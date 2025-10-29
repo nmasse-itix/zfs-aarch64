@@ -1,0 +1,98 @@
+From faebbbbfa3b1bd4120852b3f416c8073ab82d5c5 Mon Sep 17 00:00:00 2001
+From: Laine Stump <laine@redhat.com>
+Date: Mon, 25 Nov 2024 22:24:46 -0500
+Subject: [PATCH 6/9] util: put the command that adds a tx filter qdisc into a
+ separate function
+
+virNetDevBandwidthSet() adds a queue discipline (qdisc) for each
+interface that it will need to add tc transmit filters to, and the
+filters are then attached to the qdisc.
+
+There are other circumstances where some other function will need to
+add tc transmit filters to an interface (in particular an upcoming
+patch to the network driver nftables backend that will use a tc tx
+filter to fix the checksum of dhcp packets), so that function will
+also need a qdisc for the tx filter. To assure both always use exactly
+the same qdisc, this patch puts the command that adds the tx filter
+qdisc into a separate helper function that can (and will) be called
+from either place
+
+Signed-off-by: Laine Stump <laine@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+---
+ src/libvirt_private.syms      |  1 +
+ src/util/virnetdevbandwidth.c | 30 +++++++++++++++++++++++++-----
+ src/util/virnetdevbandwidth.h |  3 +++
+ 3 files changed, 29 insertions(+), 5 deletions(-)
+
+diff --git a/src/libvirt_private.syms b/src/libvirt_private.syms
+index d15d6a6a9d..0211cee967 100644
+--- a/src/libvirt_private.syms
++++ b/src/libvirt_private.syms
+@@ -2859,6 +2859,7 @@ virNetDevVFInterfaceStats;
+ 
+ 
+ # util/virnetdevbandwidth.h
++virNetDevBandWidthAddTxFilterParentQdisc;
+ virNetDevBandwidthClear;
+ virNetDevBandwidthCopy;
+ virNetDevBandwidthEqual;
+diff --git a/src/util/virnetdevbandwidth.c b/src/util/virnetdevbandwidth.c
+index 9c48844c5d..90eebe6576 100644
+--- a/src/util/virnetdevbandwidth.c
++++ b/src/util/virnetdevbandwidth.c
+@@ -266,11 +266,7 @@ virNetDevBandwidthSet(const char *ifname,
+         if (tx->burst)
+             burst = g_strdup_printf("%llukb", tx->burst);
+ 
+-        cmd = virCommandNew(TC);
+-        virCommandAddArgList(cmd, "qdisc", "add", "dev", ifname, "root",
+-                             "handle", "1:", "htb", "default",
+-                             hierarchical_class ? "2" : "1", NULL);
+-        if (virCommandRun(cmd, NULL) < 0)
++        if (virNetDevBandWidthAddTxFilterParentQdisc(ifname, hierarchical_class) < 0)
+             goto cleanup;
+ 
+         /* If we are creating a hierarchical class, all non guaranteed traffic
+@@ -794,3 +790,27 @@ virNetDevBandwidthSetRootQDisc(const char *ifname,
+ 
+     return 0;
+ }
++
++/**
++ * virNetDevBandwidthAddTxFilterParentQdisc:
++ * @ifname: name of interface that needs a qdisc to attach tx filters to
++ * @hierarchical_class: true if hierarchical classes will be used on this interface
++ *
++ * Add a root Qdisc (Queueing Discipline) for attaching Tx filters to
++ * @ifname.
++ *
++ * returns 0 on success, -1 on failure
++ */
++int
++virNetDevBandWidthAddTxFilterParentQdisc(const char *ifname,
++                                         bool hierarchical_class)
++{
++    g_autoptr(virCommand) cmd = NULL;
++
++    cmd = virCommandNew(TC);
++    virCommandAddArgList(cmd, "qdisc", "add", "dev", ifname, "root",
++                         "handle", "1:", "htb", "default",
++                         hierarchical_class ? "2" : "1", NULL);
++
++    return virCommandRun(cmd, NULL);
++}
+diff --git a/src/util/virnetdevbandwidth.h b/src/util/virnetdevbandwidth.h
+index 744aa4c826..65c1500637 100644
+--- a/src/util/virnetdevbandwidth.h
++++ b/src/util/virnetdevbandwidth.h
+@@ -84,3 +84,6 @@ int virNetDevBandwidthUpdateFilter(const char *ifname,
+ int virNetDevBandwidthSetRootQDisc(const char *ifname,
+                                    const char *qdisc)
+     G_NO_INLINE;
++
++int virNetDevBandWidthAddTxFilterParentQdisc(const char *ifname,
++                                             bool hierarchical_class);
+-- 
+2.47.1
+

@@ -1,0 +1,171 @@
+From dac9cb9030ac03d18f59884864a0a253e3c9f8f1 Mon Sep 17 00:00:00 2001
+From: Laine Stump <laine@redhat.com>
+Date: Mon, 25 Nov 2024 22:24:48 -0500
+Subject: [PATCH 8/9] util: add new "tc" layer for virFirewallCmd objects
+
+If the layer of a virFirewallCmd is "tc", then the "tc" utility will
+be executed using the arguments that had been added to the
+virFirewallCmd
+
+tc layer doesn't support auto-rollback command creation (any rollback
+needs to be added manually with virFirewallAddRollbackCmd()), and also
+tc layer isn't supported by the iptables backend (it would have been
+straightforward to add, but the iptables backend doesn't need it, and
+I didn't want to take the chance of causing a regression in that
+code for no good reason).
+
+Signed-off-by: Laine Stump <laine@redhat.com>
+Signed-off-by: Michal Privoznik <mprivozn@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+---
+ src/network/network_nftables.c |  1 +
+ src/util/virfirewall.c         | 66 +++++++++++++++++++++-------------
+ src/util/virfirewall.h         |  1 +
+ src/util/virfirewalld.c        |  1 +
+ 4 files changed, 44 insertions(+), 25 deletions(-)
+
+diff --git a/src/network/network_nftables.c b/src/network/network_nftables.c
+index 268d1f12ca..cc184105c3 100644
+--- a/src/network/network_nftables.c
++++ b/src/network/network_nftables.c
+@@ -73,6 +73,7 @@ VIR_ENUM_IMPL(nftablesLayer,
+               "",
+               "ip",
+               "ip6",
++              "",
+ );
+ 
+ 
+diff --git a/src/util/virfirewall.c b/src/util/virfirewall.c
+index 811b787ecc..9389bcf541 100644
+--- a/src/util/virfirewall.c
++++ b/src/util/virfirewall.c
+@@ -47,6 +47,7 @@ VIR_ENUM_IMPL(virFirewallLayer,
+               "ethernet",
+               "ipv4",
+               "ipv6",
++              "tc",
+ );
+ 
+ typedef struct _virFirewallGroup virFirewallGroup;
+@@ -57,6 +58,7 @@ VIR_ENUM_IMPL(virFirewallLayerCommand,
+               EBTABLES,
+               IPTABLES,
+               IP6TABLES,
++              TC,
+ );
+ 
+ struct _virFirewallCmd {
+@@ -591,6 +593,7 @@ virFirewallCmdIptablesApply(virFirewall *firewall,
+     case VIR_FIREWALL_LAYER_IPV6:
+         virCommandAddArg(cmd, "-w");
+         break;
++    case VIR_FIREWALL_LAYER_TC:
+     case VIR_FIREWALL_LAYER_LAST:
+         break;
+     }
+@@ -672,39 +675,52 @@ virFirewallCmdNftablesApply(virFirewall *firewall G_GNUC_UNUSED,
+     size_t i;
+     int status;
+ 
+-    cmd = virCommandNew(NFT);
++    if (fwCmd->layer == VIR_FIREWALL_LAYER_TC) {
+ 
+-    if ((virFirewallTransactionGetFlags(firewall) & VIR_FIREWALL_TRANSACTION_AUTO_ROLLBACK) &&
+-        fwCmd->argsLen > 1) {
+-        /* skip any leading options to get to command verb */
+-        for (i = 0; i < fwCmd->argsLen - 1; i++) {
+-            if (fwCmd->args[i][0] != '-')
+-                break;
+-        }
++        /* for VIR_FIREWALL_LAYER_TC, we run the 'tc' (traffic control) command with
++         * the supplied args.
++         */
++        cmd = virCommandNew(TC);
+ 
+-        if (i + 1 < fwCmd->argsLen &&
+-            VIR_NFTABLES_ARG_IS_CREATE(fwCmd->args[i])) {
++        /* NB: RAW commands don't support auto-rollback command creation */
+ 
+-            cmdIdx = i;
+-            objectType = fwCmd->args[i + 1];
++    } else {
+ 
+-            /* we currently only handle auto-rollback for rules,
+-             * chains, and tables, and those all can be "rolled
+-             * back" by a delete command using the handle that is
+-             * returned when "-ae" is added to the add/insert
+-             * command.
+-             */
+-            if (STREQ_NULLABLE(objectType, "rule") ||
+-                STREQ_NULLABLE(objectType, "chain") ||
+-                STREQ_NULLABLE(objectType, "table")) {
++        cmd = virCommandNew(NFT);
+ 
+-                needRollback = true;
+-                /* this option to nft instructs it to add the
+-                 * "handle" of the created object to stdout
++        if ((virFirewallTransactionGetFlags(firewall) & VIR_FIREWALL_TRANSACTION_AUTO_ROLLBACK) &&
++            fwCmd->argsLen > 1) {
++            /* skip any leading options to get to command verb */
++            for (i = 0; i < fwCmd->argsLen - 1; i++) {
++                if (fwCmd->args[i][0] != '-')
++                    break;
++            }
++
++            if (i + 1 < fwCmd->argsLen &&
++                VIR_NFTABLES_ARG_IS_CREATE(fwCmd->args[i])) {
++
++                cmdIdx = i;
++                objectType = fwCmd->args[i + 1];
++
++                /* we currently only handle auto-rollback for rules,
++                 * chains, and tables, and those all can be "rolled
++                 * back" by a delete command using the handle that is
++                 * returned when "-ae" is added to the add/insert
++                 * command.
+                  */
+-                virCommandAddArg(cmd, "-ae");
++                if (STREQ_NULLABLE(objectType, "rule") ||
++                    STREQ_NULLABLE(objectType, "chain") ||
++                    STREQ_NULLABLE(objectType, "table")) {
++
++                    needRollback = true;
++                    /* this option to nft instructs it to add the
++                     * "handle" of the created object to stdout
++                     */
++                    virCommandAddArg(cmd, "-ae");
++                }
+             }
+         }
++
+     }
+ 
+     for (i = 0; i < fwCmd->argsLen; i++)
+diff --git a/src/util/virfirewall.h b/src/util/virfirewall.h
+index bce51259d2..d42e60884b 100644
+--- a/src/util/virfirewall.h
++++ b/src/util/virfirewall.h
+@@ -39,6 +39,7 @@ typedef enum {
+     VIR_FIREWALL_LAYER_ETHERNET,
+     VIR_FIREWALL_LAYER_IPV4,
+     VIR_FIREWALL_LAYER_IPV6,
++    VIR_FIREWALL_LAYER_TC,
+ 
+     VIR_FIREWALL_LAYER_LAST,
+ } virFirewallLayer;
+diff --git a/src/util/virfirewalld.c b/src/util/virfirewalld.c
+index 827e201dbb..124523c420 100644
+--- a/src/util/virfirewalld.c
++++ b/src/util/virfirewalld.c
+@@ -43,6 +43,7 @@ VIR_LOG_INIT("util.firewalld");
+ VIR_ENUM_DECL(virFirewallLayerFirewallD);
+ VIR_ENUM_IMPL(virFirewallLayerFirewallD,
+               VIR_FIREWALL_LAYER_LAST,
++              "",
+               "eb",
+               "ipv4",
+               "ipv6",
+-- 
+2.47.1
+

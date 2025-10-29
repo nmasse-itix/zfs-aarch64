@@ -1,0 +1,29 @@
+From: Martin Kletzander <mkletzan@redhat.com>
+Date: Fri, 16 Aug 2024 13:56:51 +0200
+Subject: [PATCH] virarptable: Properly calculate rtattr length
+Content-type: text/plain
+
+Use convenience macro which does almost the same thing we were doing,
+but also pads out the payload length to a multiple of NLMSG_ALIGNTO (4)
+bytes.
+
+Signed-off-by: Martin Kletzander <mkletzan@redhat.com>
+Reviewed-by: Laine Stump <laine@redhat.com>
+---
+ src/util/virarptable.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/src/util/virarptable.c b/src/util/virarptable.c
+index 299dddd664..d8e41c5a86 100644
+--- a/src/util/virarptable.c
++++ b/src/util/virarptable.c
+@@ -102,8 +102,7 @@ virArpTableGet(void)
+             return table;
+ 
+         VIR_WARNINGS_NO_CAST_ALIGN
+-        parse_rtattr(tb, NDA_MAX, NDA_RTA(r),
+-                     nh->nlmsg_len - NLMSG_LENGTH(sizeof(*r)));
++        parse_rtattr(tb, NDA_MAX, NDA_RTA(r), NLMSG_PAYLOAD(nh, sizeof(*r)));
+         VIR_WARNINGS_RESET
+ 
+         if (tb[NDA_DST] == NULL || tb[NDA_LLADDR] == NULL)

@@ -1,0 +1,51 @@
+From 114c0ec656e879ab4d67919914bb24cf5993106d Mon Sep 17 00:00:00 2001
+Message-ID: <114c0ec656e879ab4d67919914bb24cf5993106d.1734201785.git.crobinso@redhat.com>
+From: Laine Stump <laine@redhat.com>
+Date: Mon, 2 Sep 2024 16:13:08 -0400
+Subject: [PATCH] network: permit <forward mode='open'/> when a network has no
+ IP address
+Content-type: text/plain
+
+The whole point of <forward mode='open'/> is to supress libvirt from
+adding any firewall rules for a network, and someone might want to
+create a network with no IP address (i.e. they don't want the guests
+to have connectivity to the host via this interface) and no firewall
+rules (they don't want any, or they want to add their own). So there's
+no reason to fail when a network has <forward mode='open'/> and also
+has no IP address.
+
+Kind-of-Resolves: https://gitlab.com/libvirt/libvirt/-/issues/588
+Signed-off-by: Laine Stump <laine@redhat.com>
+Reviewed-by: Martin Kletzander <mkletzan@redhat.com>
+Signed-off-by: Cole Robinson <crobinso@redhat.com>
+---
+ src/conf/network_conf.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/src/conf/network_conf.c b/src/conf/network_conf.c
+index 5cf419acf1..320e1b089a 100644
+--- a/src/conf/network_conf.c
++++ b/src/conf/network_conf.c
+@@ -1789,7 +1789,6 @@ virNetworkDefParseXML(xmlXPathContextPtr ctxt,
+ 
+     case VIR_NETWORK_FORWARD_ROUTE:
+     case VIR_NETWORK_FORWARD_NAT:
+-    case VIR_NETWORK_FORWARD_OPEN:
+         /* It's pointless to specify L3 forwarding without specifying
+          * the network we're on.
+          */
+@@ -1806,8 +1805,10 @@ virNetworkDefParseXML(xmlXPathContextPtr ctxt,
+                            def->name);
+             return NULL;
+         }
++        break;
+ 
+-        if (def->forward.type == VIR_NETWORK_FORWARD_OPEN && def->forward.nifs) {
++    case VIR_NETWORK_FORWARD_OPEN:
++        if (def->forward.nifs) {
+             /* an open network by definition can't place any restrictions
+              * on what traffic is allowed or where it goes, so specifying
+              * a forwarding device is nonsensical.
+-- 
+2.47.1
+

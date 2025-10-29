@@ -1,0 +1,107 @@
+From 73c0fb19ce5b816ee81ede691252855c75391c9a Mon Sep 17 00:00:00 2001
+From: Laine Stump <laine@redhat.com>
+Date: Mon, 25 Nov 2024 22:24:47 -0500
+Subject: [PATCH 7/9] util: don't re-add the qdisc used for tx filters if it
+ already exists
+
+There will soon be two separate users of tc on virtual networks, and
+both will use the "qdisc root handle 1: htb" to add tx filters. One or the
+other could get the first chance to add the qdisc, and then if at a
+later time the other decides to use it, we need to prevent the 2nd
+user from attempting to re-add the qdisc (because that just generates
+an error).
+
+We do this by running "tc qdisc show dev $bridge handle 1:" then
+checking if the output of that command contains both "qdisc" and " 1:
+".[*] If it does then the qdisc has already been added. If not then we
+need to add it now.
+
+[*]As of this writing, the output more exactly starts with "qdisc
+htb 1: root", but our comparison is made purposefully generous to
+increase the chances that it will continue to work properly if tc
+modifies the format of its output.
+
+Signed-off-by: Laine Stump <laine@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+---
+ src/util/virnetdevbandwidth.c  | 35 ++++++++++++++++++++++++++++------
+ tests/virnetdevbandwidthtest.c |  3 +++
+ 2 files changed, 32 insertions(+), 6 deletions(-)
+
+diff --git a/src/util/virnetdevbandwidth.c b/src/util/virnetdevbandwidth.c
+index 90eebe6576..5c6a65528c 100644
+--- a/src/util/virnetdevbandwidth.c
++++ b/src/util/virnetdevbandwidth.c
+@@ -805,12 +805,35 @@ int
+ virNetDevBandWidthAddTxFilterParentQdisc(const char *ifname,
+                                          bool hierarchical_class)
+ {
+-    g_autoptr(virCommand) cmd = NULL;
++    g_autoptr(virCommand) testCmd = NULL;
++    g_autofree char *testResult = NULL;
+ 
+-    cmd = virCommandNew(TC);
+-    virCommandAddArgList(cmd, "qdisc", "add", "dev", ifname, "root",
+-                         "handle", "1:", "htb", "default",
+-                         hierarchical_class ? "2" : "1", NULL);
++    /* first check it the qdisc with handle 1: was already added for
++     * this interface by someone else
++     */
++    testCmd = virCommandNew(TC);
++    virCommandAddArgList(testCmd, "qdisc", "show", "dev", ifname,
++                         "handle", "1:", NULL);
++    virCommandSetOutputBuffer(testCmd, &testResult);
+ 
+-    return virCommandRun(cmd, NULL);
++    if (virCommandRun(testCmd, NULL) < 0)
++        return -1;
++
++    /* output will be something like: "qdisc htb 1: root refcnt ..."
++     * if the qdisc was already added. We just search for "qdisc" and
++     * " 1: " anywhere in the output to allow for tc changing its
++     * output format.
++     */
++    if (!(testResult && strstr(testResult, "qdisc") && strstr(testResult, " 1: "))) {
++        /* didn't find qdisc in output, so we need to add one */
++        g_autoptr(virCommand) addCmd = virCommandNew(TC);
++
++        virCommandAddArgList(addCmd, "qdisc", "add", "dev", ifname, "root",
++                             "handle", "1:", "htb", "default",
++                             hierarchical_class ? "2" : "1", NULL);
++
++        return virCommandRun(addCmd, NULL);
++    }
++
++    return 0;
+ }
+diff --git a/tests/virnetdevbandwidthtest.c b/tests/virnetdevbandwidthtest.c
+index 6d5c847ad7..31aa7f469d 100644
+--- a/tests/virnetdevbandwidthtest.c
++++ b/tests/virnetdevbandwidthtest.c
+@@ -147,6 +147,7 @@ mymain(void)
+                 "</bandwidth>",
+                 TC " qdisc del dev eth0 root\n"
+                 TC " qdisc del dev eth0 ingress\n"
++                TC " qdisc show dev eth0 handle 1:\n"
+                 TC " qdisc add dev eth0 root handle 1: htb default 1\n"
+                 TC " class add dev eth0 parent 1: classid 1:1 htb rate 1024kbps quantum 87\n"
+                 TC " qdisc add dev eth0 parent 1:1 handle 2: sfq perturb 10\n"
+@@ -177,6 +178,7 @@ mymain(void)
+                 "</bandwidth>",
+                 TC " qdisc del dev eth0 root\n"
+                 TC " qdisc del dev eth0 ingress\n"
++                TC " qdisc show dev eth0 handle 1:\n"
+                 TC " qdisc add dev eth0 root handle 1: htb default 1\n"
+                 TC " class add dev eth0 parent 1: classid 1:1 htb rate 1kbps ceil 2kbps burst 4kb quantum 1\n"
+                 TC " qdisc add dev eth0 parent 1:1 handle 2: sfq perturb 10\n"
+@@ -199,6 +201,7 @@ mymain(void)
+                 "</bandwidth>",
+                 TC " qdisc del dev eth0 root\n"
+                 TC " qdisc del dev eth0 ingress\n"
++                TC " qdisc show dev eth0 handle 1:\n"
+                 TC " qdisc add dev eth0 root handle 1: htb default 1\n"
+                 TC " class add dev eth0 parent 1: classid 1:1 htb rate 4294967295kbps quantum 366503875\n"
+                 TC " qdisc add dev eth0 parent 1:1 handle 2: sfq perturb 10\n"
+-- 
+2.47.1
+

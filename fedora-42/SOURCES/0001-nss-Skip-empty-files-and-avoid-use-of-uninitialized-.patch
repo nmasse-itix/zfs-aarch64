@@ -1,0 +1,85 @@
+From 63a3d70697dc44ef2f8b40f7c8e9aa869227a7da Mon Sep 17 00:00:00 2001
+From: Jiang XueQian <jiangxueqian@gmail.com>
+Date: Sat, 18 Jan 2025 16:32:10 +0800
+Subject: [PATCH] nss: Skip empty files and avoid use of uninitialized value
+Content-type: text/plain
+
+JSON parser isn't called when reading empty files so `jerr` will be used
+uninitialized in the original code. Empty files appear when a network
+has no dhcp clients.
+
+This patch checks for such files and skip them.
+
+Fixes: a8d828c88bbdaf83ae78dc06cdd84d5667fcc424
+Signed-off-by: Jiang XueQian <jiangxueqian@gmail.com>
+Signed-off-by: Michal Privoznik <mprivozn@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+---
+ tools/nss/libvirt_nss_leases.c | 9 +++++++--
+ tools/nss/libvirt_nss_macs.c   | 9 +++++++--
+ 2 files changed, 14 insertions(+), 4 deletions(-)
+
+diff --git a/tools/nss/libvirt_nss_leases.c b/tools/nss/libvirt_nss_leases.c
+index aea81bb56e..25ea6b0ce2 100644
+--- a/tools/nss/libvirt_nss_leases.c
++++ b/tools/nss/libvirt_nss_leases.c
+@@ -263,7 +263,7 @@ findLeases(const char *file,
+     enum json_tokener_error jerr;
+     int jsonflags = JSON_TOKENER_STRICT | JSON_TOKENER_VALIDATE_UTF8;
+     char line[1024];
+-    ssize_t nreadTotal = 0;
++    size_t nreadTotal = 0;
+     int rv;
+ 
+     if ((fd = open(file, O_RDONLY)) < 0) {
+@@ -290,12 +290,17 @@ findLeases(const char *file,
+         jerr = json_tokener_get_error(tok);
+     } while (jerr == json_tokener_continue);
+ 
++    if (nreadTotal == 0) {
++        ret = 0;
++        goto cleanup;
++    }
++
+     if (jerr == json_tokener_continue) {
+         ERROR("Cannot parse %s: incomplete json found", file);
+         goto cleanup;
+     }
+ 
+-    if (nreadTotal > 0 && jerr != json_tokener_success) {
++    if (jerr != json_tokener_success) {
+         ERROR("Cannot parse %s: %s", file, json_tokener_error_desc(jerr));
+         goto cleanup;
+     }
+diff --git a/tools/nss/libvirt_nss_macs.c b/tools/nss/libvirt_nss_macs.c
+index 23229a18f3..bac8c0e1bb 100644
+--- a/tools/nss/libvirt_nss_macs.c
++++ b/tools/nss/libvirt_nss_macs.c
+@@ -124,7 +124,7 @@ findMACs(const char *file,
+     json_tokener *tok = NULL;
+     enum json_tokener_error jerr;
+     int jsonflags = JSON_TOKENER_STRICT | JSON_TOKENER_VALIDATE_UTF8;
+-    ssize_t nreadTotal = 0;
++    size_t nreadTotal = 0;
+     int rv;
+     size_t i;
+ 
+@@ -152,12 +152,17 @@ findMACs(const char *file,
+         jerr = json_tokener_get_error(tok);
+     } while (jerr == json_tokener_continue);
+ 
++    if (nreadTotal == 0) {
++        ret = 0;
++        goto cleanup;
++    }
++
+     if (jerr == json_tokener_continue) {
+         ERROR("Cannot parse %s: incomplete json found", file);
+         goto cleanup;
+     }
+ 
+-    if (nreadTotal > 0 && jerr != json_tokener_success) {
++    if (jerr != json_tokener_success) {
+         ERROR("Cannot parse %s: %s", file, json_tokener_error_desc(jerr));
+         goto cleanup;
+     }

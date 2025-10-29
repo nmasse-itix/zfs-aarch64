@@ -1,0 +1,687 @@
+From b1e2318a0d609fcdff04fcf88953ea87cdd02b95 Mon Sep 17 00:00:00 2001
+From: Laine Stump <laine@redhat.com>
+Date: Mon, 25 Nov 2024 22:24:49 -0500
+Subject: [PATCH 9/9] network: add tc filter rule to nftables backend to fix
+ checksum of DHCP responses
+
+Please see the commit log for commit v10.9.0-rc1-1-g42ab0148dd for the
+history and explanation of the problem that this patch is fixing.
+
+A shorter explanation is that when a guest is connected to a libvirt
+virtual network using a virtio-net adapter with in-kernel "vhost-net"
+packet processing enabled, it will fail to acquire an IP address from
+a DHCP seever running on the host.
+
+In commit v10.9.0-rc1-1-g42ab0148dd we tried fixing this by *zeroing
+out* the checksums of these packets with an nftables rule (nftables
+can't recompute the checksum, but it can set it to 0) . This
+*appeared* to work initially, but it turned out that zeroing the
+checksum ends up breaking dhcp packets on *non* virtio/vhost-net guest
+interfaces. That attempt was reverted in commit v10.9.0-rc2.
+
+Fortunately, there is an existing way to recompute the checksum of a
+packet as it leaves an interface - the "tc" (traffic control) utility
+that libvirt already uses for bandwidth management. This patch uses a
+tc filter rule to match dhcp response packets on the bridge and
+recompute their checksum.
+
+The filter rule must be attached to a tc qdisc, which may also have a
+filter attached for bandwidth management (in the <bandwidth> element
+of the network config). Not only must we add the qdisc only once
+(which was already handled by the patch two prior to this one), but
+also the filter rule for checksum fixing and the filter rule for
+bandwidth management must be different priorities so they don't clash;
+this is solved by adding the checksum-fix filter with "priority 2",
+while the bandwidth management filter remains "priority 1" (both will
+always be evaluated anyway, it's just a matter of which is evaluated
+first).
+
+So far this method has worked with every different guest we could
+throw at it, including several that failed with the previous method.
+
+Fixes: b89c4991daa0ee9371f10937fab3b03c5ffdabc6
+Reported-by: Rich Jones <rjones@redhat.com>
+Reported-by: Andrea Bolognani <abologna@redhat.com>
+Fix-Suggested-by: Eric Garver <egarver@redhat.com>
+Fix-Suggested-by: Phil Sutter <psutter@redhat.com>
+Signed-off-by: Laine Stump <laine@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+---
+ src/network/network_nftables.c                | 68 +++++++++++++++++++
+ .../forward-dev-linux.nftables                | 40 +++++++++++
+ .../isolated-linux.nftables                   | 40 +++++++++++
+ .../nat-default-linux.nftables                | 40 +++++++++++
+ .../nat-ipv6-linux.nftables                   | 40 +++++++++++
+ .../nat-ipv6-masquerade-linux.nftables        | 40 +++++++++++
+ .../nat-many-ips-linux.nftables               | 40 +++++++++++
+ .../nat-no-dhcp-linux.nftables                | 40 +++++++++++
+ .../nat-port-range-ipv6-linux.nftables        | 40 +++++++++++
+ .../nat-port-range-linux.nftables             | 40 +++++++++++
+ .../nat-tftp-linux.nftables                   | 40 +++++++++++
+ .../route-default-linux.nftables              | 40 +++++++++++
+ 12 files changed, 508 insertions(+)
+
+diff --git a/src/network/network_nftables.c b/src/network/network_nftables.c
+index cc184105c3..748edb0273 100644
+--- a/src/network/network_nftables.c
++++ b/src/network/network_nftables.c
+@@ -29,6 +29,7 @@
+ 
+ #include "internal.h"
+ #include "virfirewalld.h"
++#include "vircommand.h"
+ #include "virerror.h"
+ #include "virlog.h"
+ #include "virhash.h"
+@@ -924,6 +925,67 @@ nftablesAddIPSpecificFirewallRules(virFirewall *fw,
+ }
+ 
+ 
++/**
++ * nftablesAddUdpChecksumFixWithTC:
++ *
++ * Add a tc filter rule to @ifname (the bridge device of this network)
++ * that will recompute the checksum of udp packets output from @iface with
++ * destination port @port.
++ *
++ * Normally the checksum should be filled by some part of the basic
++ * network stack, but there are cases (e.g. DHCP response packets sent
++ * from virtualization host to a QEMU guest when the guest NIC uses
++ * vhost-net packet processing) when the host (sender) thinks that
++ * packet checksums will be computed elsewhere (and so leaves a
++ * partially computed checksum in the packet header) while the guest
++ * (receiver) thinks that the checksum has already been fully
++ * computed; in the meantime none of the code in between has actually
++ * finished computing the checksum.
++ *
++ * An example of this is DHCP response packets from host to guest. If
++ * the checksum of each of these packets isn't properly computed, then
++ * many guests (e.g. FreeBSD) will drop them with reason BAD CHECKSUM;
++ * this tc filter rule will fix the ip and udp checksums, and the
++ * FreeBSD dhcp client will happily accept the packet.
++ *
++ * (NB: if you're wondering how the tc qdisc and filter are removed
++ * when the network is destroyed, the answer is that the kernel
++ * automatically (and properly) removes them for us, so we don't need
++ * to worry about keeping track/deleting as we do with nftables rules)
++ */
++static int
++nftablesAddUdpChecksumFixWithTC(virFirewall *fw,
++                                const char *iface,
++                                int port)
++{
++    g_autofree char *portstr = g_strdup_printf("%d", port);
++
++    /* this will add the qdisc (that the filter below is attached to)
++     * unless it already exists
++     */
++    if (virNetDevBandWidthAddTxFilterParentQdisc(iface, true) < 0)
++        return -1;
++
++    /* add a filter to catch all udp packets with dst "port" and
++     * recompute their checksum
++     */
++    virFirewallAddCmd(fw, VIR_FIREWALL_LAYER_TC,
++                      "filter", "add", "dev", iface,
++                      "prio", "2", "protocol", "ip", "parent", "1:",
++                      "u32", "match", "ip", "dport", portstr, "ffff",
++                      "action", "csum", "ip", "and", "udp",
++                      NULL);
++
++    virFirewallAddRollbackCmd(fw, VIR_FIREWALL_LAYER_TC,
++                              "filter", "del", "dev", iface,
++                              "prio", "2", "protocol", "ip", "parent", "1:",
++                              "u32", "match", "ip", "dport", portstr, "ffff",
++                              "action", "csum", "ip", "and", "udp",
++                              NULL);
++    return 0;
++}
++
++
+ /* nftablesAddFirewallrules:
+  *
+  * @def - the network that needs an nftables firewall added
+@@ -944,6 +1006,12 @@ nftablesAddFirewallRules(virNetworkDef *def, virFirewall **fwRemoval)
+ 
+     virFirewallStartTransaction(fw, VIR_FIREWALL_TRANSACTION_AUTO_ROLLBACK);
+ 
++    /* add the tc filter rule needed to fixup the checksum of dhcp
++     * response packets going from host to guest.
++     */
++    if (nftablesAddUdpChecksumFixWithTC(fw, def->bridge, 68) < 0)
++        return -1;
++
+     nftablesAddGeneralFirewallRules(fw, def);
+ 
+     for (i = 0;
+diff --git a/tests/networkxml2firewalldata/forward-dev-linux.nftables b/tests/networkxml2firewalldata/forward-dev-linux.nftables
+index 8badb74beb..6772383b37 100644
+--- a/tests/networkxml2firewalldata/forward-dev-linux.nftables
++++ b/tests/networkxml2firewalldata/forward-dev-linux.nftables
+@@ -1,3 +1,43 @@
++tc \
++qdisc \
++show \
++dev \
++virbr0 \
++handle \
++1:
++tc \
++qdisc \
++add \
++dev \
++virbr0 \
++root \
++handle \
++1: \
++htb \
++default \
++2
++tc \
++filter \
++add \
++dev \
++virbr0 \
++prio \
++2 \
++protocol \
++ip \
++parent \
++1: \
++u32 \
++match \
++ip \
++dport \
++68 \
++ffff \
++action \
++csum \
++ip \
++and \
++udp
+ nft \
+ -ae insert \
+ rule \
+diff --git a/tests/networkxml2firewalldata/isolated-linux.nftables b/tests/networkxml2firewalldata/isolated-linux.nftables
+index d1b4dac178..546a18b75a 100644
+--- a/tests/networkxml2firewalldata/isolated-linux.nftables
++++ b/tests/networkxml2firewalldata/isolated-linux.nftables
+@@ -1,3 +1,43 @@
++tc \
++qdisc \
++show \
++dev \
++virbr0 \
++handle \
++1:
++tc \
++qdisc \
++add \
++dev \
++virbr0 \
++root \
++handle \
++1: \
++htb \
++default \
++2
++tc \
++filter \
++add \
++dev \
++virbr0 \
++prio \
++2 \
++protocol \
++ip \
++parent \
++1: \
++u32 \
++match \
++ip \
++dport \
++68 \
++ffff \
++action \
++csum \
++ip \
++and \
++udp
+ nft \
+ -ae insert \
+ rule \
+diff --git a/tests/networkxml2firewalldata/nat-default-linux.nftables b/tests/networkxml2firewalldata/nat-default-linux.nftables
+index 28508292f9..08623c1381 100644
+--- a/tests/networkxml2firewalldata/nat-default-linux.nftables
++++ b/tests/networkxml2firewalldata/nat-default-linux.nftables
+@@ -1,3 +1,43 @@
++tc \
++qdisc \
++show \
++dev \
++virbr0 \
++handle \
++1:
++tc \
++qdisc \
++add \
++dev \
++virbr0 \
++root \
++handle \
++1: \
++htb \
++default \
++2
++tc \
++filter \
++add \
++dev \
++virbr0 \
++prio \
++2 \
++protocol \
++ip \
++parent \
++1: \
++u32 \
++match \
++ip \
++dport \
++68 \
++ffff \
++action \
++csum \
++ip \
++and \
++udp
+ nft \
+ -ae insert \
+ rule \
+diff --git a/tests/networkxml2firewalldata/nat-ipv6-linux.nftables b/tests/networkxml2firewalldata/nat-ipv6-linux.nftables
+index d8a9ba706d..3fd6b94eef 100644
+--- a/tests/networkxml2firewalldata/nat-ipv6-linux.nftables
++++ b/tests/networkxml2firewalldata/nat-ipv6-linux.nftables
+@@ -1,3 +1,43 @@
++tc \
++qdisc \
++show \
++dev \
++virbr0 \
++handle \
++1:
++tc \
++qdisc \
++add \
++dev \
++virbr0 \
++root \
++handle \
++1: \
++htb \
++default \
++2
++tc \
++filter \
++add \
++dev \
++virbr0 \
++prio \
++2 \
++protocol \
++ip \
++parent \
++1: \
++u32 \
++match \
++ip \
++dport \
++68 \
++ffff \
++action \
++csum \
++ip \
++and \
++udp
+ nft \
+ -ae insert \
+ rule \
+diff --git a/tests/networkxml2firewalldata/nat-ipv6-masquerade-linux.nftables b/tests/networkxml2firewalldata/nat-ipv6-masquerade-linux.nftables
+index a7f09cda59..2811e098d1 100644
+--- a/tests/networkxml2firewalldata/nat-ipv6-masquerade-linux.nftables
++++ b/tests/networkxml2firewalldata/nat-ipv6-masquerade-linux.nftables
+@@ -1,3 +1,43 @@
++tc \
++qdisc \
++show \
++dev \
++virbr0 \
++handle \
++1:
++tc \
++qdisc \
++add \
++dev \
++virbr0 \
++root \
++handle \
++1: \
++htb \
++default \
++2
++tc \
++filter \
++add \
++dev \
++virbr0 \
++prio \
++2 \
++protocol \
++ip \
++parent \
++1: \
++u32 \
++match \
++ip \
++dport \
++68 \
++ffff \
++action \
++csum \
++ip \
++and \
++udp
+ nft \
+ -ae insert \
+ rule \
+diff --git a/tests/networkxml2firewalldata/nat-many-ips-linux.nftables b/tests/networkxml2firewalldata/nat-many-ips-linux.nftables
+index b826fe6134..5409d5b552 100644
+--- a/tests/networkxml2firewalldata/nat-many-ips-linux.nftables
++++ b/tests/networkxml2firewalldata/nat-many-ips-linux.nftables
+@@ -1,3 +1,43 @@
++tc \
++qdisc \
++show \
++dev \
++virbr0 \
++handle \
++1:
++tc \
++qdisc \
++add \
++dev \
++virbr0 \
++root \
++handle \
++1: \
++htb \
++default \
++2
++tc \
++filter \
++add \
++dev \
++virbr0 \
++prio \
++2 \
++protocol \
++ip \
++parent \
++1: \
++u32 \
++match \
++ip \
++dport \
++68 \
++ffff \
++action \
++csum \
++ip \
++and \
++udp
+ nft \
+ -ae insert \
+ rule \
+diff --git a/tests/networkxml2firewalldata/nat-no-dhcp-linux.nftables b/tests/networkxml2firewalldata/nat-no-dhcp-linux.nftables
+index d8a9ba706d..3fd6b94eef 100644
+--- a/tests/networkxml2firewalldata/nat-no-dhcp-linux.nftables
++++ b/tests/networkxml2firewalldata/nat-no-dhcp-linux.nftables
+@@ -1,3 +1,43 @@
++tc \
++qdisc \
++show \
++dev \
++virbr0 \
++handle \
++1:
++tc \
++qdisc \
++add \
++dev \
++virbr0 \
++root \
++handle \
++1: \
++htb \
++default \
++2
++tc \
++filter \
++add \
++dev \
++virbr0 \
++prio \
++2 \
++protocol \
++ip \
++parent \
++1: \
++u32 \
++match \
++ip \
++dport \
++68 \
++ffff \
++action \
++csum \
++ip \
++and \
++udp
+ nft \
+ -ae insert \
+ rule \
+diff --git a/tests/networkxml2firewalldata/nat-port-range-ipv6-linux.nftables b/tests/networkxml2firewalldata/nat-port-range-ipv6-linux.nftables
+index ceaed6fa40..d74417cdb3 100644
+--- a/tests/networkxml2firewalldata/nat-port-range-ipv6-linux.nftables
++++ b/tests/networkxml2firewalldata/nat-port-range-ipv6-linux.nftables
+@@ -1,3 +1,43 @@
++tc \
++qdisc \
++show \
++dev \
++virbr0 \
++handle \
++1:
++tc \
++qdisc \
++add \
++dev \
++virbr0 \
++root \
++handle \
++1: \
++htb \
++default \
++2
++tc \
++filter \
++add \
++dev \
++virbr0 \
++prio \
++2 \
++protocol \
++ip \
++parent \
++1: \
++u32 \
++match \
++ip \
++dport \
++68 \
++ffff \
++action \
++csum \
++ip \
++and \
++udp
+ nft \
+ -ae insert \
+ rule \
+diff --git a/tests/networkxml2firewalldata/nat-port-range-linux.nftables b/tests/networkxml2firewalldata/nat-port-range-linux.nftables
+index 1dc37a26ec..b55bb287a9 100644
+--- a/tests/networkxml2firewalldata/nat-port-range-linux.nftables
++++ b/tests/networkxml2firewalldata/nat-port-range-linux.nftables
+@@ -1,3 +1,43 @@
++tc \
++qdisc \
++show \
++dev \
++virbr0 \
++handle \
++1:
++tc \
++qdisc \
++add \
++dev \
++virbr0 \
++root \
++handle \
++1: \
++htb \
++default \
++2
++tc \
++filter \
++add \
++dev \
++virbr0 \
++prio \
++2 \
++protocol \
++ip \
++parent \
++1: \
++u32 \
++match \
++ip \
++dport \
++68 \
++ffff \
++action \
++csum \
++ip \
++and \
++udp
+ nft \
+ -ae insert \
+ rule \
+diff --git a/tests/networkxml2firewalldata/nat-tftp-linux.nftables b/tests/networkxml2firewalldata/nat-tftp-linux.nftables
+index 28508292f9..08623c1381 100644
+--- a/tests/networkxml2firewalldata/nat-tftp-linux.nftables
++++ b/tests/networkxml2firewalldata/nat-tftp-linux.nftables
+@@ -1,3 +1,43 @@
++tc \
++qdisc \
++show \
++dev \
++virbr0 \
++handle \
++1:
++tc \
++qdisc \
++add \
++dev \
++virbr0 \
++root \
++handle \
++1: \
++htb \
++default \
++2
++tc \
++filter \
++add \
++dev \
++virbr0 \
++prio \
++2 \
++protocol \
++ip \
++parent \
++1: \
++u32 \
++match \
++ip \
++dport \
++68 \
++ffff \
++action \
++csum \
++ip \
++and \
++udp
+ nft \
+ -ae insert \
+ rule \
+diff --git a/tests/networkxml2firewalldata/route-default-linux.nftables b/tests/networkxml2firewalldata/route-default-linux.nftables
+index 282c9542a5..76d6902517 100644
+--- a/tests/networkxml2firewalldata/route-default-linux.nftables
++++ b/tests/networkxml2firewalldata/route-default-linux.nftables
+@@ -1,3 +1,43 @@
++tc \
++qdisc \
++show \
++dev \
++virbr0 \
++handle \
++1:
++tc \
++qdisc \
++add \
++dev \
++virbr0 \
++root \
++handle \
++1: \
++htb \
++default \
++2
++tc \
++filter \
++add \
++dev \
++virbr0 \
++prio \
++2 \
++protocol \
++ip \
++parent \
++1: \
++u32 \
++match \
++ip \
++dport \
++68 \
++ffff \
++action \
++csum \
++ip \
++and \
++udp
+ nft \
+ -ae insert \
+ rule \
+-- 
+2.47.1
+

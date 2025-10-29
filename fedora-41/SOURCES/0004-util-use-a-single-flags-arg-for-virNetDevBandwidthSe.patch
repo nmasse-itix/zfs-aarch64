@@ -1,0 +1,315 @@
+From 807e2670f2704c41f0a1dca81a5d2f2f9336137c Mon Sep 17 00:00:00 2001
+From: Laine Stump <laine@redhat.com>
+Date: Mon, 25 Nov 2024 22:24:44 -0500
+Subject: [PATCH 4/9] util: use a single flags arg for virNetDevBandwidthSet(),
+ not multiple bools
+
+Having two bools in the arg list is on the borderline of being
+confusing to anyone trying to read the code, but we're about to add a
+3rd. This patch replaces the two bools with a single flags argument
+which will instead have one or more bits from virNetDevBandwidthFlags
+set.
+
+Signed-off-by: Laine Stump <laine@redhat.com>
+Signed-off-by: Michal Privoznik <mprivozn@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+---
+ src/lxc/lxc_driver.c           |  8 ++++++--
+ src/lxc/lxc_process.c          |  8 ++++++--
+ src/network/bridge_driver.c    | 10 ++++++++--
+ src/qemu/qemu_command.c        | 11 ++++++++---
+ src/qemu/qemu_driver.c         | 29 ++++++++++++++-------------
+ src/qemu/qemu_hotplug.c        | 22 +++++++++++++++------
+ src/util/virnetdevbandwidth.c  | 36 ++++++++++++++++++++--------------
+ src/util/virnetdevbandwidth.h  |  9 +++++++--
+ tests/virnetdevbandwidthtest.c |  8 +++++++-
+ 9 files changed, 94 insertions(+), 47 deletions(-)
+
+diff --git a/src/lxc/lxc_driver.c b/src/lxc/lxc_driver.c
+index 534e257f30..b693980dbb 100644
+--- a/src/lxc/lxc_driver.c
++++ b/src/lxc/lxc_driver.c
+@@ -3570,8 +3570,12 @@ lxcDomainAttachDeviceNetLive(virLXCDriver *driver,
+     actualBandwidth = virDomainNetGetActualBandwidth(net);
+     if (actualBandwidth) {
+         if (virNetDevSupportsBandwidth(actualType)) {
+-            if (virNetDevBandwidthSet(net->ifname, actualBandwidth, false,
+-                                      !virDomainNetTypeSharesHostView(net)) < 0)
++            unsigned int flags = 0;
++
++            if (!virDomainNetTypeSharesHostView(net))
++                flags |= VIR_NETDEV_BANDWIDTH_SET_DIR_SWAPPED;
++
++            if (virNetDevBandwidthSet(net->ifname, actualBandwidth, flags) < 0)
+                 goto cleanup;
+         } else {
+             VIR_WARN("setting bandwidth on interfaces of "
+diff --git a/src/lxc/lxc_process.c b/src/lxc/lxc_process.c
+index f5eb5383ec..0e689fbb70 100644
+--- a/src/lxc/lxc_process.c
++++ b/src/lxc/lxc_process.c
+@@ -605,8 +605,12 @@ virLXCProcessSetupInterfaces(virLXCDriver *driver,
+         actualBandwidth = virDomainNetGetActualBandwidth(net);
+         if (actualBandwidth) {
+             if (virNetDevSupportsBandwidth(type)) {
+-                if (virNetDevBandwidthSet(net->ifname, actualBandwidth, false,
+-                                          !virDomainNetTypeSharesHostView(net)) < 0)
++                unsigned int flags = 0;
++
++                if (!virDomainNetTypeSharesHostView(net))
++                    flags |= VIR_NETDEV_BANDWIDTH_SET_DIR_SWAPPED;
++
++                if (virNetDevBandwidthSet(net->ifname, actualBandwidth, flags) < 0)
+                     goto cleanup;
+             } else {
+                 VIR_WARN("setting bandwidth on interfaces of "
+diff --git a/src/network/bridge_driver.c b/src/network/bridge_driver.c
+index 32572c755f..1c53636450 100644
+--- a/src/network/bridge_driver.c
++++ b/src/network/bridge_driver.c
+@@ -2058,8 +2058,11 @@ networkStartNetworkVirtual(virNetworkDriverState *driver,
+         }
+     }
+ 
+-    if (virNetDevBandwidthSet(def->bridge, def->bandwidth, true, true) < 0)
++    if (virNetDevBandwidthSet(def->bridge, def->bandwidth,
++                              VIR_NETDEV_BANDWIDTH_SET_HIERARCHICAL_CLASS
++                              | VIR_NETDEV_BANDWIDTH_SET_DIR_SWAPPED) < 0) {
+         goto error;
++    }
+ 
+     return 0;
+ 
+@@ -2141,8 +2144,11 @@ networkStartNetworkBridge(virNetworkObj *obj)
+      * type BRIDGE, is started. On failure, undo anything you've done,
+      * and return -1. On success return 0.
+      */
+-    if (virNetDevBandwidthSet(def->bridge, def->bandwidth, true, true) < 0)
++    if (virNetDevBandwidthSet(def->bridge, def->bandwidth,
++                              VIR_NETDEV_BANDWIDTH_SET_HIERARCHICAL_CLASS
++                              | VIR_NETDEV_BANDWIDTH_SET_DIR_SWAPPED) < 0) {
+         goto error;
++    }
+ 
+     if (networkStartHandleMACTableManagerMode(obj) < 0)
+         goto error;
+diff --git a/src/qemu/qemu_command.c b/src/qemu/qemu_command.c
+index f15e6bda1e..b4815e5e71 100644
+--- a/src/qemu/qemu_command.c
++++ b/src/qemu/qemu_command.c
+@@ -8840,9 +8840,14 @@ qemuBuildInterfaceCommandLine(virQEMUDriver *driver,
+                                                         def->uuid,
+                                                         !virDomainNetTypeSharesHostView(net)) < 0)
+                     goto cleanup;
+-            } else if (virNetDevBandwidthSet(net->ifname, actualBandwidth, false,
+-                                             !virDomainNetTypeSharesHostView(net)) < 0) {
+-                goto cleanup;
++            } else {
++                unsigned int flags = 0;
++
++                if (!virDomainNetTypeSharesHostView(net))
++                    flags |= VIR_NETDEV_BANDWIDTH_SET_DIR_SWAPPED;
++
++                if (virNetDevBandwidthSet(net->ifname, actualBandwidth, flags) < 0)
++                    goto cleanup;
+             }
+         } else {
+             VIR_WARN("setting bandwidth on interfaces of "
+diff --git a/src/qemu/qemu_driver.c b/src/qemu/qemu_driver.c
+index 736602333e..14929616e5 100644
+--- a/src/qemu/qemu_driver.c
++++ b/src/qemu/qemu_driver.c
+@@ -9941,21 +9941,22 @@ qemuDomainSetInterfaceParameters(virDomainPtr dom,
+                 virErrorRestore(&orig_err);
+                 goto endjob;
+             }
+-        } else if (virNetDevBandwidthSet(net->ifname, newBandwidth, false,
+-                                         !virDomainNetTypeSharesHostView(net)) < 0) {
+-            virErrorPtr orig_err;
+-
+-            virErrorPreserveLast(&orig_err);
+-            ignore_value(virNetDevBandwidthSet(net->ifname,
+-                                               net->bandwidth,
+-                                               false,
+-                                               !virDomainNetTypeSharesHostView(net)));
+-            if (net->bandwidth) {
+-                ignore_value(virDomainNetBandwidthUpdate(net,
+-                                                         net->bandwidth));
++        } else {
++            unsigned int bwflags = 0;
++
++            if (!virDomainNetTypeSharesHostView(net))
++                bwflags |= VIR_NETDEV_BANDWIDTH_SET_DIR_SWAPPED;
++
++            if (virNetDevBandwidthSet(net->ifname, newBandwidth, bwflags) < 0) {
++                virErrorPtr orig_err;
++
++                virErrorPreserveLast(&orig_err);
++                ignore_value(virNetDevBandwidthSet(net->ifname, net->bandwidth, bwflags));
++                if (net->bandwidth)
++                    ignore_value(virDomainNetBandwidthUpdate(net, net->bandwidth));
++                virErrorRestore(&orig_err);
++                goto endjob;
+             }
+-            virErrorRestore(&orig_err);
+-            goto endjob;
+         }
+ 
+         /* If the old bandwidth was cleared out, restore qdisc. */
+diff --git a/src/qemu/qemu_hotplug.c b/src/qemu/qemu_hotplug.c
+index 7cb1800504..d5e7e99359 100644
+--- a/src/qemu/qemu_hotplug.c
++++ b/src/qemu/qemu_hotplug.c
+@@ -1279,9 +1279,14 @@ qemuDomainAttachNetDevice(virQEMUDriver *driver,
+                                                         vm->def->uuid,
+                                                         !virDomainNetTypeSharesHostView(net)) < 0)
+                     goto cleanup;
+-            } else if (virNetDevBandwidthSet(net->ifname, actualBandwidth, false,
+-                                             !virDomainNetTypeSharesHostView(net)) < 0) {
+-                goto cleanup;
++            } else {
++                int flags = 0;
++
++                if (!virDomainNetTypeSharesHostView(net))
++                    flags |= VIR_NETDEV_BANDWIDTH_SET_DIR_SWAPPED;
++
++                if (virNetDevBandwidthSet(net->ifname, actualBandwidth, flags) < 0)
++                    goto cleanup;
+             }
+         } else {
+             VIR_WARN("setting bandwidth on interfaces of "
+@@ -4082,9 +4087,14 @@ qemuDomainChangeNet(virQEMUDriver *driver,
+                                                         vm->def->uuid,
+                                                         !virDomainNetTypeSharesHostView(newdev)) < 0)
+                     goto cleanup;
+-            } else if (virNetDevBandwidthSet(newdev->ifname, newb, false,
+-                                             !virDomainNetTypeSharesHostView(newdev)) < 0) {
+-                goto cleanup;
++            } else {
++                int flags = 0;
++
++                if (!virDomainNetTypeSharesHostView(newdev))
++                    flags |= VIR_NETDEV_BANDWIDTH_SET_DIR_SWAPPED;
++
++                if (virNetDevBandwidthSet(newdev->ifname, newb, flags) < 0)
++                    goto cleanup;
+             }
+         } else {
+             if (virDomainInterfaceClearQoS(vm->def, olddev) < 0)
+diff --git a/src/util/virnetdevbandwidth.c b/src/util/virnetdevbandwidth.c
+index 2b58c58d3e..1baad849c6 100644
+--- a/src/util/virnetdevbandwidth.c
++++ b/src/util/virnetdevbandwidth.c
+@@ -173,30 +173,35 @@ virNetDevBandwidthManipulateFilter(const char *ifname,
+  * virNetDevBandwidthSet:
+  * @ifname: on which interface
+  * @bandwidth: rates to set (may be NULL)
+- * @hierarchical_class: whether to create hierarchical class
+- * @swapped: true if IN/OUT should be set contrariwise
++ * @flags: bits indicating certain optional actions
+  *
++
+  * This function enables QoS on specified interface
+  * and set given traffic limits for both, incoming
+- * and outgoing traffic. Any previous setting get
+- * overwritten. If @hierarchical_class is TRUE, create
+- * hierarchical class. It is used to guarantee minimal
+- * throughput ('floor' attribute in NIC).
++ * and outgoing traffic.
++ *
++ * @flags bits and their meanings:
++ *
++ *   VIR_NETDEV_BANDWIDTH_SET_HIERARCHICAL_CLASS
++ *     whether to create a hierarchical class
++ *     A hiearchical class structure is used to implement a minimal
++ *     throughput guarantee ('floor' attribute in NIC).
+  *
+- * If @swapped is set, the IN part of @bandwidth is set on
+- * @ifname's TX, and vice versa. If it is not set, IN is set on
+- * RX and OUT on TX. This is because for some types of interfaces
+- * domain and the host live on the same side of the interface (so
+- * domain's RX/TX is host's RX/TX), and for some it's swapped
+- * (domain's RX/TX is hosts's TX/RX).
++ *   VIR_NETDEV_BANDWIDTH_SET_DIR_SWAPPED
++ *     set if IN/OUT should be set backwards from what's indicated in
++ *     the bandwidth, i.e. the IN part of @bandwidth is set on
++ *     @ifname's TX, and the OUT part of @bandwidth is set on
++ *     @ifname's RX.  This is needed because for some types of
++ *     interfaces the domain and the host live on the same side of the
++ *     interface (so domain's RX/TX is host's RX/TX), and for some
++ *     it's swapped (domain's RX/TX is hosts's TX/RX).
+  *
+  * Return 0 on success, -1 otherwise.
+  */
+ int
+ virNetDevBandwidthSet(const char *ifname,
+                       const virNetDevBandwidth *bandwidth,
+-                      bool hierarchical_class,
+-                      bool swapped)
++                      unsigned int flags)
+ {
+     int ret = -1;
+     virNetDevBandwidthRate *rx = NULL; /* From domain POV */
+@@ -205,6 +210,7 @@ virNetDevBandwidthSet(const char *ifname,
+     char *average = NULL;
+     char *peak = NULL;
+     char *burst = NULL;
++    bool hierarchical_class = flags & VIR_NETDEV_BANDWIDTH_SET_HIERARCHICAL_CLASS;
+ 
+     if (!bandwidth) {
+         /* nothing to be enabled */
+@@ -224,7 +230,7 @@ virNetDevBandwidthSet(const char *ifname,
+         return -1;
+     }
+ 
+-    if (swapped) {
++    if (flags & VIR_NETDEV_BANDWIDTH_SET_DIR_SWAPPED) {
+         rx = bandwidth->out;
+         tx = bandwidth->in;
+     } else {
+diff --git a/src/util/virnetdevbandwidth.h b/src/util/virnetdevbandwidth.h
+index 6d268fb119..80dc654486 100644
+--- a/src/util/virnetdevbandwidth.h
++++ b/src/util/virnetdevbandwidth.h
+@@ -39,11 +39,16 @@ void virNetDevBandwidthFree(virNetDevBandwidth *def);
+ 
+ G_DEFINE_AUTOPTR_CLEANUP_FUNC(virNetDevBandwidth, virNetDevBandwidthFree);
+ 
++typedef enum {
++    VIR_NETDEV_BANDWIDTH_SET_HIERARCHICAL_CLASS = (1 << 0),
++    VIR_NETDEV_BANDWIDTH_SET_DIR_SWAPPED = (1 << 1),
++} virNetDevBandwidthSetFlags;
++
+ int virNetDevBandwidthSet(const char *ifname,
+                           const virNetDevBandwidth *bandwidth,
+-                          bool hierarchical_class,
+-                          bool swapped)
++                          unsigned int flags)
+     G_GNUC_WARN_UNUSED_RESULT;
++
+ int virNetDevBandwidthClear(const char *ifname);
+ int virNetDevBandwidthCopy(virNetDevBandwidth **dest,
+                            const virNetDevBandwidth *src)
+diff --git a/tests/virnetdevbandwidthtest.c b/tests/virnetdevbandwidthtest.c
+index f7c38faa2e..6529ff4026 100644
+--- a/tests/virnetdevbandwidthtest.c
++++ b/tests/virnetdevbandwidthtest.c
+@@ -82,8 +82,14 @@ testVirNetDevBandwidthSet(const void *data)
+         if (virNetDevOpenvswitchInterfaceSetQos(iface, band, info->uuid, true) < 0)
+             return -1;
+     } else {
++        unsigned int flags = VIR_NETDEV_BANDWIDTH_SET_DIR_SWAPPED;
++
++        if (info->hierarchical_class)
++            flags |= VIR_NETDEV_BANDWIDTH_SET_HIERARCHICAL_CLASS;
++
+         exp_cmd = info->exp_cmd_tc;
+-        if (virNetDevBandwidthSet(iface, band, info->hierarchical_class, true) < 0)
++
++        if (virNetDevBandwidthSet(iface, band, flags) < 0)
+             return -1;
+     }
+ 
+-- 
+2.47.1
+

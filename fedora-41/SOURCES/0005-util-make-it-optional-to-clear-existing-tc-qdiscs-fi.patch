@@ -1,0 +1,185 @@
+From 490f58382dca2a415a5f16b6133f298d853bb379 Mon Sep 17 00:00:00 2001
+From: Laine Stump <laine@redhat.com>
+Date: Mon, 25 Nov 2024 22:24:45 -0500
+Subject: [PATCH 5/9] util: make it optional to clear existing tc
+ qdiscs/filters in virNetDevBandwidthSet()
+
+virNetDevBandwidthSet() always clears all existing qdiscs and their
+subordinate filters before adding all the new qdiscs/filters. This is
+normally exactly what we want, but there is one case (the network
+driver) where the Qdisc added by virNetDevBandwidthSet() may already
+be in use by the nftables backend (which will add a rule to fix the
+checksum of dhcp packets); in that case, we *don't* want
+virNetDevBandwidthSet() to clear out the qdisc that was already added
+for nftables, and none of the bandwidth filters have been added yet,
+so there already aren't any "old" filters that need to be removed
+either - it is safe to just skip virNetDevBandwidthClear() in this
+case.
+
+To allow the network driver to set bandwidth without first clearing
+it, this patch adds the flag VIR_NETDEV_BANDWIDTH_SET_CLEAR_ALL to the
+virNetDevBandwidthSetFlags enum, and recognizes it in
+virNetDevBandwidthSet() - if the flag is set, then
+virNetDevBandwidth() will call virNetDevBandwidthClear() just as it
+always has. But if the flag isn't set it *won't* call
+virNetDevBandwidthClear().
+
+As suggested above, VIR_NETDEV_BANDWIDTH_SET_CLEAR_ALL is set for all
+calls to virNetdevBandwidthSet() except for two places in the network
+driver.
+
+Signed-off-by: Laine Stump <laine@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+---
+ src/lxc/lxc_driver.c           |  2 +-
+ src/lxc/lxc_process.c          |  2 +-
+ src/qemu/qemu_command.c        |  2 +-
+ src/qemu/qemu_driver.c         |  2 +-
+ src/qemu/qemu_hotplug.c        |  4 ++--
+ src/util/virnetdevbandwidth.c  | 21 ++++++++++++++++++++-
+ src/util/virnetdevbandwidth.h  |  1 +
+ tests/virnetdevbandwidthtest.c |  3 ++-
+ 8 files changed, 29 insertions(+), 8 deletions(-)
+
+diff --git a/src/lxc/lxc_driver.c b/src/lxc/lxc_driver.c
+index b693980dbb..81581c74df 100644
+--- a/src/lxc/lxc_driver.c
++++ b/src/lxc/lxc_driver.c
+@@ -3570,7 +3570,7 @@ lxcDomainAttachDeviceNetLive(virLXCDriver *driver,
+     actualBandwidth = virDomainNetGetActualBandwidth(net);
+     if (actualBandwidth) {
+         if (virNetDevSupportsBandwidth(actualType)) {
+-            unsigned int flags = 0;
++            unsigned int flags = VIR_NETDEV_BANDWIDTH_SET_CLEAR_ALL;
+ 
+             if (!virDomainNetTypeSharesHostView(net))
+                 flags |= VIR_NETDEV_BANDWIDTH_SET_DIR_SWAPPED;
+diff --git a/src/lxc/lxc_process.c b/src/lxc/lxc_process.c
+index 0e689fbb70..081ce03a57 100644
+--- a/src/lxc/lxc_process.c
++++ b/src/lxc/lxc_process.c
+@@ -605,7 +605,7 @@ virLXCProcessSetupInterfaces(virLXCDriver *driver,
+         actualBandwidth = virDomainNetGetActualBandwidth(net);
+         if (actualBandwidth) {
+             if (virNetDevSupportsBandwidth(type)) {
+-                unsigned int flags = 0;
++                unsigned int flags = VIR_NETDEV_BANDWIDTH_SET_CLEAR_ALL;
+ 
+                 if (!virDomainNetTypeSharesHostView(net))
+                     flags |= VIR_NETDEV_BANDWIDTH_SET_DIR_SWAPPED;
+diff --git a/src/qemu/qemu_command.c b/src/qemu/qemu_command.c
+index b4815e5e71..ed54fd4c5b 100644
+--- a/src/qemu/qemu_command.c
++++ b/src/qemu/qemu_command.c
+@@ -8841,7 +8841,7 @@ qemuBuildInterfaceCommandLine(virQEMUDriver *driver,
+                                                         !virDomainNetTypeSharesHostView(net)) < 0)
+                     goto cleanup;
+             } else {
+-                unsigned int flags = 0;
++                unsigned int flags = VIR_NETDEV_BANDWIDTH_SET_CLEAR_ALL;
+ 
+                 if (!virDomainNetTypeSharesHostView(net))
+                     flags |= VIR_NETDEV_BANDWIDTH_SET_DIR_SWAPPED;
+diff --git a/src/qemu/qemu_driver.c b/src/qemu/qemu_driver.c
+index 14929616e5..9549065b1f 100644
+--- a/src/qemu/qemu_driver.c
++++ b/src/qemu/qemu_driver.c
+@@ -9942,7 +9942,7 @@ qemuDomainSetInterfaceParameters(virDomainPtr dom,
+                 goto endjob;
+             }
+         } else {
+-            unsigned int bwflags = 0;
++            unsigned int bwflags = VIR_NETDEV_BANDWIDTH_SET_CLEAR_ALL;
+ 
+             if (!virDomainNetTypeSharesHostView(net))
+                 bwflags |= VIR_NETDEV_BANDWIDTH_SET_DIR_SWAPPED;
+diff --git a/src/qemu/qemu_hotplug.c b/src/qemu/qemu_hotplug.c
+index d5e7e99359..ceda4119cd 100644
+--- a/src/qemu/qemu_hotplug.c
++++ b/src/qemu/qemu_hotplug.c
+@@ -1280,7 +1280,7 @@ qemuDomainAttachNetDevice(virQEMUDriver *driver,
+                                                         !virDomainNetTypeSharesHostView(net)) < 0)
+                     goto cleanup;
+             } else {
+-                int flags = 0;
++                int flags = VIR_NETDEV_BANDWIDTH_SET_CLEAR_ALL;
+ 
+                 if (!virDomainNetTypeSharesHostView(net))
+                     flags |= VIR_NETDEV_BANDWIDTH_SET_DIR_SWAPPED;
+@@ -4088,7 +4088,7 @@ qemuDomainChangeNet(virQEMUDriver *driver,
+                                                         !virDomainNetTypeSharesHostView(newdev)) < 0)
+                     goto cleanup;
+             } else {
+-                int flags = 0;
++                int flags = VIR_NETDEV_BANDWIDTH_SET_CLEAR_ALL;
+ 
+                 if (!virDomainNetTypeSharesHostView(newdev))
+                     flags |= VIR_NETDEV_BANDWIDTH_SET_DIR_SWAPPED;
+diff --git a/src/util/virnetdevbandwidth.c b/src/util/virnetdevbandwidth.c
+index 1baad849c6..9c48844c5d 100644
+--- a/src/util/virnetdevbandwidth.c
++++ b/src/util/virnetdevbandwidth.c
+@@ -196,6 +196,21 @@ virNetDevBandwidthManipulateFilter(const char *ifname,
+  *     interface (so domain's RX/TX is host's RX/TX), and for some
+  *     it's swapped (domain's RX/TX is hosts's TX/RX).
+  *
++ *   VIR_NETDEV_BANDWIDTH_SET_CLEAR_ALL
++ *     If VIR_NETDEV_BANDWIDTH_SET_CLEAR_ALL is set, then the root
++ *     qdisc is deleted before adding any new qdisc/class/filter,
++ *     which causes any pre-existing filters to also be deleted. If
++ *     not set, then it's assumed that there are no existing rules (or
++ *     that those already there need to be kept). The caller should
++ *     set this flag for an existing interface that is having its
++ *     bandwidth settings modified, but can leave it unset if the
++ *     interface was newly created and this is the first time
++ *     bandwidth has been set, but someone else might have already
++ *     added the qdisc (e.g. this is the case when the network driver
++ *     is setting bandwidth for a virtual network bridge device - the
++ *     nftables backend may have already added qdisc handle 1:0 and a
++ *     filter, and we don't want to delete them)
++ *
+  * Return 0 on success, -1 otherwise.
+  */
+ int
+@@ -238,7 +253,11 @@ virNetDevBandwidthSet(const char *ifname,
+         tx = bandwidth->out;
+     }
+ 
+-    virNetDevBandwidthClear(ifname);
++    /* Only if the caller requests, clear everything including root
++     * qdisc and all filters before adding everything.
++     */
++    if (flags & VIR_NETDEV_BANDWIDTH_SET_CLEAR_ALL)
++        virNetDevBandwidthClear(ifname);
+ 
+     if (tx && tx->average) {
+         average = g_strdup_printf("%llukbps", tx->average);
+diff --git a/src/util/virnetdevbandwidth.h b/src/util/virnetdevbandwidth.h
+index 80dc654486..744aa4c826 100644
+--- a/src/util/virnetdevbandwidth.h
++++ b/src/util/virnetdevbandwidth.h
+@@ -42,6 +42,7 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC(virNetDevBandwidth, virNetDevBandwidthFree);
+ typedef enum {
+     VIR_NETDEV_BANDWIDTH_SET_HIERARCHICAL_CLASS = (1 << 0),
+     VIR_NETDEV_BANDWIDTH_SET_DIR_SWAPPED = (1 << 1),
++    VIR_NETDEV_BANDWIDTH_SET_CLEAR_ALL = (1 << 2),
+ } virNetDevBandwidthSetFlags;
+ 
+ int virNetDevBandwidthSet(const char *ifname,
+diff --git a/tests/virnetdevbandwidthtest.c b/tests/virnetdevbandwidthtest.c
+index 6529ff4026..6d5c847ad7 100644
+--- a/tests/virnetdevbandwidthtest.c
++++ b/tests/virnetdevbandwidthtest.c
+@@ -82,7 +82,8 @@ testVirNetDevBandwidthSet(const void *data)
+         if (virNetDevOpenvswitchInterfaceSetQos(iface, band, info->uuid, true) < 0)
+             return -1;
+     } else {
+-        unsigned int flags = VIR_NETDEV_BANDWIDTH_SET_DIR_SWAPPED;
++        unsigned int flags = VIR_NETDEV_BANDWIDTH_SET_DIR_SWAPPED |
++                             VIR_NETDEV_BANDWIDTH_SET_CLEAR_ALL;
+ 
+         if (info->hierarchical_class)
+             flags |= VIR_NETDEV_BANDWIDTH_SET_HIERARCHICAL_CLASS;
+-- 
+2.47.1
+

@@ -1,0 +1,46 @@
+From: Martin Kletzander <mkletzan@redhat.com>
+Date: Fri, 16 Aug 2024 14:02:48 +0200
+Subject: [PATCH] virarptable: End parsing earlier in case of NLMSG_DONE
+Content-type: text/plain
+
+Check for the last multipart message right as the first thing.  The
+presumption probably was that the last message might still contain a
+payload we want to parse.  However that cannot be true since that would
+have to be a type RTM_NEWNEIGH.  This was not caught because older
+kernels were note sending NLMSG_DONE and probably relied on the fact
+that the parsing just stops after all the messages are walked through,
+which the NLMSG_OK macro successfully did.
+
+Resolves: https://issues.redhat.com/browse/RHEL-52449
+Resolves: https://bugzilla.redhat.com/2302245
+Fixes: a176d67cdfaf5b8237a7e3a80d8be0e6bdf2d8fd
+Signed-off-by: Martin Kletzander <mkletzan@redhat.com>
+Reviewed-by: Laine Stump <laine@redhat.com>
+---
+ src/util/virarptable.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/util/virarptable.c b/src/util/virarptable.c
+index 45ee76766f..20d11f97b0 100644
+--- a/src/util/virarptable.c
++++ b/src/util/virarptable.c
+@@ -83,6 +83,9 @@ virArpTableGet(void)
+         struct ndmsg *r = NLMSG_DATA(nh);
+         void *addr;
+ 
++        if (nh->nlmsg_type == NLMSG_DONE)
++            break;
++
+         if (nh->nlmsg_len < NLMSG_SPACE(sizeof(*r))) {
+             virReportError(VIR_ERR_INTERNAL_ERROR, "%s",
+                            _("wrong nlmsg len"));
+@@ -97,9 +100,6 @@ virArpTableGet(void)
+             (!(r->ndm_state == NUD_STALE || r->ndm_state == NUD_REACHABLE)))
+             continue;
+ 
+-        if (nh->nlmsg_type == NLMSG_DONE)
+-            return table;
+-
+         VIR_WARNINGS_NO_CAST_ALIGN
+         parse_rtattr(tb, NDA_MAX, NDA_RTA(r), NLMSG_PAYLOAD(nh, sizeof(*r)));
+         VIR_WARNINGS_RESET

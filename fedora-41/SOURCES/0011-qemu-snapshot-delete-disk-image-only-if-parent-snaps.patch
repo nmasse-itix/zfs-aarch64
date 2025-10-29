@@ -1,0 +1,64 @@
+From d51179fa82448f4720f1645f0b7100df80508cc4 Mon Sep 17 00:00:00 2001
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Thu, 9 Jan 2025 16:23:44 +0100
+Subject: [PATCH] qemu: snapshot: delete disk image only if parent snapshot is
+ external
+Content-type: text/plain
+
+When we are deleting external snapshot that is not active we only need
+to delete overlay disk image of the parent snapshot. This works
+correctly even if parent snapshot is external and active as it will have
+another overlay created when user reverted to that snapshot.
+
+In case the parent snapshot is internal there are no overlay disk images
+created as everything is stored internally within the disk image. In
+this case we would delete the actual disk image storing internal
+snapshots and most likely the original disk image as well resulting in
+data loss once the VM is shutoff.
+
+Fixes: https://gitlab.com/libvirt/libvirt/-/issues/734
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Peter Krempa <pkrempa@redhat.com>
+---
+ src/qemu/qemu_snapshot.c | 14 ++++++++------
+ 1 file changed, 8 insertions(+), 6 deletions(-)
+
+diff --git a/src/qemu/qemu_snapshot.c b/src/qemu/qemu_snapshot.c
+index 18b2e478f6..80cd54bf33 100644
+--- a/src/qemu/qemu_snapshot.c
++++ b/src/qemu/qemu_snapshot.c
+@@ -3144,6 +3144,8 @@ qemuSnapshotDeleteExternalPrepareData(virDomainObj *vm,
+             return -1;
+         }
+ 
++        data->parentSnap = qemuSnapshotFindParentSnapForDisk(snap, data->snapDisk);
++
+         if (data->merge) {
+             virStorageSource *snapDiskSrc = NULL;
+ 
+@@ -3185,8 +3187,6 @@ qemuSnapshotDeleteExternalPrepareData(virDomainObj *vm,
+                 qemuSnapshotGetDisksWithBackingStore(vm, snap, data);
+             }
+ 
+-            data->parentSnap = qemuSnapshotFindParentSnapForDisk(snap, data->snapDisk);
+-
+             if (data->parentSnap && !virDomainSnapshotIsExternal(data->parentSnap)) {
+                 virReportError(VIR_ERR_OPERATION_UNSUPPORTED, "%s",
+                                _("deleting external snapshot that has internal snapshot as parent not supported"));
+@@ -3642,10 +3642,12 @@ qemuSnapshotDiscardExternal(virDomainObj *vm,
+             if (!data->job)
+                 goto error;
+         } else {
+-            if (virStorageSourceInit(data->parentDomDisk->src) < 0 ||
+-                virStorageSourceUnlink(data->parentDomDisk->src) < 0) {
+-                VIR_WARN("Failed to remove snapshot image '%s'",
+-                         data->snapDisk->name);
++            if (data->parentSnap && virDomainSnapshotIsExternal(data->parentSnap)) {
++                if (virStorageSourceInit(data->parentDomDisk->src) < 0 ||
++                    virStorageSourceUnlink(data->parentDomDisk->src) < 0) {
++                    VIR_WARN("Failed to remove snapshot image '%s'",
++                             data->snapDisk->name);
++                }
+             }
+         }
+     }
