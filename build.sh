@@ -10,8 +10,8 @@ for dist in centos-* fedora-*; do
   chroot="${dist//centos/epel}-aarch64"
   echo "Building packages for $dist using $chroot..."
   for spec in $dist/SPECS/*.spec; do
-    spec=${spec#$dist/}
-    copr-cli buildscm --clone-url "$GIT_REPOSITORY" --subdir "$dist" --spec "$spec" --chroot "$chroot" --nowait "$COPR_PROJECT"
+    spec="${spec#$dist/}"
+    copr-cli buildscm --clone-url "$GIT_REPOSITORY" --method make_srpm --subdir "$dist" --spec "$spec" --chroot "$chroot" --nowait "$COPR_PROJECT"
   done
 done
 
