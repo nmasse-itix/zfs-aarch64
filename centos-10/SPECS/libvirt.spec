@@ -26,11 +26,7 @@
 %endif
 %define arches_vbox             %{arches_x86}
 %define arches_ceph             %{arches_64bit}
-%if 0%{?copr_projectname:1}
-    %define arches_zfs              %{arches_x86} %{power64} %{arm} aarch64
-%else
-    %define arches_zfs              %{arches_x86} %{power64} %{arm}
-%endif
+%define arches_zfs              %{arches_x86} %{power64} %{arm} aarch64
 %define arches_numactl          %{arches_x86} %{power64} aarch64 s390x
 %define arches_numad            %{arches_x86} %{power64} aarch64
 %define arches_ch               x86_64 aarch64
@@ -80,17 +76,7 @@
     %define with_storage_gluster 0
 %endif
 
-# Local overrides for Copr
-%if 0%{?copr_projectname:1}
-    %define with_storage_zfs      1
-%else
-    # Fedora had zfs-fuse until F43
-    %if 0%{?fedora} && 0%{?fedora} < 43
-        %define with_storage_zfs      0%{!?_without_storage_zfs:1}
-    %else
-        %define with_storage_zfs      0
-    %endif
-%endif
+%define with_storage_zfs      1
 
 %define with_storage_iscsi_direct 0%{!?_without_storage_iscsi_direct:1}
 # libiscsi has been dropped in RHEL-9

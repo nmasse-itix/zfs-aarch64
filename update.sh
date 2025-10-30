@@ -4,6 +4,20 @@ set -Eeuo pipefail
 
 find . -name '*.src.rpm' -delete
 
+function install_all_srpm () {
+  local dist=$1
+  echo "Importing source RPMs of $dist..."
+  rpm -ivh "--define=_topdir $PWD/$dist" "$dist/SRPMS/"*.src.rpm
+}
+
+function apply_patches () {
+  local dist=$1
+  for patch in "$dist/PATCHES"/*.patch; do
+    echo "Applying patch $(basename "$patch")..."
+    patch -d "$dist"* -p1 < "$patch"
+  done
+}
+
 for v in 41 42 43; do
   dist="fedora-$v"
   mkdir -p "$dist/SRPMS"
@@ -13,8 +27,8 @@ for v in 41 42 43; do
   if ! dnf download --repofrompath=zfs-$dist,http://download.zfsonlinux.org/fedora/$v/SRPMS/ --repo=zfs-$dist --source zfs zfs-dkms --destdir $dist/SRPMS/; then
     echo "ZFS source RPM not found for Fedora $v, skipping..."
   fi
-  echo "Importing source RPMs for Fedora $v..."
-  rpm -ivh "--define=_topdir $PWD/$dist" $dist/SRPMS/*.src.rpm
+  install_all_srpm "$dist"
+  apply_patches "$dist"
 done
 
 for v in 9 10; do
@@ -26,6 +40,6 @@ for v in 9 10; do
   if ! dnf download --repofrompath=zfs-$dist,http://download.zfsonlinux.org/epel/$v/SRPMS/ --repo=zfs-$dist --source zfs zfs-dkms --destdir $dist/SRPMS/; then
     echo "ZFS source RPM not found for CentOS Stream $v, skipping..."
   fi
-  echo "Importing source RPMs for CentOS Stream $v..."
-  rpm -ivh "--define=_topdir $PWD/$dist" $dist/SRPMS/*.src.rpm
+  install_all_srpm "$dist"
+  apply_patches "$dist"
 done

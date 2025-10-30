@@ -26,7 +26,7 @@
 %endif
 %define arches_vbox             %{arches_x86}
 %define arches_ceph             %{arches_64bit}
-%define arches_zfs              %{arches_x86} %{power64} %{arm}
+%define arches_zfs              %{arches_x86} %{power64} %{arm} aarch64
 %define arches_numactl          %{arches_x86} %{power64} aarch64 s390x
 %define arches_numad            %{arches_x86} %{power64} aarch64
 
@@ -75,12 +75,7 @@
     %endif
 %endif
 
-# Fedora has zfs-fuse
-%if 0%{?fedora}
-    %define with_storage_zfs      0%{!?_without_storage_zfs:1}
-%else
-    %define with_storage_zfs      0
-%endif
+%define with_storage_zfs      1
 
 %define with_storage_iscsi_direct 0%{!?_without_storage_iscsi_direct:1}
 # libiscsi has been dropped in RHEL-9
