@@ -76,11 +76,16 @@
     %define with_storage_gluster 0
 %endif
 
-# Fedora had zfs-fuse until F43
-%if 0%{?fedora} && 0%{?fedora} < 43
-    %define with_storage_zfs      0%{!?_without_storage_zfs:1}
+# Local overrides for Copr
+%if 0%{?copr_projectname:1}
+    %define with_storage_zfs      1
 %else
-    %define with_storage_zfs      0
+    # Fedora had zfs-fuse until F43
+    %if 0%{?fedora} && 0%{?fedora} < 43
+        %define with_storage_zfs      0%{!?_without_storage_zfs:1}
+    %else
+        %define with_storage_zfs      0
+    %endif
 %endif
 
 %define with_storage_iscsi_direct 0%{!?_without_storage_iscsi_direct:1}
