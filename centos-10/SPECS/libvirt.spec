@@ -26,7 +26,11 @@
 %endif
 %define arches_vbox             %{arches_x86}
 %define arches_ceph             %{arches_64bit}
-%define arches_zfs              %{arches_x86} %{power64} %{arm}
+%if 0%{?copr_projectname:1}
+    %define arches_zfs              %{arches_x86} %{power64} %{arm} aarch64
+%else
+    %define arches_zfs              %{arches_x86} %{power64} %{arm}
+%endif
 %define arches_numactl          %{arches_x86} %{power64} aarch64 s390x
 %define arches_numad            %{arches_x86} %{power64} aarch64
 %define arches_ch               x86_64 aarch64
