@@ -19,7 +19,7 @@ jobs:
     steps:
       # 1. Install pre-requisites
       - name: Install copr-cli
-        run: dnf install -y copr-cli git
+        run: dnf install -y copr-cli git git-lfs
 
       # 2. Checkout the repository
       - name: Checkout repository
