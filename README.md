@@ -8,6 +8,7 @@ This repository provides ZFS and libvirt RPM packages compiled specifically for 
 - **Libvirt with ZFS Storage**: Patches libvirt to enable ZFS storage pool support on aarch64 architecture, allowing virtualization environments to leverage ZFS storage backends
 - **Multi-distribution Support**: Builds packages for multiple Linux distributions (Fedora 41-43, CentOS Stream 9-10) to ensure broad compatibility
 - **Automated Building**: Uses COPR (Cool Other Package Repo) infrastructure for automated building and distribution
+- **Upstream Integration**: Keeps packages in sync with upstream ZFS and libvirt releases, applying necessary patches for ARM64 compatibility
 
 The repository automatically downloads upstream source RPMs, applies necessary patches (especially the `20-enable-zfs.patch` for libvirt), and builds optimized packages for ARM64 systems.
 
@@ -93,8 +94,8 @@ function build_spec() {
   rootdir="$(dirname $spec)/../"
   rootdir="$(realpath $rootdir)"
   outdir="$rootdir/RPMS/$spec_name-$mock_chroot-$(date -Iseconds)/"
-  mkdir -p "$outdir"
-  rm -f "$rootdir/$spec_name"-*.src.rpm
+  mkdir -p "$outdir" "$rootdir/SRPMS"
+  rm -f "$rootdir/SRPMS/$spec_name"-*.src.rpm
   rpmbuild --define "_topdir $rootdir" -bs "$spec"
   mock -r "$mock_chroot" --resultdir="$outdir" "$rootdir/SRPMS/$spec_name"-*.src.rpm
 }
