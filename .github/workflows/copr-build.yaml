@@ -1,10 +1,14 @@
 name: Trigger COPR Build
 
 on:
-  # Trigger on push to main branch
-  #push:
-  #  branches:
-  #    - main
+  # Trigger on push, but only for SPECS and SOURCES changes
+  push:
+    paths:
+    - fedora-*/SPECS/*.spec
+    - fedora-*/SOURCES/**
+    - centos-*/SPECS/*.spec
+    - centos-*/SOURCES/**
+
   # Enables manual triggering of the workflow
   workflow_dispatch:
 

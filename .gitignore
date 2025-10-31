@@ -2,3 +2,5 @@ SRPMS
 RPMS
 BUILD
 BUILDROOT
+*.orig
+*.rej
