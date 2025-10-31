@@ -17,13 +17,13 @@ jobs:
       image: fedora:latest
 
     steps:
-      # 1. Checkout the repository
+      # 1. Install pre-requisites
+      - name: Install copr-cli
+        run: dnf install -y copr-cli git
+
+      # 2. Checkout the repository
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      # 2. Install the 'copr-cli' dependency
-      - name: Install copr-cli
-        run: dnf install -y copr-cli
 
       # 3. Run the build script
       - name: Run COPR build script

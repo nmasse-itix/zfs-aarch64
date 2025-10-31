@@ -20,13 +20,13 @@ jobs:
       image: fedora:latest
 
     steps:
-      # 1. Checkout the repository
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      # 2. Install pre-requisites
+      # 1. Install pre-requisites
       - name: Install pre-requisites
         run: dnf install -y patch git
+
+      # 2. Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       # 3. Run the update script in the container
       - name: Run update script
