@@ -1,0 +1,33 @@
+name: Trigger COPR Build
+
+on:
+  # Trigger on push to main branch
+  #push:
+  #  branches:
+  #    - main
+  # Enables manual triggering of the workflow
+  workflow_dispatch:
+
+jobs:
+  build-copr:
+    runs-on: ubuntu-latest
+
+    # Defines the Fedora container for this job
+    container:
+      image: fedora:latest
+
+    steps:
+      # 1. Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Install the 'copr-cli' dependency
+      - name: Install copr-cli
+        run: dnf install -y copr-cli
+
+      # 3. Run the build script
+      - name: Run COPR build script
+        run: ./build.sh
+        # Inject secrets into the container as environment variables
+        env:
+          COPR_CONFIG: ${{ secrets.COPR_CONFIG }}

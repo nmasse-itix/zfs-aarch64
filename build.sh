@@ -2,6 +2,13 @@
 
 set -Eeuo pipefail
 
+if [ ! -f "$HOME/.config/copr" && -n "$COPR_CONFIG" ]; then
+  echo "Copr configuration file not found. Injecting from environment variable..."
+  mkdir -p "$HOME/.config"
+  echo "$COPR_CONFIG" > "$HOME/.config/copr"
+  chmod 0600 "$HOME/.config/copr"
+fi
+
 GIT_REPOSITORY="https://github.com/nmasse-itix/zfs-aarch64.git"
 COPR_PROJECT="zfs-aarch64"
 COPR_USERNAME="$(copr-cli whoami)"
