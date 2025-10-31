@@ -7,10 +7,6 @@ on:
   # Enables manual triggering of the workflow
   workflow_dispatch:
 
-# Grants the action write access to the repository
-permissions:
-  contents: write
-
 jobs:
   update-packages:
     runs-on: ubuntu-latest
@@ -27,26 +23,18 @@ jobs:
       # 2. Checkout the repository
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
 
       # 3. Run the update script in the container
       - name: Run update script
         run: ./update.sh
 
-      # 4. Prepare and push changes (if any)
-      - name: Commit and push changes
-        run: |
-          # Configure git
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-
-          # Add all changes
-          git add .
-
-          # Check if there are changes to commit
-          if ! git diff-index --quiet HEAD; then
-            echo "Changes detected. Committing and pushing..."
-            git commit -m "chore: Automatic package backport"
-            git push
-          else
-            echo "No changes to commit."
-          fi
+      # 4. Push changes (if any)
+      - uses: stefanzweifel/git-auto-commit-action@v7
+        with:
+          commit_message: Backport packages from upstream
+          commit_author: Nicolas Massé <nicolas.masse@itix.fr>
+          # We cannot use the default GITHUB_TOKEN as it is restricted and cannot
+          # trigger another workflow run, which is needed here to trigger the COPR build
+          token: ${{ secrets.COMMIT_TOKEN }}
