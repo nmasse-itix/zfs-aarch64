@@ -2,7 +2,7 @@
 
 set -Eeuo pipefail
 
-if [ ! -f "$HOME/.config/copr" && -n "$COPR_CONFIG" ]; then
+if [ ! -f "$HOME/.config/copr" ] && [ -n "$COPR_CONFIG" ]; then
   echo "Copr configuration file not found. Injecting from environment variable..."
   mkdir -p "$HOME/.config"
   echo "$COPR_CONFIG" > "$HOME/.config/copr"
