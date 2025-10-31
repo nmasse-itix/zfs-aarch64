@@ -25,6 +25,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.head_ref }}
+          lfs: true
+          # We cannot use the default GITHUB_TOKEN as it is restricted and cannot
+          # trigger another workflow run, which is needed here to trigger the COPR build
+          token: ${{ secrets.COMMIT_TOKEN }}
 
       # 3. Run the update script in the container
       - name: Run update script
@@ -35,6 +39,3 @@ jobs:
         with:
           commit_message: Backport packages from upstream
           commit_author: Nicolas Massé <nicolas.masse@itix.fr>
-          # We cannot use the default GITHUB_TOKEN as it is restricted and cannot
-          # trigger another workflow run, which is needed here to trigger the COPR build
-          token: ${{ secrets.COMMIT_TOKEN }}

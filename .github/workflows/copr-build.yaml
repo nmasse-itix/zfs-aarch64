@@ -24,6 +24,9 @@ jobs:
       # 2. Checkout the repository
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          lfs: true
 
       # 3. Run the build script
       - name: Run COPR build script
