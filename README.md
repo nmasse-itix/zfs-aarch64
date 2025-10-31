@@ -24,7 +24,7 @@ The packages are built and hosted on COPR. To use them on your aarch64 system:
    sudo dnf copr enable nmasse-itix/zfs-aarch64
 
    # Optionally, limit the packages to only ZFS-related ones
-   sudo dnf config-manager setopt 'copr:copr.fedorainfracloud.org:nmasse-itix:zfs-aarch64.includepkgs=zfs zfs-dkms libvirt-daemon-driver-storage-zfs'
+   sudo dnf config-manager setopt 'copr:copr.fedorainfracloud.org:nmasse-itix:zfs-aarch64.includepkgs=*zfs* libnvpair* libuutil* libzpool*'
 
    # Verify the repository is enabled and packages are available
    sudo dnf --repo=copr:copr.fedorainfracloud.org:nmasse-itix:zfs-aarch64 search zfs
