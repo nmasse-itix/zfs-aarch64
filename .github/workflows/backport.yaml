@@ -1,6 +1,6 @@
 name: Backport Packages (Daily)
 
-# Everyday at02:00 UTC
+# Everyday at 02:00 UTC
 on:
   schedule:
     - cron: '0 2 * * *'
@@ -24,7 +24,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Run the update script in the container
+      # 2. Install pre-requisites
+      - name: Install pre-requisites
+        run: dnf install -y patch git
+
+      # 3. Run the update script in the container
       - name: Run update script
         run: ./update.sh
 
