@@ -14,21 +14,25 @@ COPR_PROJECT="zfs-aarch64"
 COPR_USERNAME="$(copr-cli whoami)"
 
 for dist in centos-* fedora-*; do
-  chroot="${dist//centos/epel}-aarch64"
-  echo "Building packages for $dist using $chroot..."
+  copr_release="${dist//centos/epel}"
+  echo "Building packages for $copr_release..."
   for spec in $dist/SPECS/*.spec; do
     spec="${spec#$dist/}"
     package_name="$(basename "$spec" .spec)"
     dist_version="${dist#*-}"
     dist_name="${dist%%-*}"
+    copr_args=( --chroot "$copr_release-aarch64" )
 
-    copr-cli buildscm --clone-url "$GIT_REPOSITORY" --method make_srpm --subdir "$dist" --spec "$spec" --chroot "$chroot" --background --nowait "$COPR_PROJECT"
-
-    # Special case for libvirt on Fedora 43. Since the ZFS driver of libvirt is disabled since Fedora 43, we also build it for x86_64.
-    if [[ "$package_name" == "libvirt" && "$dist_name" == "fedora" && "$dist_version" -ge "43" ]]; then
-      echo "Also submitting libvirt build for Fedora 43 using x86_64 chroot..."
-      copr-cli buildscm --clone-url "$GIT_REPOSITORY" --method make_srpm --subdir "$dist" --spec "$spec" --chroot "$dist-x86_64" --background --nowait "$COPR_PROJECT"
+    # Special case for libvirt.
+    # Since the ZFS driver of libvirt is disabled since Fedora 43, we also build it for x86_64.
+    # And CentOS never shipped the Libvirt ZFS driver, so we build it for x86_64 as well.
+    if [[ "$package_name" == "libvirt" ]]; then
+      if  [[ "$dist_name" == "fedora" && "$dist_version" -ge "43" || "$dist_name" == "centos" ]]; then
+        copr_args+=( --chroot "$copr_release-x86_64" )
+      fi
     fi
+
+    copr-cli buildscm --clone-url "$GIT_REPOSITORY" --method make_srpm --subdir "$dist" --spec "$spec" "${copr_args[@]}" --background --nowait "$COPR_PROJECT"
   done
 done
 
