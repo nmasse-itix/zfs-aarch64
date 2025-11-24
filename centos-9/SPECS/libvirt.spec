@@ -283,7 +283,7 @@
 
 Summary: Library providing a simple virtualization API
 Name: libvirt
-Version: 11.8.0
+Version: 11.9.0
 Release: 1%{?dist}%{?extra_release}
 License: GPL-2.0-or-later AND LGPL-2.1-only AND LGPL-2.1-or-later AND OFL-1.1
 URL: https://libvirt.org/
@@ -2686,6 +2686,11 @@ exit 0
 %endif
 
 %changelog
+* Tue Nov  4 2025 Jiri Denemark <jdenemar@redhat.com> - 11.9.0-1
+- Rebased to libvirt-11.9.0 (RHEL-118197)
+- The rebase also fixes the following bugs:
+    RHEL-114003
+
 * Wed Oct  1 2025 Jiri Denemark <jdenemar@redhat.com> - 11.8.0-1
 - Rebased to libvirt-11.8.0 (RHEL-118197)
 - The rebase also fixes the following bugs:

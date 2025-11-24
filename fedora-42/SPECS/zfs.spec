@@ -102,7 +102,7 @@ sitedir = sysconfig.get_path('purelib', scheme, vars={'base': prefix})
 print(sitedir);" 2>/dev/null || %{__python} -Esc "from distutils import sysconfig; print(sysconfig.get_python_lib(0,0))")
 
 Name:           zfs
-Version:        2.3.4
+Version:        2.3.5
 Release:        1%{?dist}
 Summary:        Commands to control the kernel modules and libraries
 

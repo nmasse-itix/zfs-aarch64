@@ -290,7 +290,7 @@
 Summary: Library providing a simple virtualization API
 Name: libvirt
 Version: 11.0.0
-Release: 4%{?dist}
+Release: 5%{?dist}
 License: GPL-2.0-or-later AND LGPL-2.1-only AND LGPL-2.1-or-later AND OFL-1.1
 URL: https://libvirt.org/
 
@@ -310,6 +310,16 @@ Patch: 0001-Fix-mocking-of-virQEMUCapsProbeHVF-function.patch
 Patch: 0001-qemu-Be-more-forgiving-when-acquiring-QUERY-job-when.patch
 # libvirt-nss stops working after network restarts (bz #2364285)
 Patch: 0001-nss-Skip-empty-files-and-avoid-use-of-uninitialized-.patch
+
+# Fix build with wireshark
+Patch: 0001-wireshark-Drop-needless-declaration-of-proto_registe.patch
+Patch: 0002-wireshark-Switch-header-files-to-pragma-once.patch
+Patch: 0003-wireshark-Move-WIRESHARK_VERSION-macro-definition.patch
+Patch: 0004-wireshark-Fix-int-type-of-some-virNetMessageHeader-m.patch
+Patch: 0005-wireshark-Don-t-special-case-retval-of-get_program_d.patch
+Patch: 0006-wireshark-Introduce-and-use-vir_val_to_str.patch
+Patch: 0007-wireshark-Don-t-leak-column-strings.patch
+Patch: 0008-wireshark-Adapt-to-wireshark-4.6.0.patch
 
 Requires: libvirt-daemon = %{version}-%{release}
 Requires: libvirt-daemon-config-network = %{version}-%{release}
@@ -2696,6 +2706,9 @@ exit 0
 
 
 %changelog
+* Fri Oct 24 2025 Cole Robinson <crobinso@redhat.com> - 11.0.0-5
+- Fix build with latest wireshark
+
 * Fri Aug 08 2025 Cole Robinson <crobinso@redhat.com> - 11.0.0-4
 - libvirt-nss stops working after network restarts (bz #2364285)
 
