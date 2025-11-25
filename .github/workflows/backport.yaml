@@ -24,11 +24,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref }}
+          ref: main
           lfs: true
           # We cannot use the default GITHUB_TOKEN as it is restricted and cannot
           # trigger another workflow run, which is needed here to trigger the COPR build
           token: ${{ secrets.COMMIT_TOKEN }}
+
+      # 2.5. Configure Git safe directory
+      - name: Configure Git safe directory
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       # 3. Run the update script in the container
       - name: Run update script
