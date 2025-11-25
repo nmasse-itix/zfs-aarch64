@@ -1,9 +1,9 @@
 name: Backport Packages (Daily)
 
-# Everyday at 02:00 UTC
+# Every Sunday at 02:00 UTC
 on:
   schedule:
-    - cron: '0 2 * * *'
+    - cron: '0 2 * * 0'
   # Enables manual triggering of the workflow
   workflow_dispatch:
 
