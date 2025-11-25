@@ -1,4 +1,4 @@
-name: Backport Packages (Daily)
+name: Backport Packages (Weekly)
 
 # Every Sunday at 02:00 UTC
 on:
