@@ -12,7 +12,7 @@
 
 Name:           %{module}-dkms
 
-Version:        2.3.5
+Version:        2.4.0
 Release:        1%{?dist}
 Summary:        Kernel module(s) (dkms)
 
@@ -32,12 +32,12 @@ Requires(post): gcc, make, perl, diffutils
 
 # Hold back kernel upgrades if kernel is not supported by ZFS
 %if 0%{?rhel}%{?fedora}%{?mageia}%{?suse_version}%{?openEuler}
-Requires:       kernel-devel >= 4.18, kernel-devel <= 6.17.999
-Requires(post): kernel-devel >= 4.18, kernel-devel <= 6.17.999
-Conflicts:      kernel-devel < 4.18, kernel-devel > 6.17.999
-Requires:       kernel-uname-r >= 4.18, kernel-uname-r <= 6.17.999
-Requires(post): kernel-uname-r >= 4.18, kernel-uname-r <= 6.17.999
-Conflicts:      kernel-uname-r < 4.18, kernel-uname-r > 6.17.999
+Requires:       kernel-devel >= 4.18, kernel-devel <= 6.18.999
+Requires(post): kernel-devel >= 4.18, kernel-devel <= 6.18.999
+Conflicts:      kernel-devel < 4.18, kernel-devel > 6.18.999
+Requires:       kernel-uname-r >= 4.18, kernel-uname-r <= 6.18.999
+Requires(post): kernel-uname-r >= 4.18, kernel-uname-r <= 6.18.999
+Conflicts:      kernel-uname-r < 4.18, kernel-uname-r > 6.18.999
 
 Obsoletes:      spl-dkms <= %{version}
 %endif
