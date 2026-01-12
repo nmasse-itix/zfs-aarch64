@@ -18,7 +18,7 @@ function apply_patches () {
   done
 }
 
-for v in 41 42 43; do
+for v in 42 43 ; do
   dist="fedora-$v"
   mkdir -p "$dist/SRPMS"
   echo "Downloading libvirt source for Fedora $v..."
