@@ -13,7 +13,7 @@ GIT_REPOSITORY="https://github.com/nmasse-itix/zfs-aarch64.git"
 COPR_PROJECT="zfs-aarch64"
 COPR_USERNAME="$(copr-cli whoami)"
 
-for dist in centos-* fedora-*; do
+for dist in centos-{9,10} fedora-{42,43}; do
   copr_release="${dist//centos/epel}"
   echo "Building packages for $copr_release..."
   for spec in $dist/SPECS/*.spec; do
