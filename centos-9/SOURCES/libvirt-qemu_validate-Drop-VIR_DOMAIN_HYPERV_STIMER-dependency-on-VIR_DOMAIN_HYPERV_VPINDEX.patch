@@ -1,0 +1,69 @@
+From ba255cecade6c9f690997b53bfe517eef341695a Mon Sep 17 00:00:00 2001
+Message-ID: <ba255cecade6c9f690997b53bfe517eef341695a.1768317034.git.jdenemar@redhat.com>
+From: Michal Privoznik <mprivozn@redhat.com>
+Date: Tue, 6 Jan 2026 14:37:23 +0100
+Subject: [PATCH] qemu_validate: Drop VIR_DOMAIN_HYPERV_STIMER dependency on
+ VIR_DOMAIN_HYPERV_VPINDEX
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The original commit (v11.9.0-rc1~84) added a dependency checking
+of VIR_DOMAIN_HYPERV_STIMER on VIR_DOMAIN_HYPERV_VPINDEX
+(meaning, if stimer is on then vpindex must also be on). It
+justified this by citing QEMU documentation:
+
+Per QEMU documentation (docs/system/i386/hyperv.rst):
+
+``hv-stimer``
+  Enables Hyper-V synthetic timers. <snip/>
+
+  Requires: ``hv-vpindex``, ``hv-synic``, ``hv-time``
+
+While the documentation is almost correct (see previous commit
+when it's incorrect), the code express no dependency on vpindex
+(kvm_hyperv_properties[] array from target/i386/kvm/kvm.c):
+
+    [HYPERV_FEAT_STIMER] = {
+        .desc = "synthetic timers (hv-stimer)",
+        .flags = {
+            {.func = HV_CPUID_FEATURES, .reg = R_EAX,
+             .bits = HV_SYNTIMERS_AVAILABLE}
+        },
+        .dependencies = BIT(HYPERV_FEAT_SYNIC) | BIT(HYPERV_FEAT_TIME)
+    },
+
+If transitivity is taken into account then the documentation is
+of course correct (minus that one aforementioned special case).
+Well, there's no need for us to implement transitional checks.
+VIR_DOMAIN_HYPERV_STIMER requires VIR_DOMAIN_HYPERV_SYNIC and
+whether that requires VIR_DOMAIN_HYPERV_VPINDEX is another
+question.
+
+Just drop the transitive check.
+
+Resolves: https://gitlab.com/libvirt/libvirt/-/issues/837
+Resolves: https://issues.redhat.com/browse/RHEL-138689
+Fixes: da261327ea94300d1aa2d3b76ba9dcd4de6160f6
+Signed-off-by: Michal Privoznik <mprivozn@redhat.com>
+Reviewed-by: Daniel P. Berrangé <berrange@redhat.com>
+(cherry picked from commit 6df374fefc94f5e729870dfe1ff65b62ee986fce)
+Signed-off-by: Michal Privoznik <mprivozn@redhat.com>
+---
+ src/qemu/qemu_validate.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/src/qemu/qemu_validate.c b/src/qemu/qemu_validate.c
+index 3e27c11da3..66c59c3696 100644
+--- a/src/qemu/qemu_validate.c
++++ b/src/qemu/qemu_validate.c
+@@ -122,7 +122,6 @@ qemuValidateDomainDefHypervFeatures(const virDomainDef *def)
+         }
+     }
+ 
+-    CHECK_HV_FEAT(VIR_DOMAIN_HYPERV_STIMER, VIR_DOMAIN_HYPERV_VPINDEX);
+     CHECK_HV_FEAT(VIR_DOMAIN_HYPERV_STIMER, VIR_DOMAIN_HYPERV_SYNIC);
+ 
+     CHECK_HV_FEAT(VIR_DOMAIN_HYPERV_TLBFLUSH, VIR_DOMAIN_HYPERV_VPINDEX);
+-- 
+2.52.0

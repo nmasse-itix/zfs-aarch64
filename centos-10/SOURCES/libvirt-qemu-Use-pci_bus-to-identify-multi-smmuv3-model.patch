@@ -1,0 +1,69 @@
+From 933524784d813b24aa0970992b820698f1e03180 Mon Sep 17 00:00:00 2001
+Message-ID: <933524784d813b24aa0970992b820698f1e03180.1766070439.git.jdenemar@redhat.com>
+From: Nathan Chen via Devel <devel@lists.libvirt.org>
+Date: Tue, 2 Dec 2025 11:59:47 -0800
+Subject: [PATCH] qemu: Use pci_bus to identify multi-smmuv3 model
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Use presence of non-negative pci_bus to identify multi-smmuv3
+IOMMU model, instead of the niommus attribute. This allows for
+specifying a single arm-smmuv3 on the qemu command line,
+instead of both the virt-machine smmuv3 and arm-smmuv3
+being specified at the same time.
+
+Signed-off-by: Nathan Chen <nathanc@nvidia.com>
+Fixes: e70c4d54d365 conf: Support multiple device-pluggable smmuv3 IOMMUs
+Reviewed-by: Ján Tomko <jtomko@redhat.com>
+(cherry picked from commit da4305b7bc8d3bd52c60db1905db88e43ebd9868)
+
+https://issues.redhat.com/browse/RHEL-74200
+Signed-off-by: Ján Tomko <jtomko@redhat.com>
+---
+ src/qemu/qemu_command.c                                         | 2 +-
+ src/qemu/qemu_postparse.c                                       | 2 +-
+ .../iommu-smmuv3-pci-bus-single.aarch64-latest.args             | 2 +-
+ 3 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/qemu/qemu_command.c b/src/qemu/qemu_command.c
+index b69fe23236..fb89dbec27 100644
+--- a/src/qemu/qemu_command.c
++++ b/src/qemu/qemu_command.c
+@@ -7192,7 +7192,7 @@ qemuBuildMachineCommandLine(virCommand *cmd,
+     if (qemuAppendDomainFeaturesMachineParam(&buf, def, qemuCaps) < 0)
+         return -1;
+ 
+-    if (def->niommus == 1) {
++    if (def->iommus && def->iommus[0]->pci_bus < 0) {
+         switch (def->iommus[0]->model) {
+         case VIR_DOMAIN_IOMMU_MODEL_SMMUV3:
+             virBufferAddLit(&buf, ",iommu=smmuv3");
+diff --git a/src/qemu/qemu_postparse.c b/src/qemu/qemu_postparse.c
+index dc5ade829a..840d6a1174 100644
+--- a/src/qemu/qemu_postparse.c
++++ b/src/qemu/qemu_postparse.c
+@@ -1559,7 +1559,7 @@ qemuDomainDefEnableDefaultFeatures(virDomainDef *def,
+      * domain already has IOMMU without inremap. This will be fixed in
+      * qemuDomainIOMMUDefPostParse() but there domain definition can't be
+      * modified so change it now. */
+-    if (def->iommus && def->niommus == 1 &&
++    if (def->iommus && def->iommus[0]->pci_bus < 0 &&
+         (def->iommus[0]->intremap == VIR_TRISTATE_SWITCH_ON ||
+          qemuDomainNeedsIOMMUWithEIM(def)) &&
+         def->features[VIR_DOMAIN_FEATURE_IOAPIC] == VIR_DOMAIN_IOAPIC_NONE) {
+diff --git a/tests/qemuxmlconfdata/iommu-smmuv3-pci-bus-single.aarch64-latest.args b/tests/qemuxmlconfdata/iommu-smmuv3-pci-bus-single.aarch64-latest.args
+index 976467e641..34e7bda1c5 100644
+--- a/tests/qemuxmlconfdata/iommu-smmuv3-pci-bus-single.aarch64-latest.args
++++ b/tests/qemuxmlconfdata/iommu-smmuv3-pci-bus-single.aarch64-latest.args
+@@ -10,7 +10,7 @@ XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-guest/.config \
+ -name guest=guest,debug-threads=on \
+ -S \
+ -object '{"qom-type":"secret","id":"masterKey0","format":"raw","file":"/var/lib/libvirt/qemu/domain--1-guest/master-key.aes"}' \
+--machine virt,usb=off,gic-version=2,iommu=smmuv3,dump-guest-core=off,memory-backend=mach-virt.ram,acpi=off \
++-machine virt,usb=off,gic-version=2,dump-guest-core=off,memory-backend=mach-virt.ram,acpi=off \
+ -accel tcg \
+ -cpu cortex-a15 \
+ -m size=1048576k \
+-- 
+2.52.0

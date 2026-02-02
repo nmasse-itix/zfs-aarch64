@@ -1,0 +1,84 @@
+From 9a8eedf3c0eca3075cf27ebae2d872df6627f3dd Mon Sep 17 00:00:00 2001
+Message-ID: <9a8eedf3c0eca3075cf27ebae2d872df6627f3dd.1766070439.git.jdenemar@redhat.com>
+From: Jiri Denemark <jdenemar@redhat.com>
+Date: Fri, 5 Dec 2025 16:52:32 +0100
+Subject: [PATCH] util: Rework virFileIsSharedFSOverride using
+ virFileCheckParents
+
+The newly introduced virFileCheckParents is generic enough to be used
+for checking whether a specific path or any of its parents is included
+in the overrides array.
+
+Signed-off-by: Jiri Denemark <jdenemar@redhat.com>
+(cherry picked from commit eedf9ed68b45585569865604bf2a403670feaf3e)
+
+https://issues.redhat.com/browse/RHEL-102925
+
+Signed-off-by: Jiri Denemark <jdenemar@redhat.com>
+---
+ src/util/virfile.c | 35 ++++++++++++-----------------------
+ 1 file changed, 12 insertions(+), 23 deletions(-)
+
+diff --git a/src/util/virfile.c b/src/util/virfile.c
+index 52d711d2a9..05b2fa8168 100644
+--- a/src/util/virfile.c
++++ b/src/util/virfile.c
+@@ -3859,6 +3859,14 @@ virFileCheckParentsCanonicalize(const char *path,
+ }
+ 
+ 
++static bool
++virFileCheckParentsInOverrides(const char *path,
++                               void *opaque)
++{
++    return g_strv_contains((const char *const *) opaque, path);
++}
++
++
+ /**
+  * virFileIsSharedFSOverride:
+  * @path: Path to check
+@@ -3872,7 +3880,6 @@ virFileIsSharedFSOverride(const char *path,
+                           char *const *overrides)
+ {
+     g_autofree char *dirpath = NULL;
+-    char *p = NULL;
+     int rc;
+ 
+     if (!path || path[0] != '/' || !overrides)
+@@ -3894,29 +3901,11 @@ virFileIsSharedFSOverride(const char *path,
+         return false;
+     }
+ 
+-    if (g_strv_contains((const char *const *) overrides, dirpath))
+-        return true;
++    if (virFileCheckParents(dirpath, NULL, virFileCheckParentsInOverrides,
++                            (void *) overrides) < 0)
++        return false;
+ 
+-    /* Continue until we've scanned the entire path */
+-    while (p != dirpath) {
+-
+-        /* Find the last slash */
+-        if ((p = strrchr(dirpath, '/')) == NULL)
+-            break;
+-
+-        /* Truncate the path by overwriting the slash that we've just
+-         * found with a null byte. If it is the very first slash in
+-         * the path, we need to handle things slightly differently */
+-        if (p == dirpath)
+-            *(p+1) = '\0';
+-        else
+-            *p = '\0';
+-
+-        if (g_strv_contains((const char *const *) overrides, dirpath))
+-            return true;
+-    }
+-
+-    return false;
++    return true;
+ }
+ 
+ 
+-- 
+2.52.0

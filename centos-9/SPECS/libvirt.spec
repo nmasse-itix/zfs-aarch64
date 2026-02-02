@@ -6,7 +6,7 @@
 %define min_rhel 9
 %define min_fedora 41
 
-%define arches_qemu_kvm         %{ix86} x86_64 %{power64} %{arm} aarch64 s390x riscv64
+%define arches_qemu_kvm         %{ix86} x86_64 %{power64} aarch64 s390x riscv64
 %if 0%{?rhel}
     %if 0%{?rhel} >= 10
         %define arches_qemu_kvm     x86_64 aarch64 s390x riscv64
@@ -32,11 +32,21 @@
 %define arches_ch               x86_64 aarch64
 
 # The hypervisor drivers that run in libvirtd
-%define with_qemu          0%{!?_without_qemu:1}
 %define with_lxc           0%{!?_without_lxc:1}
 %define with_libxl         0%{!?_without_libxl:1}
 %define with_vbox          0%{!?_without_vbox:1}
 %define with_ch            0%{!?_without_ch:1}
+
+%ifarch %{arches_64bit}
+    %define with_qemu      0%{!?_without_qemu:1}
+%else
+    # QEMU drops 32-bit in Fedora 44
+    %if 0%{?fedora} > 43
+        %define with_qemu  0
+    %else
+        %define with_qemu  0%{!?_without_qemu:1}
+    %endif
+%endif
 
 %ifarch %{arches_qemu_kvm}
     %define with_qemu_kvm      %{with_qemu}
@@ -86,7 +96,6 @@
 
 # Other optional features
 %define with_numactl          0%{!?_without_numactl:1}
-%define with_userfaultfd_sysctl 0%{!?_without_userfaultfd_sysctl:1}
 
 # A few optional bits off by default, we enable later
 %define with_fuse             0
@@ -254,12 +263,6 @@
     %define enable_werror -Dwerror=false -Dgit_werror=disabled
 %endif
 
-# Fedora and RHEL-9 are new enough to support /dev/userfaultfd, which
-# does not require enabling vm.unprivileged_userfaultfd sysctl.
-%if 0%{?fedora} || 0%{?rhel}
-    %define with_userfaultfd_sysctl 0
-%endif
-
 %define tls_priority "@LIBVIRT,SYSTEM"
 
 # libvirt 8.1.0 stops distributing any sysconfig files.
@@ -283,8 +286,8 @@
 
 Summary: Library providing a simple virtualization API
 Name: libvirt
-Version: 11.9.0
-Release: 1%{?dist}%{?extra_release}
+Version: 11.10.0
+Release: 3%{?dist}%{?extra_release}
 License: GPL-2.0-or-later AND LGPL-2.1-only AND LGPL-2.1-or-later AND OFL-1.1
 URL: https://libvirt.org/
 
@@ -292,6 +295,18 @@ URL: https://libvirt.org/
     %define mainturl stable_updates/
 %endif
 Source: https://download.libvirt.org/%{?mainturl}libvirt-%{version}.tar.xz
+Patch1: libvirt-qemu-tpm-Account-for-possible-migration-without-actually-sharing-storage.patch
+Patch2: libvirt-tests-Test-virFileIsSharedFSOverride.patch
+Patch3: libvirt-util-Fix-race-condition-in-virFileIsSharedFSType.patch
+Patch4: libvirt-util-Fix-race-condition-in-virFileIsSharedFSOverride.patch
+Patch5: libvirt-util-Rework-virFileIsSharedFSOverride-using-virFileCheckParents.patch
+Patch6: libvirt-util-json-Increase-JSON-nesting-limit-when-parsing-to-300.patch
+Patch7: libvirt-virjsontest-Add-test-for-nesting-depth.patch
+Patch8: libvirt-qemu_validate-Drop-VIR_DOMAIN_HYPERV_SYNIC-dependency-on-VIR_DOMAIN_HYPERV_VPINDEX.patch
+Patch9: libvirt-qemu_validate-Drop-VIR_DOMAIN_HYPERV_STIMER-dependency-on-VIR_DOMAIN_HYPERV_VPINDEX.patch
+Patch10: libvirt-esx_util-Introduce-esxUtil_EscapeInventoryObject.patch
+Patch11: libvirt-esx-URI-encode-inventory-objects-twice.patch
+
 
 Requires: libvirt-daemon = %{version}-%{release}
 Requires: libvirt-daemon-config-network = %{version}-%{release}
@@ -399,7 +414,7 @@ BuildRequires: numactl-devel
     %endif
 BuildRequires: libcap-ng-devel >= 0.5.0
     %if %{with_fuse}
-BuildRequires: fuse-devel >= 2.8.6
+BuildRequires: fuse3-devel
     %endif
     %if %{with_libssh2}
 BuildRequires: libssh2-devel >= 1.3.0
@@ -669,9 +684,6 @@ Requires: /usr/bin/qemu-img
 Obsoletes: libvirt-daemon-driver-storage-rbd < 5.2.0
     %endif
 Obsoletes: libvirt-daemon-driver-storage-sheepdog < 8.8.0
-    %if !%{with_storage_zfs}
-Obsoletes: libvirt-daemon-driver-storage-zfs < 11.4.0
-    %endif
 
 %description daemon-driver-storage-core
 The storage driver plugin for the libvirtd daemon, providing
@@ -772,9 +784,13 @@ volumes using the ceph protocol.
 Summary: Storage driver plugin for ZFS
 Requires: libvirt-daemon-driver-storage-core = %{version}-%{release}
 Requires: libvirt-libs = %{version}-%{release}
-# Support any conforming implementation of zfs
+# Starting with Fedora 43 the 'zfs-fuse' is no longer shipped but obtainable
+# externally. The package builds fine without these. Users will have to provide
+# their own implementation.
+        %if 0%{?fedora} && 0%{?fedora} < 43
 Requires: /sbin/zfs
 Requires: /sbin/zpool
+        %endif
 
 %description daemon-driver-storage-zfs
 The storage driver backend adding implementation of the storage APIs for
@@ -798,7 +814,10 @@ Requires: libvirt-daemon-driver-storage-gluster = %{version}-%{release}
     %if %{with_storage_rbd}
 Requires: libvirt-daemon-driver-storage-rbd = %{version}-%{release}
     %endif
-    %if %{with_storage_zfs}
+# Starting with Fedora 43 the 'zfs-fuse' is no longer shipped but obtainable
+# externally. We do not want to install this as part of 'daemon-driver-storage'
+# any more.
+    %if %{with_storage_zfs} && 0%{?fedora} && 0%{?fedora} < 43
 Requires: libvirt-daemon-driver-storage-zfs = %{version}-%{release}
     %endif
 
@@ -1154,6 +1173,9 @@ MinGW Windows libvirt virtualization library.
 %prep
 %autosetup -S git_am -N
 
+%autopatch
+
+
 %build
 %if 0%{?fedora} >= %{min_fedora} || 0%{?rhel} >= %{min_rhel}
     %define supported_platform 1
@@ -1324,12 +1346,6 @@ exit 1
     %define arg_remote_mode -Dremote_default_mode=legacy
 %endif
 
-%if %{with_userfaultfd_sysctl}
-    %define arg_userfaultfd_sysctl -Duserfaultfd_sysctl=enabled
-%else
-    %define arg_userfaultfd_sysctl -Duserfaultfd_sysctl=disabled
-%endif
-
 %define when  %(date +"%%F-%%T")
 %define where %(hostname)
 %define who   %{?packager}%{!?packager:Unknown}
@@ -1413,7 +1429,6 @@ export SOURCE_DATE_EPOCH=$(stat --printf='%Y' %{_specdir}/libvirt.spec)
            -Dqemu_datadir=%{qemu_datadir} \
            -Dtls_priority=%{tls_priority} \
            -Dsysctl_config=enabled \
-           %{?arg_userfaultfd_sysctl} \
            -Dssh_proxy=enabled \
            %{?enable_werror} \
            -Dexpensive_tests=enabled \
@@ -1501,7 +1516,6 @@ export SOURCE_DATE_EPOCH=$(stat --printf='%Y' %{_specdir}/libvirt.spec)
   -Dstorage_vstorage=disabled \
   -Dstorage_zfs=disabled \
   -Dsysctl_config=disabled \
-  -Duserfaultfd_sysctl=disabled \
   -Dssh_proxy=disabled \
   -Dtests=disabled \
   -Dudev=disabled \
@@ -2309,9 +2323,6 @@ exit 0
     %if %{with_qemu}
 %files daemon-driver-qemu
 %config(noreplace) %{_sysconfdir}/libvirt/virtqemud.conf
-        %if %{with_userfaultfd_sysctl}
-%config(noreplace) %{_prefix}/lib/sysctl.d/60-qemu-postcopy-migration.conf
-        %endif
 %{_datadir}/augeas/lenses/virtqemud.aug
 %{_datadir}/augeas/lenses/tests/test_virtqemud.aug
 %{_unitdir}/virtqemud.service
@@ -2686,6 +2697,27 @@ exit 0
 %endif
 
 %changelog
+* Tue Jan 13 2026 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-3
+- util: json: Increase JSON nesting limit when parsing to 300 (RHEL-135128)
+- virjsontest: Add test for nesting depth (RHEL-135128)
+- qemu_validate: Drop VIR_DOMAIN_HYPERV_SYNIC dependency on VIR_DOMAIN_HYPERV_VPINDEX (RHEL-138689)
+- qemu_validate: Drop VIR_DOMAIN_HYPERV_STIMER dependency on VIR_DOMAIN_HYPERV_VPINDEX (RHEL-138689)
+- esx_util: Introduce esxUtil_EscapeInventoryObject() (RHEL-134127)
+- esx: URI encode inventory objects twice (RHEL-134127)
+
+* Thu Dec 18 2025 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-2
+- qemu: tpm: Account for possible migration without actually sharing storage (RHEL-108915)
+- tests: Test virFileIsSharedFSOverride (RHEL-135287)
+- util: Fix race condition in virFileIsSharedFSType (RHEL-135287)
+- util: Fix race condition in virFileIsSharedFSOverride (RHEL-135287)
+- util: Rework virFileIsSharedFSOverride using virFileCheckParents (RHEL-135287)
+
+* Tue Dec  2 2025 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-1
+- Rebased to libvirt-11.10.0 (RHEL-118197)
+- The rebase also fixes the following bugs:
+    RHEL-126090, RHEL-128107
+- spec: Fix RPM build when %{fedora} is undefined (RHEL-118197)
+
 * Tue Nov  4 2025 Jiri Denemark <jdenemar@redhat.com> - 11.9.0-1
 - Rebased to libvirt-11.9.0 (RHEL-118197)
 - The rebase also fixes the following bugs:

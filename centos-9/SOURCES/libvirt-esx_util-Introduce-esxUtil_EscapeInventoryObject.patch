@@ -1,0 +1,76 @@
+From 3a1f8bb838db0f412205e2918fc2eb4213f323ad Mon Sep 17 00:00:00 2001
+Message-ID: <3a1f8bb838db0f412205e2918fc2eb4213f323ad.1768317034.git.jdenemar@redhat.com>
+From: Michal Privoznik <mprivozn@redhat.com>
+Date: Wed, 7 Jan 2026 10:34:25 +0100
+Subject: [PATCH] esx_util: Introduce esxUtil_EscapeInventoryObject()
+
+The aim of this helper function is to URI-encode given string
+twice. There's a bug (fixed in next commit) in which we're unable
+to fetch .vmx file for a domain if corresponding datastore
+contains some special characters (like +). Cole Robinson
+discovered that encoding datastore twice enables libvirt to work
+around the issue [2]. Well, this function does exactly that.
+It was tested with the following inputs and all worked
+flawlessly: "datastore", "datastore2", "datastore2+",
+"datastore3+-@", "data store2+".
+
+1: https://issues.redhat.com/browse/RHEL-134127
+2: https://issues.redhat.com/browse/RHEL-133729#comment-28604072
+
+Signed-off-by: Michal Privoznik <mprivozn@redhat.com>
+Reviewed-by: Jiri Denemark <jdenemar@redhat.com>
+Reviewed-by: Richard W.M. Jones <rjones@redhat.com>
+(cherry picked from commit ffe74c7c551bd641cbcaa2512ed0ad4a25d3980b)
+Resolves: https://issues.redhat.com/browse/RHEL-134127
+Signed-off-by: Michal Privoznik <mprivozn@redhat.com>
+---
+ src/esx/esx_util.c | 18 ++++++++++++++++++
+ src/esx/esx_util.h |  3 +++
+ 2 files changed, 21 insertions(+)
+
+diff --git a/src/esx/esx_util.c b/src/esx/esx_util.c
+index 7ee0e5f7c0..9b714d90ba 100644
+--- a/src/esx/esx_util.c
++++ b/src/esx/esx_util.c
+@@ -448,3 +448,21 @@ esxUtil_EscapeForXml(const char *string)
+ 
+     return virBufferContentAndReset(&buffer);
+ }
++
++
++/* esxUtil_EscapeInventoryObject:
++ * @buf: the buffer to append to
++ * @string: the string argument which will be URI-encoded
++ *
++ * URI-encode given @string TWICE and append the result to the @buf. This is
++ * to be used with inventory objects (like 'dcPath' and 'dsName') to work
++ * around a VMware bug in which once round of URI-encoding is not enough.
++ */
++void
++esxUtil_EscapeInventoryObject(virBuffer *buf, const char *string)
++{
++    g_autoptr(GString) escaped = g_string_new(NULL);
++
++    g_string_append_uri_escaped(escaped, string, NULL, false);
++    virBufferURIEncodeString(buf, escaped->str);
++}
+diff --git a/src/esx/esx_util.h b/src/esx/esx_util.h
+index 58bc44e744..29f01e0c15 100644
+--- a/src/esx/esx_util.h
++++ b/src/esx/esx_util.h
+@@ -22,6 +22,7 @@
+ #pragma once
+ 
+ #include "internal.h"
++#include "virbuffer.h"
+ #include "viruri.h"
+ 
+ #define ESX_VI_CHECK_ARG_LIST(val) \
+@@ -67,3 +68,5 @@ void esxUtil_ReplaceSpecialWindowsPathChars(char *string);
+ char *esxUtil_EscapeDatastoreItem(const char *string);
+ 
+ char *esxUtil_EscapeForXml(const char *string);
++
++void esxUtil_EscapeInventoryObject(virBuffer *buf, const char *string);
+-- 
+2.52.0

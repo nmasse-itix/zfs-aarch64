@@ -1,0 +1,119 @@
+From 582ac1d5b308d1b9816c57ebca762a8796c67df4 Mon Sep 17 00:00:00 2001
+Message-ID: <582ac1d5b308d1b9816c57ebca762a8796c67df4.1766070256.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Mon, 1 Dec 2025 11:35:32 +0100
+Subject: [PATCH] qemu: tpm: Account for possible migration without actually
+ sharing storage
+
+The current logic in 'qemuTPMEmulatorBuildCommand' skips all setup if
+the *location* of the data is on what we'd consider shared storage.
+
+This means that if the location is not actually shared (e.g. it's shared
+betweeh some other hosts than the two doing the migration) and the path
+wasn't ever used (e.g. by migrating out) from the host where we're
+migrating into the complete setup of the location would be skipped even
+when it doesn't exist.
+
+Fix the logic by skipping only some of the setup steps so that
+'qemuTPMEmulatorCreateStorage' can still create the storage if it
+doesn't exist.
+
+The rest of the code then needs to take the 'created' flag returned from
+'qemuTPMEmulatorCreateStorage' into account.
+
+Fixes: 68103e9daf633b789428fedef56f816c92f6ee75
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit d56d0560946770d4364a4918cc289e6a7fe5d15c)
+https://issues.redhat.com/browse/RHEL-108915
+---
+ src/qemu/qemu_tpm.c | 29 ++++++++++++++++++++---------
+ 1 file changed, 20 insertions(+), 9 deletions(-)
+
+diff --git a/src/qemu/qemu_tpm.c b/src/qemu/qemu_tpm.c
+index 4c9445d72c..660410bcba 100644
+--- a/src/qemu/qemu_tpm.c
++++ b/src/qemu/qemu_tpm.c
+@@ -158,6 +158,7 @@ qemuTPMEmulatorGetPid(const char *swtpmStateDir,
+ /**
+  * qemuTPMEmulatorCreateStorage:
+  * @tpm: TPM definition for an emulator type
++ * @sharedStorageMigration: VM is being migrated with possibly shared storage
+  * @created: a pointer to a bool that will be set to true if the
+  *           storage was created because it did not exist yet
+  * @swtpm_user: The uid that needs to be able to access the directory
+@@ -169,6 +170,7 @@ qemuTPMEmulatorGetPid(const char *swtpmStateDir,
+  */
+ static int
+ qemuTPMEmulatorCreateStorage(virDomainTPMDef *tpm,
++                             bool sharedStorageMigration,
+                              bool *created,
+                              uid_t swtpm_user,
+                              gid_t swtpm_group)
+@@ -187,8 +189,17 @@ qemuTPMEmulatorCreateStorage(virDomainTPMDef *tpm,
+     *created = false;
+ 
+     if (!virFileExists(source_path) ||
+-        virDirIsEmpty(source_path, true) > 0)
++        virDirIsEmpty(source_path, true) > 0) {
+         *created = true;
++    } else {
++        /* If the location exists and is shared, we don't need to create it
++         * during migration */
++        if (sharedStorageMigration) {
++            VIR_DEBUG("Skipping TPM storage creation. Path '%s' already exists and is on shared storage.",
++                      source_path);
++            return 0;
++        }
++    }
+ 
+     if (virDirCreate(source_path, 0700, swtpm_user, swtpm_group,
+                      VIR_DIR_CREATE_ALLOW_EXIST) < 0) {
+@@ -809,16 +820,13 @@ qemuTPMEmulatorBuildCommand(virDomainTPMDef *tpm,
+         run_setup = true;
+     }
+ 
+-    /* Do not create storage and run swtpm_setup on incoming migration over
+-     * shared storage
+-     */
+     on_shared_storage = virFileIsSharedFS(tpm->data.emulator.source_path,
+                                           cfg->sharedFilesystems) == 1;
+-    if (incomingMigration && on_shared_storage)
+-        create_storage = false;
+ 
+     if (create_storage) {
+-        if (qemuTPMEmulatorCreateStorage(tpm, &created,
++        if (qemuTPMEmulatorCreateStorage(tpm,
++                                         incomingMigration && on_shared_storage,
++                                         &created,
+                                          cfg->swtpm_user, cfg->swtpm_group) < 0)
+             return NULL;
+         run_setup = created;
+@@ -885,6 +893,9 @@ qemuTPMEmulatorBuildCommand(virDomainTPMDef *tpm,
+     /* If swtpm supports it and the TPM state is stored on shared storage,
+      * start swtpm with --migration release-lock-outgoing so it can migrate
+      * across shared storage if needed.
++     *
++     * Note that if 'created' is true, the location didn't exist so the storage
++     * is not actually shared.
+      */
+     QEMU_DOMAIN_TPM_PRIVATE(tpm)->swtpm.can_migrate_shared_storage = false;
+     if (on_shared_storage &&
+@@ -892,13 +903,13 @@ qemuTPMEmulatorBuildCommand(virDomainTPMDef *tpm,
+ 
+         virCommandAddArg(cmd, "--migration");
+         virCommandAddArgFormat(cmd, "release-lock-outgoing%s",
+-                               incomingMigration ? ",incoming": "");
++                               incomingMigration && !created ? ",incoming": "");
+         QEMU_DOMAIN_TPM_PRIVATE(tpm)->swtpm.can_migrate_shared_storage = true;
+     } else {
+         /* Report an error if there's an incoming migration across shared
+          * storage and swtpm does not support the --migration option.
+          */
+-        if (incomingMigration && on_shared_storage) {
++        if (incomingMigration && on_shared_storage && !created) {
+             virReportError(VIR_ERR_ARGUMENT_UNSUPPORTED,
+                            _("%1$s (on destination side) does not support the --migration option needed for migration with shared storage"),
+                            swtpm);
+-- 
+2.52.0

@@ -1,0 +1,47 @@
+From e9a4c12db5da26084d8ec03b9249a53f980b3ad3 Mon Sep 17 00:00:00 2001
+Message-ID: <e9a4c12db5da26084d8ec03b9249a53f980b3ad3.1768317034.git.jdenemar@redhat.com>
+From: Michal Privoznik <mprivozn@redhat.com>
+Date: Tue, 6 Jan 2026 12:03:56 +0100
+Subject: [PATCH] qemu_validate: Drop VIR_DOMAIN_HYPERV_SYNIC dependency on
+ VIR_DOMAIN_HYPERV_VPINDEX
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Turns out, that synic hyperv enlightenment not always requires
+vpindex. Some (older) machine types (e.g. pc-i440fx-3.0,
+pc-q35-3.0, pc-i440fx-rhel7.6.0) can run with synic enabled and vpindex
+disabled. This is because they did enable 'x-hv-synic-kvm-only'
+CPU property, but starting from QEMU commit v3.1.0-rc0~44^2~9 the
+property is disabled by default.
+
+To avoid parsing machine type version, let's just drop this
+dependency validation and rely on QEMU to report sensible error
+message.
+
+Resolves: https://gitlab.com/libvirt/libvirt/-/issues/837
+Resolves: https://issues.redhat.com/browse/RHEL-138689
+Fixes: 1822d030c32d9857020ee8385b0a8808a29a472f
+Signed-off-by: Michal Privoznik <mprivozn@redhat.com>
+Reviewed-by: Daniel P. Berrangé <berrange@redhat.com>
+(cherry picked from commit 8e9a9f86b046c5bc917875f4b3854f13c4b33b55)
+Signed-off-by: Michal Privoznik <mprivozn@redhat.com>
+---
+ src/qemu/qemu_validate.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/src/qemu/qemu_validate.c b/src/qemu/qemu_validate.c
+index da08fd17cd..3e27c11da3 100644
+--- a/src/qemu/qemu_validate.c
++++ b/src/qemu/qemu_validate.c
+@@ -112,8 +112,6 @@ qemuValidateDomainDefHypervFeatures(const virDomainDef *def)
+         return -1;
+     }
+ 
+-    CHECK_HV_FEAT(VIR_DOMAIN_HYPERV_SYNIC, VIR_DOMAIN_HYPERV_VPINDEX);
+-
+     if (def->hyperv.features[VIR_DOMAIN_HYPERV_STIMER] == VIR_TRISTATE_SWITCH_ON) {
+         if (!virDomainDefHasTimer(def, VIR_DOMAIN_TIMER_NAME_HYPERVCLOCK)) {
+             virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
+-- 
+2.52.0
