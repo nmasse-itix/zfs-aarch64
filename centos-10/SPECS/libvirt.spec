@@ -287,7 +287,7 @@
 Summary: Library providing a simple virtualization API
 Name: libvirt
 Version: 11.10.0
-Release: 2%{?dist}%{?extra_release}
+Release: 4%{?dist}%{?extra_release}
 License: GPL-2.0-or-later AND LGPL-2.1-only AND LGPL-2.1-or-later AND OFL-1.1
 URL: https://libvirt.org/
 
@@ -302,6 +302,24 @@ Patch4: libvirt-tests-Test-virFileIsSharedFSOverride.patch
 Patch5: libvirt-util-Fix-race-condition-in-virFileIsSharedFSType.patch
 Patch6: libvirt-util-Fix-race-condition-in-virFileIsSharedFSOverride.patch
 Patch7: libvirt-util-Rework-virFileIsSharedFSOverride-using-virFileCheckParents.patch
+Patch8: libvirt-util-json-Increase-JSON-nesting-limit-when-parsing-to-300.patch
+Patch9: libvirt-virjsontest-Add-test-for-nesting-depth.patch
+Patch10: libvirt-qemuSecurityMoveImageMetadata-Move-seclabels-only-to-virStorageSource-of-same-type.patch
+Patch11: libvirt-esx-Allow-connecting-to-IPv6-server.patch
+Patch12: libvirt-qemuDomainSetThrottleGroup-Enforce-non-zero-groupname-string-length.patch
+Patch13: libvirt-qemuDomainSetBlockIoTuneField-Move-setting-of-group_name-out-of-the-loop.patch
+Patch14: libvirt-qemuDomainSetThrottleGroup-Always-honour-thottle-group-name-passed-as-argument.patch
+Patch15: libvirt-qemuDomainSetThrottleGroup-Don-t-put-group-name-into-the-tunable-event-twice.patch
+Patch16: libvirt-qemuSnapshotDiskHasBackingDisk-Avoid-call-of-virStorageSourceIsSameLocation-with-NULL-argument.patch
+Patch17: libvirt-qemuSnapshotUpdateBackingStore-Remove-stale-comment.patch
+Patch18: libvirt-qemuSnapshotDiskHasBackingDisk-Use-proper-max_depth-when-calling-virStorageSourceGetMetadata.patch
+Patch19: libvirt-virDomainSnapshotDefAssignExternalNames-Improve-error-message.patch
+Patch20: libvirt-qemuSnapshotUpdateBackingStore-Retry-as-curent-user-if-qemu-img-fails.patch
+Patch21: libvirt-esx-Debug-URL-just-before-opening-with-curl.patch
+Patch22: libvirt-esx-Abstract-all-URL-creation-code-into-one-function.patch
+Patch23: libvirt-esx-Switch-to-creating-URLs-using-virURIFormat.patch
+Patch24: libvirt-esx_util-Introduce-esxUtil_EscapeInventoryObject.patch
+Patch25: libvirt-esx-URI-encode-inventory-objects-twice.patch
 
 
 Requires: libvirt-daemon = %{version}-%{release}
@@ -2693,6 +2711,28 @@ exit 0
 %endif
 
 %changelog
+* Thu Jan 29 2026 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-4
+- qemuDomainSetThrottleGroup: Enforce non-zero 'groupname' string length (RHEL-141820)
+- qemuDomainSetBlockIoTuneField: Move setting of 'group_name' out of the loop (RHEL-141820)
+- qemuDomainSetThrottleGroup: Always honour thottle group name passed as argument (RHEL-141820)
+- qemuDomainSetThrottleGroup: Don't put group name into the 'tunable' event twice (RHEL-141820)
+- qemuSnapshotDiskHasBackingDisk: Avoid call of virStorageSourceIsSameLocation with NULL argument (RHEL-144089)
+- qemuSnapshotUpdateBackingStore: Remove stale comment (RHEL-144089)
+- qemuSnapshotDiskHasBackingDisk: Use proper 'max_depth' when calling 'virStorageSourceGetMetadata' (RHEL-144089)
+- virDomainSnapshotDefAssignExternalNames: Improve error message (RHEL-144089)
+- qemuSnapshotUpdateBackingStore: Retry as curent user if qemu-img fails (RHEL-144089)
+- esx: Debug URL just before opening with curl (RHEL-138300)
+- esx: Abstract all URL-creation code into one function (RHEL-138300)
+- esx: Switch to creating URLs using virURIFormat (RHEL-138300)
+- esx_util: Introduce esxUtil_EscapeInventoryObject() (RHEL-140196)
+- esx: URI encode inventory objects twice (RHEL-140196)
+
+* Fri Jan 23 2026 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-3
+- util: json: Increase JSON nesting limit when parsing to 300 (RHEL-135181)
+- virjsontest: Add test for nesting depth (RHEL-135181)
+- qemuSecurityMoveImageMetadata: Move seclabels only to virStorageSource of same type (RHEL-114412)
+- esx: Allow connecting to IPv6 server (RHEL-138300)
+
 * Thu Dec 18 2025 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-2
 - tests: add test for a single per-device smmuv3 (RHEL-74200)
 - qemu: Use pci_bus to identify multi-smmuv3 model (RHEL-74200)

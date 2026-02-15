@@ -287,7 +287,7 @@
 Summary: Library providing a simple virtualization API
 Name: libvirt
 Version: 11.10.0
-Release: 3%{?dist}%{?extra_release}
+Release: 4%{?dist}%{?extra_release}
 License: GPL-2.0-or-later AND LGPL-2.1-only AND LGPL-2.1-or-later AND OFL-1.1
 URL: https://libvirt.org/
 
@@ -306,6 +306,16 @@ Patch8: libvirt-qemu_validate-Drop-VIR_DOMAIN_HYPERV_SYNIC-dependency-on-VIR_DOM
 Patch9: libvirt-qemu_validate-Drop-VIR_DOMAIN_HYPERV_STIMER-dependency-on-VIR_DOMAIN_HYPERV_VPINDEX.patch
 Patch10: libvirt-esx_util-Introduce-esxUtil_EscapeInventoryObject.patch
 Patch11: libvirt-esx-URI-encode-inventory-objects-twice.patch
+Patch12: libvirt-qemuSecurityMoveImageMetadata-Move-seclabels-only-to-virStorageSource-of-same-type.patch
+Patch13: libvirt-qemuDomainSetThrottleGroup-Enforce-non-zero-groupname-string-length.patch
+Patch14: libvirt-qemuDomainSetBlockIoTuneField-Move-setting-of-group_name-out-of-the-loop.patch
+Patch15: libvirt-qemuDomainSetThrottleGroup-Always-honour-thottle-group-name-passed-as-argument.patch
+Patch16: libvirt-qemuDomainSetThrottleGroup-Don-t-put-group-name-into-the-tunable-event-twice.patch
+Patch17: libvirt-qemuSnapshotDiskHasBackingDisk-Avoid-call-of-virStorageSourceIsSameLocation-with-NULL-argument.patch
+Patch18: libvirt-qemuSnapshotUpdateBackingStore-Remove-stale-comment.patch
+Patch19: libvirt-qemuSnapshotDiskHasBackingDisk-Use-proper-max_depth-when-calling-virStorageSourceGetMetadata.patch
+Patch20: libvirt-virDomainSnapshotDefAssignExternalNames-Improve-error-message.patch
+Patch21: libvirt-qemuSnapshotUpdateBackingStore-Retry-as-curent-user-if-qemu-img-fails.patch
 
 
 Requires: libvirt-daemon = %{version}-%{release}
@@ -2697,6 +2707,18 @@ exit 0
 %endif
 
 %changelog
+* Thu Jan 29 2026 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-4
+- qemuSecurityMoveImageMetadata: Move seclabels only to virStorageSource of same type (RHEL-140624)
+- qemuDomainSetThrottleGroup: Enforce non-zero 'groupname' string length (RHEL-144010)
+- qemuDomainSetBlockIoTuneField: Move setting of 'group_name' out of the loop (RHEL-144010)
+- qemuDomainSetThrottleGroup: Always honour thottle group name passed as argument (RHEL-144010)
+- qemuDomainSetThrottleGroup: Don't put group name into the 'tunable' event twice (RHEL-144010)
+- qemuSnapshotDiskHasBackingDisk: Avoid call of virStorageSourceIsSameLocation with NULL argument (RHEL-144090)
+- qemuSnapshotUpdateBackingStore: Remove stale comment (RHEL-144090)
+- qemuSnapshotDiskHasBackingDisk: Use proper 'max_depth' when calling 'virStorageSourceGetMetadata' (RHEL-144090)
+- virDomainSnapshotDefAssignExternalNames: Improve error message (RHEL-144090)
+- qemuSnapshotUpdateBackingStore: Retry as curent user if qemu-img fails (RHEL-144090)
+
 * Tue Jan 13 2026 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-3
 - util: json: Increase JSON nesting limit when parsing to 300 (RHEL-135128)
 - virjsontest: Add test for nesting depth (RHEL-135128)

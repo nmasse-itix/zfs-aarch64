@@ -1,0 +1,75 @@
+From f44d3fa49e7f1507e93c1e9525dd0db4227809cc Mon Sep 17 00:00:00 2001
+Message-ID: <f44d3fa49e7f1507e93c1e9525dd0db4227809cc.1769699749.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Fri, 16 Jan 2026 16:39:40 +0100
+Subject: [PATCH] qemuDomainSetThrottleGroup: Always honour thottle group name
+ passed as argument
+
+Due to the code share with 'qemuDomainSetBlockIoTune' the throttle group
+setting code accepts the throttle group name also via typed parameters.
+
+In 'qemuDomainSetThrottleGroup', this means that there are 2 ways to
+pass it the throttle group name and both are handled slightly
+differently. Specifically the name of the group used in the list of
+groups is the name taken from the typed parameters rather than the one
+passed via API. We also don't validate that they match.
+
+Now if the name in the typed parameters is missing we'd add empty string
+to the group list which would later crash when looking up the group
+name.
+
+To avoid this problem always use the name passed via argument. This is
+achieved by passing it into 'qemuDomainSetBlockIoTuneFields' so that it
+overrides whatever is in the typed parameters.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 0cd13906dcf15ea5709a7b253466816a1b875640)
+
+https://issues.redhat.com/browse/RHEL-141820 [rhel-10.2]
+https://issues.redhat.com/browse/RHEL-144010 [rhel-9.8]
+---
+ src/qemu/qemu_driver.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/src/qemu/qemu_driver.c b/src/qemu/qemu_driver.c
+index ecfb65c535..a6d5dd6e05 100644
+--- a/src/qemu/qemu_driver.c
++++ b/src/qemu/qemu_driver.c
+@@ -15168,6 +15168,7 @@ static int
+ qemuDomainSetBlockIoTuneFields(virDomainBlockIoTuneInfo *info,
+                                virTypedParameterPtr params,
+                                int nparams,
++                               const char *group_name,
+                                qemuBlockIoTuneSetFlags *set_fields,
+                                virTypedParameterPtr *eventParams,
+                                int *eventNparams,
+@@ -15238,6 +15239,10 @@ qemuDomainSetBlockIoTuneFields(virDomainBlockIoTuneInfo *info,
+                          WRITE_IOPS_SEC_MAX_LENGTH);
+     }
+ 
++    /* The name of the throttle group passed via API always takes precedence */
++    if (group_name)
++        param_group_name = group_name;
++
+     if (param_group_name) {
+         info->group_name = g_strdup(param_group_name);
+         *set_fields |= QEMU_BLOCK_IOTUNE_SET_GROUP_NAME;
+@@ -15385,6 +15390,7 @@ qemuDomainSetBlockIoTune(virDomainPtr dom,
+     if (qemuDomainSetBlockIoTuneFields(&info,
+                                        params,
+                                        nparams,
++                                       NULL,
+                                        &set_fields,
+                                        &eventParams,
+                                        &eventNparams,
+@@ -20379,6 +20385,7 @@ qemuDomainSetThrottleGroup(virDomainPtr dom,
+     if (qemuDomainSetBlockIoTuneFields(&info,
+                                        params,
+                                        nparams,
++                                       groupname,
+                                        &set_fields,
+                                        &eventParams,
+                                        &eventNparams,
+-- 
+2.52.0

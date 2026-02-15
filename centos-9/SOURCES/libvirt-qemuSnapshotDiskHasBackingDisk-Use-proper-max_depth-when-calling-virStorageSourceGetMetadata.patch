@@ -1,0 +1,75 @@
+From f14123947915d38c9c1b9664f5da73cbf21ff4c5 Mon Sep 17 00:00:00 2001
+Message-ID: <f14123947915d38c9c1b9664f5da73cbf21ff4c5.1769699807.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Mon, 26 Jan 2026 16:39:24 +0100
+Subject: [PATCH] qemuSnapshotDiskHasBackingDisk: Use proper 'max_depth' when
+ calling 'virStorageSourceGetMetadata'
+
+The 'max_depth' argument of 'virStorageSourceGetMetadata' doesn't just
+limit how far the function goes but also fails completely if the chain
+is deeper than the passed value.
+
+In 'qemuSnapshotDiskHasBackingDisk' we only care about finding the
+backing image, so just one level below, the passed path, but due to the
+above setting '1' as max_depth will make the function simply fail every
+time.
+
+Extract and reuse QEMU_DOMAIN_STORAGE_SOURCE_CHAIN_MAX_DEPTH as the
+detection depth. While '200' layers is overkill for this code, we also
+start a full qemu instance just to delete an snapshot so this doens't
+matter and still protects from self-referential images.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Pavel Hrdina <phrdina@redhat.com>
+(cherry picked from commit 6bcdf4ee59595041c76ed2339c45503723400737)
+
+ https://issues.redhat.com/browse/RHEL-144089 [rhel-10.2]
+ https://issues.redhat.com/browse/RHEL-144090 [rhel-9.8]
+---
+ src/qemu/qemu_domain.c   | 2 --
+ src/qemu/qemu_domain.h   | 1 +
+ src/qemu/qemu_snapshot.c | 4 +++-
+ 3 files changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/src/qemu/qemu_domain.c b/src/qemu/qemu_domain.c
+index ac56fc7cb4..486a0e7913 100644
+--- a/src/qemu/qemu_domain.c
++++ b/src/qemu/qemu_domain.c
+@@ -6297,8 +6297,6 @@ qemuDomainStorageAlias(const char *device, int depth)
+ }
+ 
+ 
+-#define QEMU_DOMAIN_STORAGE_SOURCE_CHAIN_MAX_DEPTH 200
+-
+ /**
+  * qemuDomainStorageSourceValidateDepth:
+  * @src: storage source chain to validate
+diff --git a/src/qemu/qemu_domain.h b/src/qemu/qemu_domain.h
+index 3396f929fd..b9bb338682 100644
+--- a/src/qemu/qemu_domain.h
++++ b/src/qemu/qemu_domain.h
+@@ -706,6 +706,7 @@ int qemuDomainCheckDiskStartupPolicy(virQEMUDriver *driver,
+                                      size_t diskIndex,
+                                      bool cold_boot);
+ 
++#define QEMU_DOMAIN_STORAGE_SOURCE_CHAIN_MAX_DEPTH 200
+ int qemuDomainStorageSourceValidateDepth(virStorageSource *src,
+                                          int add,
+                                          const char *diskdst);
+diff --git a/src/qemu/qemu_snapshot.c b/src/qemu/qemu_snapshot.c
+index 942ba0d437..c23add5103 100644
+--- a/src/qemu/qemu_snapshot.c
++++ b/src/qemu/qemu_snapshot.c
+@@ -3133,7 +3133,9 @@ qemuSnapshotDiskHasBackingDisk(void *payload,
+                               NULL, &uid, &gid);
+ 
+         if (!disk->src->backingStore)
+-            ignore_value(virStorageSourceGetMetadata(disk->src, uid, gid, 1, false));
++            ignore_value(virStorageSourceGetMetadata(disk->src, uid, gid,
++                                                     QEMU_DOMAIN_STORAGE_SOURCE_CHAIN_MAX_DEPTH,
++                                                     false));
+ 
+         if (disk->src->backingStore &&
+             virStorageSourceIsSameLocation(disk->src->backingStore, iterdata->diskSrc)) {
+-- 
+2.52.0

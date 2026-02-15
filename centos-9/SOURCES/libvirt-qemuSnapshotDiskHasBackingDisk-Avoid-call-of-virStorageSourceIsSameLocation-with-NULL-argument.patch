@@ -1,0 +1,48 @@
+From 5192ca6507c19b3c98df8dff4354d2e22d946cfb Mon Sep 17 00:00:00 2001
+Message-ID: <5192ca6507c19b3c98df8dff4354d2e22d946cfb.1769699807.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Fri, 23 Jan 2026 08:42:50 +0100
+Subject: [PATCH] qemuSnapshotDiskHasBackingDisk: Avoid call of
+ virStorageSourceIsSameLocation with NULL argument
+
+When the 'backingStore' pointer is not populated the function calls
+'virStorageSourceGetMetadata' to try to populate it but if the on-disk
+metadata doesn't have a backing image (e.g. if it's the 'base' image of
+the chain) the 'backingStore' or the metadata fetcher fails the pointer
+will still be NULL.
+
+The function then calls 'virStorageSourceIsSameLocation' but the
+internal functions for dealing with storage sources don't handle NULL
+gracefully.
+
+Since the code calling 'qemu-img' based on the data detected here
+doesn't actually raise errors if the operations fail there's no point
+in raising errors here either.
+
+Closes: https://gitlab.com/libvirt/libvirt/-/issues/844
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Pavel Hrdina <phrdina@redhat.com>
+(cherry picked from commit b43aee9cc904961e0f18156c3c84a3e460bdb7be)
+
+ https://issues.redhat.com/browse/RHEL-144089 [rhel-10.2]
+ https://issues.redhat.com/browse/RHEL-144090 [rhel-9.8]
+---
+ src/qemu/qemu_snapshot.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/qemu/qemu_snapshot.c b/src/qemu/qemu_snapshot.c
+index 302775af92..dfc3f449e3 100644
+--- a/src/qemu/qemu_snapshot.c
++++ b/src/qemu/qemu_snapshot.c
+@@ -3135,7 +3135,8 @@ qemuSnapshotDiskHasBackingDisk(void *payload,
+         if (!disk->src->backingStore)
+             ignore_value(virStorageSourceGetMetadata(disk->src, uid, gid, 1, false));
+ 
+-        if (virStorageSourceIsSameLocation(disk->src->backingStore, iterdata->diskSrc)) {
++        if (disk->src->backingStore &&
++            virStorageSourceIsSameLocation(disk->src->backingStore, iterdata->diskSrc)) {
+             struct _qemuSnapshotDisksWithBackingStoreData *data =
+                 g_new0(struct _qemuSnapshotDisksWithBackingStoreData, 1);
+ 
+-- 
+2.52.0

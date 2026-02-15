@@ -1,0 +1,37 @@
+From 12d480034a41e3066c6c5adab27b504cfaefea6a Mon Sep 17 00:00:00 2001
+Message-ID: <12d480034a41e3066c6c5adab27b504cfaefea6a.1769699749.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Mon, 26 Jan 2026 16:39:45 +0100
+Subject: [PATCH] virDomainSnapshotDefAssignExternalNames: Improve error
+ message
+
+Mention the 'path' where the detection failed as well as include the
+possibility that the 'path' doesn't exist in the message itself.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Pavel Hrdina <phrdina@redhat.com>
+(cherry picked from commit f1ad5219368b1b2c603d876f28dc852fd6da3a8d)
+
+ https://issues.redhat.com/browse/RHEL-144089 [rhel-10.2]
+ https://issues.redhat.com/browse/RHEL-144090 [rhel-9.8]
+---
+ src/conf/snapshot_conf.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/conf/snapshot_conf.c b/src/conf/snapshot_conf.c
+index 039ed77b84..4309667a34 100644
+--- a/src/conf/snapshot_conf.c
++++ b/src/conf/snapshot_conf.c
+@@ -541,8 +541,8 @@ virDomainSnapshotDefAssignExternalNames(virDomainSnapshotDef *def,
+ 
+         if (stat(origpath, &sb) < 0 || !S_ISREG(sb.st_mode)) {
+             virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
+-                           _("source for disk '%1$s' is not a regular file; refusing to generate external snapshot name"),
+-                           disk->name);
++                           _("source for disk '%1$s' (%2$s) doesn't exist or is not a regular file; refusing to generate external snapshot name"),
++                           disk->name, origpath);
+             return -1;
+         }
+ 
+-- 
+2.52.0

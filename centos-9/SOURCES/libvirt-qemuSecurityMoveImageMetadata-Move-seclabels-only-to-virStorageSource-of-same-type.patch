@@ -1,0 +1,57 @@
+From 887c6befa9ee57f0da96f49dd62bea463bbc75af Mon Sep 17 00:00:00 2001
+Message-ID: <887c6befa9ee57f0da96f49dd62bea463bbc75af.1769699807.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Mon, 12 Jan 2026 10:54:38 +0100
+Subject: [PATCH] qemuSecurityMoveImageMetadata: Move seclabels only to
+ virStorageSource of same type
+
+The concept of moving a seclabel is used e.g. when a new image is
+introduced to the backing chain (or one of the existing ones becomes
+active during block commit). What it does is that it moves the metedata
+remembering the original seclabel to the new image.
+
+That idea works reasonably well if both the original and new image are
+of same type e.g. a file, where they have comparable seclabel.
+
+It breaks down though when you e.g. create a snapshot stored in a 'file'
+on top of a disk originally backed by a 'block' storage source, since
+the seclabels differ quite siginificantly.
+
+This patch restricts the seclabel move in qemuSecurityMoveImageMetadata
+to happen only if the storage sources are of same type to avoid the
+issue. This means that the seclabels will not be remebered and will be
+restored to the default but it's better than to transfer wrong labels.
+
+Resolves: https://issues.redhat.com/browse/RHEL-114412
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 37d51c0d27692a245d7a5eeeef57748e7574de4b)
+https://issues.redhat.com/browse/RHEL-140624
+---
+ src/qemu/qemu_security.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/src/qemu/qemu_security.c b/src/qemu/qemu_security.c
+index 6bb0f9170d..84cb981a96 100644
+--- a/src/qemu/qemu_security.c
++++ b/src/qemu/qemu_security.c
+@@ -201,6 +201,16 @@ qemuSecurityMoveImageMetadata(virQEMUDriver *driver,
+     if (qemuDomainNamespaceEnabled(vm, QEMU_DOMAIN_NS_MOUNT))
+         pid = vm->pid;
+ 
++    /* Moving seclabel metadata makes sense only when 'src' and 'dst' are of
++     * the same type. Otherwise 'dst' could end up with a seclabel that doesn't
++     * make sense for it (e.g. a seclabel originating from a block device /dev
++     * node moved to a file), once the seclabels are restored for it */
++    if (src && dst && src->type != dst->type) {
++        VIR_DEBUG("dropping security label metadata instead of moving it from '%s' to '%s' due to type mismatch",
++                  NULLSTR(src->path), NULLSTR(dst->path));
++        dst = NULL;
++    }
++
+     return virSecurityManagerMoveImageMetadata(driver->securityManager,
+                                                cfg->sharedFilesystems,
+                                                pid, src, dst);
+-- 
+2.52.0
