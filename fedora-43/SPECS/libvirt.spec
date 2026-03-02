@@ -284,7 +284,7 @@
 Summary: Library providing a simple virtualization API
 Name: libvirt
 Version: 11.6.0
-Release: 2%{?dist}
+Release: 3%{?dist}
 License: GPL-2.0-or-later AND LGPL-2.1-only AND LGPL-2.1-or-later AND OFL-1.1
 URL: https://libvirt.org/
 
@@ -679,9 +679,6 @@ Requires: /usr/bin/qemu-img
 Obsoletes: libvirt-daemon-driver-storage-rbd < 5.2.0
     %endif
 Obsoletes: libvirt-daemon-driver-storage-sheepdog < 8.8.0
-    %if !%{with_storage_zfs}
-Obsoletes: libvirt-daemon-driver-storage-zfs < 11.4.0
-    %endif
 
 %description daemon-driver-storage-core
 The storage driver plugin for the libvirtd daemon, providing
@@ -782,9 +779,13 @@ volumes using the ceph protocol.
 Summary: Storage driver plugin for ZFS
 Requires: libvirt-daemon-driver-storage-core = %{version}-%{release}
 Requires: libvirt-libs = %{version}-%{release}
-# Support any conforming implementation of zfs
+# Starting with Fedora 43 the 'zfs-fuse' is no longer shipped but obtainable
+# externally. The package builds fine without these. Users will have to provide
+# their own implementation.
+        %if 0%{?fedora} && 0%{?fedora} < 43
 Requires: /sbin/zfs
 Requires: /sbin/zpool
+        %endif
 
 %description daemon-driver-storage-zfs
 The storage driver backend adding implementation of the storage APIs for
@@ -808,7 +809,10 @@ Requires: libvirt-daemon-driver-storage-gluster = %{version}-%{release}
     %if %{with_storage_rbd}
 Requires: libvirt-daemon-driver-storage-rbd = %{version}-%{release}
     %endif
-    %if %{with_storage_zfs}
+# Starting with Fedora 43 the 'zfs-fuse' is no longer shipped but obtainable
+# externally. We do not want to install this as part of 'daemon-driver-storage'
+# any more.
+    %if %{with_storage_zfs} && 0%{?fedora} && 0%{?fedora} < 43
 Requires: libvirt-daemon-driver-storage-zfs = %{version}-%{release}
     %endif
 
@@ -2694,6 +2698,9 @@ exit 0
 
 
 %changelog
+* Mon Feb 16 2026 Daniel P. Berrangé <berrange@redhat.com> - 11.6.0-3
+- Re-enable ZFS (rhbz#2407005)
+
 * Fri Oct 31 2025 Cole Robinson <crobinso@redhat.com> - 11.6.0-2
 - Fix build with latest wireshark
 
