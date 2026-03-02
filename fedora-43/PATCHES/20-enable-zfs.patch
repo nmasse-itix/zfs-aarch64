@@ -10,12 +10,14 @@ diff --git a/SPECS/libvirt.spec b/SPECS/libvirt.spec
  %define arches_numactl          %{arches_x86} %{power64} aarch64 s390x
  %define arches_numad            %{arches_x86} %{power64} aarch64
  %define arches_ch               x86_64 aarch64
-@@ -76,12 +76,7 @@
+@@ -76,14 +76,7 @@
      %define with_storage_gluster 0
  %endif
  
--# Fedora had zfs-fuse until F43
--%if 0%{?fedora} && 0%{?fedora} < 43
+-# On Fedora 43, the 'zfs-fuse' package was removed, but is obtainable via
+-# other means. Build the backend, but it's no longer considered to be part
+-# of 'daemon-driver-storage'.
+-%if 0%{?fedora}
 -    %define with_storage_zfs      0%{!?_without_storage_zfs:1}
 -%else
 -    %define with_storage_zfs      0
