@@ -1,0 +1,90 @@
+From 66c0e4b7a9b472c539701bede38cbe9278fec830 Mon Sep 17 00:00:00 2001
+Message-ID: <66c0e4b7a9b472c539701bede38cbe9278fec830.1772815312.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Thu, 27 Nov 2025 19:05:17 +0100
+Subject: [PATCH] qemu_firmware: Move copying of nvram.format to loader.format
+
+As explained in the comment that comes along with it, this code
+ensures that the user's preference is taken into account when
+nvram.format is the only information that's provided. Currently
+it lives in the parser, but it makes more sense for it to be
+together with the rest of the firmware selection code instead.
+
+Note that this move is not completely seamless: once the code
+is moved outside of the parser, it can no longer reliably know
+whether the <loader> element actually existed in the domain
+XML. The difference is subtle enough that the test suite is
+completely unaffected, and we are going to rework the handling
+of this scenario in a way that restores the original behavior
+later anyway, so it ultimately doesn't matter.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 4df091dea4a41767561bab1bcd28c3fd9ac2dcea)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/conf/domain_conf.c   | 18 +-----------------
+ src/qemu/qemu_firmware.c | 15 +++++++++++++++
+ 2 files changed, 16 insertions(+), 17 deletions(-)
+
+diff --git a/src/conf/domain_conf.c b/src/conf/domain_conf.c
+index cb047e5a3e..e72cda0048 100644
+--- a/src/conf/domain_conf.c
++++ b/src/conf/domain_conf.c
+@@ -17937,24 +17937,8 @@ virDomainLoaderDefParseXMLLoader(virDomainLoaderDef *loader,
+ {
+     unsigned int format = 0;
+ 
+-    if (!loaderNode) {
+-        /* If there is no <loader> element but the <nvram> element
+-         * was present, copy the format from the latter to the
+-         * former.
+-         *
+-         * This ensures that a configuration such as
+-         *
+-         *   <os>
+-         *     <nvram format='foo'/>
+-         *   </os>
+-         *
+-         * behaves as expected, that is, results in a firmware build
+-         * with format 'foo' being selected */
+-        if (loader->nvram)
+-            loader->format = loader->nvram->format;
+-
++    if (!loaderNode)
+         return 0;
+-    }
+ 
+     if (virXMLPropTristateBool(loaderNode, "readonly", VIR_XML_PROP_NONE,
+                                &loader->readonly) < 0)
+diff --git a/src/qemu/qemu_firmware.c b/src/qemu/qemu_firmware.c
+index 6c609ece6a..a22853361b 100644
+--- a/src/qemu/qemu_firmware.c
++++ b/src/qemu/qemu_firmware.c
+@@ -1783,6 +1783,21 @@ qemuFirmwareFillDomain(virQEMUDriver *driver,
+     bool autoSelection = (def->os.firmware != VIR_DOMAIN_OS_DEF_FIRMWARE_NONE);
+     int ret;
+ 
++    /* If there is no <loader> element but the <nvram> element
++     * was present, copy the format from the latter to the
++     * former.
++     *
++     * This ensures that a configuration such as
++     *
++     *   <os>
++     *     <nvram format='foo'/>
++     *   </os>
++     *
++     * behaves as expected, that is, results in a firmware build
++     * with format 'foo' being selected */
++    if (loader && loader->nvram && !loader->format)
++        loader->format = loader->nvram->format;
++
+     /* If we're loading an existing configuration from disk, we
+      * should try as hard as possible to preserve historical
+      * behavior. In particular, firmware autoselection being enabled
+-- 
+2.53.0

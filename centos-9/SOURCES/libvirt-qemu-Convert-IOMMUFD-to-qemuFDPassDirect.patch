@@ -1,0 +1,125 @@
+From ca83d49a04eb50ecb5bff8dde9928a9c15764fee Mon Sep 17 00:00:00 2001
+Message-ID: <ca83d49a04eb50ecb5bff8dde9928a9c15764fee.1771423832.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Sun, 15 Feb 2026 19:42:39 +0100
+Subject: [PATCH] qemu: Convert IOMMUFD to qemuFDPassDirect
+
+This cleans up creating QEMU command line and makes it easier when
+adding hotplug support.
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit df59beed37db5451a44955c1c440eebc474bffb2)
+
+Resolves: https://issues.redhat.com/browse/RHEL-150353
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/qemu/qemu_command.c | 7 ++-----
+ src/qemu/qemu_domain.c  | 4 ++--
+ src/qemu/qemu_domain.h  | 2 +-
+ src/qemu/qemu_process.c | 6 ++++--
+ tests/qemuxmlconftest.c | 6 ++++--
+ 5 files changed, 13 insertions(+), 12 deletions(-)
+
+diff --git a/src/qemu/qemu_command.c b/src/qemu/qemu_command.c
+index 482f8d8ca2..0057934cc6 100644
+--- a/src/qemu/qemu_command.c
++++ b/src/qemu/qemu_command.c
+@@ -5350,19 +5350,16 @@ qemuBuildIOMMUFDCommandLine(virCommand *cmd,
+                             virDomainObj *vm)
+ {
+     qemuDomainObjPrivate *priv = vm->privateData;
+-    g_autofree char *fdstr = g_strdup_printf("%d", priv->iommufd);
+     g_autoptr(virJSONValue) props = NULL;
+ 
+     if (!virDomainDefHasPCIHostdevWithIOMMUFD(def))
+         return 0;
+ 
+-    virCommandPassFD(cmd, priv->iommufd, VIR_COMMAND_PASS_FD_CLOSE_PARENT);
+-
+-    priv->iommufd = -1;
++    qemuFDPassDirectTransferCommand(priv->iommufd, cmd);
+ 
+     if (qemuMonitorCreateObjectProps(&props, "iommufd",
+                                      "iommufd0",
+-                                     "S:fd", fdstr,
++                                     "S:fd", qemuFDPassDirectGetPath(priv->iommufd),
+                                      NULL) < 0)
+         return -1;
+ 
+diff --git a/src/qemu/qemu_domain.c b/src/qemu/qemu_domain.c
+index 64b01e524f..d9cd9324e0 100644
+--- a/src/qemu/qemu_domain.c
++++ b/src/qemu/qemu_domain.c
+@@ -1975,7 +1975,7 @@ qemuDomainObjPrivateDataClear(qemuDomainObjPrivate *priv)
+ 
+     priv->migrationRecoverSetup = false;
+ 
+-    VIR_FORCE_CLOSE(priv->iommufd);
++    g_clear_pointer(&priv->iommufd, qemuFDPassDirectFree);
+ 
+     g_clear_pointer(&priv->memoryBackingDir, g_free);
+ }
+@@ -2044,7 +2044,7 @@ qemuDomainObjPrivateAlloc(void *opaque)
+     priv->blockjobs = virHashNew(virObjectUnref);
+     priv->fds = virHashNew(g_object_unref);
+ 
+-    priv->iommufd = -1;
++    priv->iommufd = NULL;
+     priv->pidMonitored = -1;
+ 
+     /* agent commands block by default, user can choose different behavior */
+diff --git a/src/qemu/qemu_domain.h b/src/qemu/qemu_domain.h
+index 30ca67bf76..a5403ecc93 100644
+--- a/src/qemu/qemu_domain.h
++++ b/src/qemu/qemu_domain.h
+@@ -264,7 +264,7 @@ struct _qemuDomainObjPrivate {
+     /* named file descriptor groups associated with the VM */
+     GHashTable *fds;
+ 
+-    int iommufd;
++    qemuFDPassDirect *iommufd;
+ 
+     char *memoryBackingDir;
+ };
+diff --git a/src/qemu/qemu_process.c b/src/qemu/qemu_process.c
+index 3729edcd7e..91167d73bc 100644
+--- a/src/qemu/qemu_process.c
++++ b/src/qemu/qemu_process.c
+@@ -7685,13 +7685,15 @@ static int
+ qemuProcessOpenIommuFd(virDomainObj *vm)
+ {
+     qemuDomainObjPrivate *priv = vm->privateData;
++    int iommufd;
+ 
+     VIR_DEBUG("Opening IOMMU FD for domain %s", vm->def->name);
+ 
+-    if ((priv->iommufd = virIOMMUFDOpenDevice()) < 0)
++    if ((iommufd = virIOMMUFDOpenDevice()) < 0)
+         return -1;
+ 
+-    VIR_DEBUG("Opened IOMMU FD %d for domain %s", priv->iommufd, vm->def->name);
++    priv->iommufd = qemuFDPassDirectNew("iommufd", &iommufd);
++
+     return 0;
+ }
+ 
+diff --git a/tests/qemuxmlconftest.c b/tests/qemuxmlconftest.c
+index 885512a38c..eeb9298b2e 100644
+--- a/tests/qemuxmlconftest.c
++++ b/tests/qemuxmlconftest.c
+@@ -406,8 +406,10 @@ testQemuPrepareHostdev(virDomainObj *vm)
+         }
+     }
+ 
+-    if (virDomainDefHasPCIHostdevWithIOMMUFD(vm->def))
+-        priv->iommufd = 0;
++    if (virDomainDefHasPCIHostdevWithIOMMUFD(vm->def)) {
++        int iommufd = 0;
++        priv->iommufd = qemuFDPassDirectNew("iommufd", &iommufd);
++    }
+ }
+ 
+ 
+-- 
+2.53.0

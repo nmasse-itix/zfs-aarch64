@@ -1,0 +1,151 @@
+From b4ac6b2fe5cc443ca41eaad3301137c2c47ced2d Mon Sep 17 00:00:00 2001
+Message-ID: <b4ac6b2fe5cc443ca41eaad3301137c2c47ced2d.1772815313.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Fri, 23 Jan 2026 14:34:05 +0100
+Subject: [PATCH] tests: Rename custom JSON firmware descriptors
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Most of the JSON firmware descriptors in our test suite come from
+the Fedora package for edk2, but there are a few additional ones
+that we have created ourselves to ensure coverage of uncommon or
+problematic scenarios.
+
+In order to make sure that such descriptors are clearly marked as
+custom, rename them to include the string "libvirt" in the path.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+Reviewed-by: Daniel P. Berrangé <berrange@redhat.com>
+(cherry picked from commit ccdff699ac30fc12691ad45b36951317d37e1030)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ .../etc/qemu/firmware/20-bios.json               |  1 -
+ .../etc/qemu/firmware/20-libvirt-bios.json       |  1 +
+ .../etc/qemu/firmware/59-combined.json           |  1 -
+ .../etc/qemu/firmware/59-libvirt-combined.json   |  1 +
+ .../{92-masked.json => 92-libvirt-masked.json}   |  0
+ .../{10-bios.json => 10-libvirt-bios.json}       |  0
+ ...90-combined.json => 90-libvirt-combined.json} |  0
+ .../{91-bios.json => 91-libvirt-bios.json}       |  0
+ .../{92-masked.json => 92-libvirt-masked.json}   |  0
+ .../{93-invalid.json => 93-libvirt-invalid.json} |  0
+ tests/qemufirmwaretest.c                         | 16 ++++++++--------
+ 11 files changed, 10 insertions(+), 10 deletions(-)
+ delete mode 120000 tests/qemufirmwaredata/etc/qemu/firmware/20-bios.json
+ create mode 120000 tests/qemufirmwaredata/etc/qemu/firmware/20-libvirt-bios.json
+ delete mode 120000 tests/qemufirmwaredata/etc/qemu/firmware/59-combined.json
+ create mode 120000 tests/qemufirmwaredata/etc/qemu/firmware/59-libvirt-combined.json
+ rename tests/qemufirmwaredata/etc/qemu/firmware/{92-masked.json => 92-libvirt-masked.json} (100%)
+ rename tests/qemufirmwaredata/home/user/.config/qemu/firmware/{10-bios.json => 10-libvirt-bios.json} (100%)
+ rename tests/qemufirmwaredata/usr/share/qemu/firmware/{90-combined.json => 90-libvirt-combined.json} (100%)
+ rename tests/qemufirmwaredata/usr/share/qemu/firmware/{91-bios.json => 91-libvirt-bios.json} (100%)
+ rename tests/qemufirmwaredata/usr/share/qemu/firmware/{92-masked.json => 92-libvirt-masked.json} (100%)
+ rename tests/qemufirmwaredata/usr/share/qemu/firmware/{93-invalid.json => 93-libvirt-invalid.json} (100%)
+
+diff --git a/tests/qemufirmwaredata/etc/qemu/firmware/20-bios.json b/tests/qemufirmwaredata/etc/qemu/firmware/20-bios.json
+deleted file mode 120000
+index 2c274dddc2..0000000000
+--- a/tests/qemufirmwaredata/etc/qemu/firmware/20-bios.json
++++ /dev/null
+@@ -1 +0,0 @@
+-../../../usr/share/qemu/firmware/91-bios.json
+\ No newline at end of file
+diff --git a/tests/qemufirmwaredata/etc/qemu/firmware/20-libvirt-bios.json b/tests/qemufirmwaredata/etc/qemu/firmware/20-libvirt-bios.json
+new file mode 120000
+index 0000000000..fab8877c3e
+--- /dev/null
++++ b/tests/qemufirmwaredata/etc/qemu/firmware/20-libvirt-bios.json
+@@ -0,0 +1 @@
++../../../usr/share/qemu/firmware/91-libvirt-bios.json
+\ No newline at end of file
+diff --git a/tests/qemufirmwaredata/etc/qemu/firmware/59-combined.json b/tests/qemufirmwaredata/etc/qemu/firmware/59-combined.json
+deleted file mode 120000
+index da9099ffb7..0000000000
+--- a/tests/qemufirmwaredata/etc/qemu/firmware/59-combined.json
++++ /dev/null
+@@ -1 +0,0 @@
+-../../../usr/share/qemu/firmware/90-combined.json
+\ No newline at end of file
+diff --git a/tests/qemufirmwaredata/etc/qemu/firmware/59-libvirt-combined.json b/tests/qemufirmwaredata/etc/qemu/firmware/59-libvirt-combined.json
+new file mode 120000
+index 0000000000..74e63c4574
+--- /dev/null
++++ b/tests/qemufirmwaredata/etc/qemu/firmware/59-libvirt-combined.json
+@@ -0,0 +1 @@
++../../../usr/share/qemu/firmware/90-libvirt-combined.json
+\ No newline at end of file
+diff --git a/tests/qemufirmwaredata/etc/qemu/firmware/92-masked.json b/tests/qemufirmwaredata/etc/qemu/firmware/92-libvirt-masked.json
+similarity index 100%
+rename from tests/qemufirmwaredata/etc/qemu/firmware/92-masked.json
+rename to tests/qemufirmwaredata/etc/qemu/firmware/92-libvirt-masked.json
+diff --git a/tests/qemufirmwaredata/home/user/.config/qemu/firmware/10-bios.json b/tests/qemufirmwaredata/home/user/.config/qemu/firmware/10-libvirt-bios.json
+similarity index 100%
+rename from tests/qemufirmwaredata/home/user/.config/qemu/firmware/10-bios.json
+rename to tests/qemufirmwaredata/home/user/.config/qemu/firmware/10-libvirt-bios.json
+diff --git a/tests/qemufirmwaredata/usr/share/qemu/firmware/90-combined.json b/tests/qemufirmwaredata/usr/share/qemu/firmware/90-libvirt-combined.json
+similarity index 100%
+rename from tests/qemufirmwaredata/usr/share/qemu/firmware/90-combined.json
+rename to tests/qemufirmwaredata/usr/share/qemu/firmware/90-libvirt-combined.json
+diff --git a/tests/qemufirmwaredata/usr/share/qemu/firmware/91-bios.json b/tests/qemufirmwaredata/usr/share/qemu/firmware/91-libvirt-bios.json
+similarity index 100%
+rename from tests/qemufirmwaredata/usr/share/qemu/firmware/91-bios.json
+rename to tests/qemufirmwaredata/usr/share/qemu/firmware/91-libvirt-bios.json
+diff --git a/tests/qemufirmwaredata/usr/share/qemu/firmware/92-masked.json b/tests/qemufirmwaredata/usr/share/qemu/firmware/92-libvirt-masked.json
+similarity index 100%
+rename from tests/qemufirmwaredata/usr/share/qemu/firmware/92-masked.json
+rename to tests/qemufirmwaredata/usr/share/qemu/firmware/92-libvirt-masked.json
+diff --git a/tests/qemufirmwaredata/usr/share/qemu/firmware/93-invalid.json b/tests/qemufirmwaredata/usr/share/qemu/firmware/93-libvirt-invalid.json
+similarity index 100%
+rename from tests/qemufirmwaredata/usr/share/qemu/firmware/93-invalid.json
+rename to tests/qemufirmwaredata/usr/share/qemu/firmware/93-libvirt-invalid.json
+diff --git a/tests/qemufirmwaretest.c b/tests/qemufirmwaretest.c
+index 2eb9d8e701..e09f50592b 100644
+--- a/tests/qemufirmwaretest.c
++++ b/tests/qemufirmwaretest.c
+@@ -84,7 +84,7 @@ testFWPrecedence(const void *opaque G_GNUC_UNUSED)
+     g_autofree char *fakehome = NULL;
+     g_auto(GStrv) fwList = NULL;
+     const char *expected[] = {
+-        SYSCONFDIR "/qemu/firmware/20-bios.json",
++        SYSCONFDIR "/qemu/firmware/20-libvirt-bios.json",
+         PREFIX "/share/qemu/firmware/30-edk2-ovmf-4m-qcow2-x64-sb-enrolled.json",
+         PREFIX "/share/qemu/firmware/31-edk2-ovmf-2m-raw-x64-sb-enrolled.json",
+         PREFIX "/share/qemu/firmware/40-edk2-ovmf-4m-qcow2-x64-sb.json",
+@@ -98,12 +98,12 @@ testFWPrecedence(const void *opaque G_GNUC_UNUSED)
+         PREFIX "/share/qemu/firmware/51-edk2-ovmf-2m-raw-x64-nosb.json",
+         PREFIX "/share/qemu/firmware/52-edk2-aarch64-verbose-qcow2.json",
+         PREFIX "/share/qemu/firmware/53-edk2-aarch64-verbose-raw.json",
+-        SYSCONFDIR "/qemu/firmware/59-combined.json",
++        SYSCONFDIR "/qemu/firmware/59-libvirt-combined.json",
+         PREFIX "/share/qemu/firmware/60-edk2-ovmf-x64-amdsev.json",
+         PREFIX "/share/qemu/firmware/60-edk2-ovmf-x64-inteltdx.json",
+-        PREFIX "/share/qemu/firmware/90-combined.json",
+-        PREFIX "/share/qemu/firmware/91-bios.json",
+-        PREFIX "/share/qemu/firmware/93-invalid.json",
++        PREFIX "/share/qemu/firmware/90-libvirt-combined.json",
++        PREFIX "/share/qemu/firmware/91-libvirt-bios.json",
++        PREFIX "/share/qemu/firmware/93-libvirt-invalid.json",
+         NULL
+     };
+     const char **e;
+@@ -285,9 +285,9 @@ mymain(void)
+     DO_PARSE_TEST("usr/share/qemu/firmware/53-edk2-aarch64-verbose-raw.json");
+     DO_PARSE_TEST("usr/share/qemu/firmware/60-edk2-ovmf-x64-amdsev.json");
+     DO_PARSE_TEST("usr/share/qemu/firmware/60-edk2-ovmf-x64-inteltdx.json");
+-    DO_PARSE_TEST("usr/share/qemu/firmware/90-combined.json");
+-    DO_PARSE_TEST("usr/share/qemu/firmware/91-bios.json");
+-    DO_PARSE_FAILURE_TEST("usr/share/qemu/firmware/93-invalid.json");
++    DO_PARSE_TEST("usr/share/qemu/firmware/90-libvirt-combined.json");
++    DO_PARSE_TEST("usr/share/qemu/firmware/91-libvirt-bios.json");
++    DO_PARSE_FAILURE_TEST("usr/share/qemu/firmware/93-libvirt-invalid.json");
+ 
+     if (virTestRun("QEMU FW precedence test", testFWPrecedence, NULL) < 0)
+         ret = -1;
+-- 
+2.53.0

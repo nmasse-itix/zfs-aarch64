@@ -1,0 +1,40 @@
+From 28d5107c5ce7488664cedd82565167e6df7b61de Mon Sep 17 00:00:00 2001
+Message-ID: <28d5107c5ce7488664cedd82565167e6df7b61de.1771423832.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Sun, 15 Feb 2026 19:57:12 +0100
+Subject: [PATCH] qemu_hotplug: Remove iommufd object if no longer needed
+
+When removing last host device using IOMMUFD remove the iommufd object
+as well.
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 300ebf01b88d154312c1a5a684be2add95dd7f31)
+
+Resolves: https://issues.redhat.com/browse/RHEL-150353
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/qemu/qemu_hotplug.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/src/qemu/qemu_hotplug.c b/src/qemu/qemu_hotplug.c
+index 9445599d2c..10ad13a416 100644
+--- a/src/qemu/qemu_hotplug.c
++++ b/src/qemu/qemu_hotplug.c
+@@ -4986,6 +4986,14 @@ qemuDomainRemoveHostDevice(virQEMUDriver *driver,
+         }
+     }
+ 
++    if (priv->iommufdState &&
++        !virDomainDefHasPCIHostdevWithIOMMUFD(vm->def)) {
++        qemuDomainObjEnterMonitor(vm);
++        ignore_value(qemuMonitorDelObject(priv->mon, "iommufd0", false));
++        qemuDomainObjExitMonitor(vm);
++        priv->iommufdState = false;
++    }
++
+     virDomainAuditHostdev(vm, hostdev, "detach", true);
+ 
+     if (!virHostdevIsPCIDevice(hostdev) &&
+-- 
+2.53.0

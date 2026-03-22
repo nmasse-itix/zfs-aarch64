@@ -1,0 +1,44 @@
+From 0ec84169d9163d94a209b2c5babf18841a4ccc66 Mon Sep 17 00:00:00 2001
+Message-ID: <0ec84169d9163d94a209b2c5babf18841a4ccc66.1772815312.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Wed, 26 Nov 2025 18:18:06 +0100
+Subject: [PATCH] schemas: Allow templateFormat without template path
+
+Similarly to how we allow the format for the loader and the NVRAM
+file to be specified without the corresponding path being present,
+we should allow that to happen for the NVRAM template too.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 2bd0499294b145c6a4c36d431c39a5da9c6d57c0)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/conf/schemas/domaincommon.rng | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/src/conf/schemas/domaincommon.rng b/src/conf/schemas/domaincommon.rng
+index 441328a08e..152aa489f5 100644
+--- a/src/conf/schemas/domaincommon.rng
++++ b/src/conf/schemas/domaincommon.rng
+@@ -354,11 +354,11 @@
+                 <attribute name="template">
+                   <ref name="absFilePath"/>
+                 </attribute>
+-                <optional>
+-                  <attribute name="templateFormat">
+-                    <ref name="pflashFormatTypes"/>
+-                  </attribute>
+-                </optional>
++              </optional>
++              <optional>
++                <attribute name="templateFormat">
++                  <ref name="pflashFormatTypes"/>
++                </attribute>
+               </optional>
+               <optional>
+                 <ref name="pflashFormat"/>
+-- 
+2.53.0

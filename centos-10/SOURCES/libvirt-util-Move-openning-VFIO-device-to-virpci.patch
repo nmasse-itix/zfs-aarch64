@@ -1,0 +1,123 @@
+From d116851dc65d69b95d9de2f0f209ba5d69987cb8 Mon Sep 17 00:00:00 2001
+Message-ID: <d116851dc65d69b95d9de2f0f209ba5d69987cb8.1771423658.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Sun, 15 Feb 2026 17:39:05 +0100
+Subject: [PATCH] util: Move openning VFIO device to virpci
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 22c666097cc56919355e653010bff8ade5d5f12c)
+
+Resolves: https://issues.redhat.com/browse/RHEL-150351
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/libvirt_private.syms |  1 +
+ src/qemu/qemu_process.c  | 23 +----------------------
+ src/util/virpci.c        | 28 ++++++++++++++++++++++++++++
+ src/util/virpci.h        |  2 ++
+ 4 files changed, 32 insertions(+), 22 deletions(-)
+
+diff --git a/src/libvirt_private.syms b/src/libvirt_private.syms
+index 6c4918da9e..9ae44e31b8 100644
+--- a/src/libvirt_private.syms
++++ b/src/libvirt_private.syms
+@@ -3180,6 +3180,7 @@ virPCIDeviceListNew;
+ virPCIDeviceListSteal;
+ virPCIDeviceListStealIndex;
+ virPCIDeviceNew;
++virPCIDeviceOpenVfioFd;
+ virPCIDeviceReattach;
+ virPCIDeviceRebind;
+ virPCIDeviceReset;
+diff --git a/src/qemu/qemu_process.c b/src/qemu/qemu_process.c
+index 71770d2099..55cd930df8 100644
+--- a/src/qemu/qemu_process.c
++++ b/src/qemu/qemu_process.c
+@@ -7707,9 +7707,6 @@ qemuProcessOpenIommuFd(virDomainObj *vm)
+ static int
+ qemuProcessOpenVfioDeviceFd(virDomainHostdevDef *hostdev)
+ {
+-    g_autofree char *vfioPath = NULL;
+-    int fd = -1;
+-
+     if (hostdev->mode != VIR_DOMAIN_HOSTDEV_MODE_SUBSYS ||
+         hostdev->source.subsys.type != VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_PCI) {
+         virReportError(VIR_ERR_INTERNAL_ERROR, "%s",
+@@ -7717,25 +7714,7 @@ qemuProcessOpenVfioDeviceFd(virDomainHostdevDef *hostdev)
+         return -1;
+     }
+ 
+-    if (virPCIDeviceGetVfioPath(&hostdev->source.subsys.u.pci.addr, &vfioPath) < 0)
+-        return -1;
+-
+-    VIR_DEBUG("Opening VFIO device %s", vfioPath);
+-
+-    if ((fd = open(vfioPath, O_RDWR | O_CLOEXEC)) < 0) {
+-        if (errno == ENOENT) {
+-            virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
+-                           _("VFIO device %1$s not found - ensure device is bound to vfio-pci driver"),
+-                           vfioPath);
+-        } else {
+-            virReportSystemError(errno,
+-                                 _("cannot open VFIO device %1$s"), vfioPath);
+-        }
+-        return -1;
+-    }
+-
+-    VIR_DEBUG("Opened VFIO device FD %d for %s", fd, vfioPath);
+-    return fd;
++    return virPCIDeviceOpenVfioFd(&hostdev->source.subsys.u.pci.addr);
+ }
+ 
+ /**
+diff --git a/src/util/virpci.c b/src/util/virpci.c
+index 2348a98003..30feec6dae 100644
+--- a/src/util/virpci.c
++++ b/src/util/virpci.c
+@@ -3359,3 +3359,31 @@ virPCIDeviceGetVfioPath(virPCIDeviceAddress *addr,
+                    addrStr);
+     return -1;
+ }
++
++/**
++ * virPCIDeviceOpenVfioFd:
++ * @addr:
++ *
++ * Opens VFIO device and returns its FD.
++ *
++ * Returns: FD on success, -1 on failure
++ */
++int
++virPCIDeviceOpenVfioFd(virPCIDeviceAddress *addr)
++{
++    g_autofree char *vfioPath = NULL;
++    int fd = -1;
++
++    if (virPCIDeviceGetVfioPath(addr, &vfioPath) < 0)
++        return -1;
++
++    VIR_DEBUG("Opening VFIO device %s", vfioPath);
++
++    if ((fd = open(vfioPath, O_RDWR | O_CLOEXEC)) < 0) {
++        virReportSystemError(errno, _("cannot open VFIO device %1$s"), vfioPath);
++        return -1;
++    }
++
++    VIR_DEBUG("Opened VFIO device FD %d for %s", fd, vfioPath);
++    return fd;
++}
+diff --git a/src/util/virpci.h b/src/util/virpci.h
+index 24ede10755..7848567285 100644
+--- a/src/util/virpci.h
++++ b/src/util/virpci.h
+@@ -298,6 +298,8 @@ void virPCIDeviceAddressFree(virPCIDeviceAddress *address);
+ 
+ int virPCIDeviceGetVfioPath(virPCIDeviceAddress *addr, char **vfioPath);
+ 
++int virPCIDeviceOpenVfioFd(virPCIDeviceAddress *addr);
++
+ G_DEFINE_AUTOPTR_CLEANUP_FUNC(virPCIDevice, virPCIDeviceFree);
+ G_DEFINE_AUTOPTR_CLEANUP_FUNC(virPCIDeviceAddress, virPCIDeviceAddressFree);
+ G_DEFINE_AUTOPTR_CLEANUP_FUNC(virPCIEDeviceInfo, virPCIEDeviceInfoFree);
+-- 
+2.53.0

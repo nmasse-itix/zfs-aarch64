@@ -1,0 +1,276 @@
+From 7478247b414df910fc319aa3c1d016f81e510fd9 Mon Sep 17 00:00:00 2001
+Message-ID: <7478247b414df910fc319aa3c1d016f81e510fd9.1770383236.git.jdenemar@redhat.com>
+From: Nathan Chen <nathanc@nvidia.com>
+Date: Fri, 30 Jan 2026 10:59:13 -0800
+Subject: [PATCH] qemu: Introduce privateData for hostdevs
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Introduce private data for hostdevs and allocate hostdev
+private data by default.
+
+Signed-off-by: Ján Tomko <jtomko@redhat.com>
+Signed-off-by: Nathan Chen <nathanc@nvidia.com>
+Reviewed-by: Pavel Hrdina <phrdina@redhat.com>
+(cherry picked from commit 1043e04e17ed4be59b46e925089204333c08f05e)
+
+Resolves: https://issues.redhat.com/browse/RHEL-126345
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/bhyve/bhyve_parse_command.c |  2 +-
+ src/conf/domain_conf.c          | 13 +++++++++--
+ src/conf/domain_conf.h          |  5 ++++-
+ src/libxl/xen_common.c          |  2 +-
+ src/libxl/xen_xl.c              |  2 +-
+ src/lxc/lxc_native.c            |  2 +-
+ src/qemu/qemu_domain.c          | 40 +++++++++++++++++++++++++++++++++
+ src/qemu/qemu_domain.h          | 15 +++++++++++++
+ src/vbox/vbox_common.c          |  2 +-
+ tests/virhostdevtest.c          |  2 +-
+ 10 files changed, 76 insertions(+), 9 deletions(-)
+
+diff --git a/src/bhyve/bhyve_parse_command.c b/src/bhyve/bhyve_parse_command.c
+index d62ea64beb..8b405206bd 100644
+--- a/src/bhyve/bhyve_parse_command.c
++++ b/src/bhyve/bhyve_parse_command.c
+@@ -687,7 +687,7 @@ bhyveParsePassthru(virDomainDef *def G_GNUC_UNUSED,
+         return -1;
+     }
+ 
+-    hostdev = virDomainHostdevDefNew();
++    hostdev = virDomainHostdevDefNew(NULL);
+     hostdev->mode = VIR_DOMAIN_HOSTDEV_MODE_SUBSYS;
+     hostdev->source.subsys.type = VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_PCI;
+ 
+diff --git a/src/conf/domain_conf.c b/src/conf/domain_conf.c
+index 541dad5bdc..f950f7c75d 100644
+--- a/src/conf/domain_conf.c
++++ b/src/conf/domain_conf.c
+@@ -2733,6 +2733,8 @@ virDomainHostdevDefClear(virDomainHostdevDef *def)
+     case VIR_DOMAIN_HOSTDEV_MODE_LAST:
+         break;
+     }
++
++    g_clear_pointer(&def->privateData, virObjectUnref);
+ }
+ 
+ 
+@@ -3483,7 +3485,7 @@ void virDomainVideoDefFree(virDomainVideoDef *def)
+ 
+ 
+ virDomainHostdevDef *
+-virDomainHostdevDefNew(void)
++virDomainHostdevDefNew(virDomainXMLOption *xmlopt)
+ {
+     virDomainHostdevDef *def;
+ 
+@@ -3491,6 +3493,13 @@ virDomainHostdevDefNew(void)
+ 
+     def->info = g_new0(virDomainDeviceInfo, 1);
+ 
++    if (xmlopt && xmlopt->privateData.hostdevNew &&
++        !(def->privateData = xmlopt->privateData.hostdevNew())) {
++        VIR_FREE(def->info);
++        VIR_FREE(def);
++        return NULL;
++    }
++
+     return def;
+ }
+ 
+@@ -13678,7 +13687,7 @@ virDomainHostdevDefParseXML(virDomainXMLOption *xmlopt,
+ 
+     ctxt->node = node;
+ 
+-    def = virDomainHostdevDefNew();
++    def = virDomainHostdevDefNew(xmlopt);
+ 
+     if (virXMLPropEnumDefault(node, "mode", virDomainHostdevModeTypeFromString,
+                               VIR_XML_PROP_NONE,
+diff --git a/src/conf/domain_conf.h b/src/conf/domain_conf.h
+index cb35ff06bd..8f53ed96c0 100644
+--- a/src/conf/domain_conf.h
++++ b/src/conf/domain_conf.h
+@@ -364,6 +364,8 @@ struct _virDomainHostdevDef {
+      */
+     virDomainNetDef *parentnet;
+ 
++    virObject *privateData;
++
+     virDomainHostdevMode mode;
+     virDomainStartupPolicy startupPolicy;
+     bool managed;
+@@ -3588,6 +3590,7 @@ struct _virDomainXMLPrivateDataCallbacks {
+     virDomainXMLPrivateDataNewFunc    vsockNew;
+     virDomainXMLPrivateDataNewFunc    cryptoNew;
+     virDomainXMLPrivateDataNewFunc    graphicsNew;
++    virDomainXMLPrivateDataNewFunc    hostdevNew;
+     virDomainXMLPrivateDataNewFunc    networkNew;
+     virDomainXMLPrivateDataNetParseFunc networkParse;
+     virDomainXMLPrivateDataNetFormatFunc networkFormat;
+@@ -3797,7 +3800,7 @@ virDomainVideoDef *virDomainVideoDefNew(virDomainXMLOption *xmlopt);
+ void virDomainVideoDefFree(virDomainVideoDef *def);
+ G_DEFINE_AUTOPTR_CLEANUP_FUNC(virDomainVideoDef, virDomainVideoDefFree);
+ void virDomainVideoDefClear(virDomainVideoDef *def);
+-virDomainHostdevDef *virDomainHostdevDefNew(void);
++virDomainHostdevDef *virDomainHostdevDefNew(virDomainXMLOption *xmlopt);
+ void virDomainHostdevDefFree(virDomainHostdevDef *def);
+ void virDomainHubDefFree(virDomainHubDef *def);
+ void virDomainRedirdevDefFree(virDomainRedirdevDef *def);
+diff --git a/src/libxl/xen_common.c b/src/libxl/xen_common.c
+index 666c6cae20..f19e4f6abb 100644
+--- a/src/libxl/xen_common.c
++++ b/src/libxl/xen_common.c
+@@ -445,7 +445,7 @@ xenParsePCI(char *entry)
+         }
+     }
+ 
+-    hostdev = virDomainHostdevDefNew();
++    hostdev = virDomainHostdevDefNew(NULL);
+     hostdev->managed = false;
+     hostdev->writeFiltering = filtered;
+     hostdev->source.subsys.type = VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_PCI;
+diff --git a/src/libxl/xen_xl.c b/src/libxl/xen_xl.c
+index b2ff0edcf2..e62302736b 100644
+--- a/src/libxl/xen_xl.c
++++ b/src/libxl/xen_xl.c
+@@ -930,7 +930,7 @@ xenParseXLUSB(virConf *conf, virDomainDef *def)
+                 key = nextkey;
+             }
+ 
+-            hostdev = virDomainHostdevDefNew();
++            hostdev = virDomainHostdevDefNew(NULL);
+             hostdev->managed = false;
+             hostdev->source.subsys.type = VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_USB;
+             hostdev->source.subsys.u.usb.bus = busNum;
+diff --git a/src/lxc/lxc_native.c b/src/lxc/lxc_native.c
+index 7700804429..a94427b027 100644
+--- a/src/lxc/lxc_native.c
++++ b/src/lxc/lxc_native.c
+@@ -376,7 +376,7 @@ lxcCreateNetDef(const char *type,
+ static virDomainHostdevDef *
+ lxcCreateHostdevDef(const char *data)
+ {
+-    virDomainHostdevDef *hostdev = virDomainHostdevDefNew();
++    virDomainHostdevDef *hostdev = virDomainHostdevDefNew(NULL);
+     hostdev->mode = VIR_DOMAIN_HOSTDEV_MODE_CAPABILITIES;
+     hostdev->source.caps.type = VIR_DOMAIN_HOSTDEV_CAPS_TYPE_NET;
+     hostdev->source.caps.u.net.ifname = g_strdup(data);
+diff --git a/src/qemu/qemu_domain.c b/src/qemu/qemu_domain.c
+index 486a0e7913..3366214677 100644
+--- a/src/qemu/qemu_domain.c
++++ b/src/qemu/qemu_domain.c
+@@ -1238,6 +1238,45 @@ qemuDomainNetworkPrivateFormat(const virDomainNetDef *net,
+ }
+ 
+ 
++static virClass *qemuDomainHostdevPrivateClass;
++
++static void
++qemuDomainHostdevPrivateDispose(void *obj)
++{
++    qemuDomainHostdevPrivate *priv = obj;
++
++    VIR_FORCE_CLOSE(priv->vfioDeviceFd);
++}
++
++
++static int
++qemuDomainHostdevPrivateOnceInit(void)
++{
++    if (!VIR_CLASS_NEW(qemuDomainHostdevPrivate, virClassForObject()))
++        return -1;
++
++    return 0;
++}
++
++VIR_ONCE_GLOBAL_INIT(qemuDomainHostdevPrivate);
++
++virObject *
++qemuDomainHostdevPrivateNew(void)
++{
++    qemuDomainHostdevPrivate *priv;
++
++    if (qemuDomainHostdevPrivateInitialize() < 0)
++        return NULL;
++
++    if (!(priv = virObjectNew(qemuDomainHostdevPrivateClass)))
++        return NULL;
++
++    priv->vfioDeviceFd = -1;
++
++    return (virObject *) priv;
++}
++
++
+ /* qemuDomainSecretInfoSetup:
+  * @priv: pointer to domain private object
+  * @alias: alias of the secret
+@@ -3563,6 +3602,7 @@ virDomainXMLPrivateDataCallbacks virQEMUDriverPrivateDataCallbacks = {
+     .chrSourceNew = qemuDomainChrSourcePrivateNew,
+     .vsockNew = qemuDomainVsockPrivateNew,
+     .graphicsNew = qemuDomainGraphicsPrivateNew,
++    .hostdevNew = qemuDomainHostdevPrivateNew,
+     .networkNew = qemuDomainNetworkPrivateNew,
+     .networkParse = qemuDomainNetworkPrivateParse,
+     .networkFormat = qemuDomainNetworkPrivateFormat,
+diff --git a/src/qemu/qemu_domain.h b/src/qemu/qemu_domain.h
+index b9bb338682..88c8416aa4 100644
+--- a/src/qemu/qemu_domain.h
++++ b/src/qemu/qemu_domain.h
+@@ -461,6 +461,18 @@ struct _qemuDomainTPMPrivate {
+ };
+ 
+ 
++#define QEMU_DOMAIN_HOSTDEV_PRIVATE(hostdev) \
++    ((qemuDomainHostdevPrivate *) (hostdev)->privateData)
++
++typedef struct _qemuDomainHostdevPrivate qemuDomainHostdevPrivate;
++struct _qemuDomainHostdevPrivate {
++    virObject parent;
++
++    /* VFIO device file descriptor for iommufd passthrough */
++    int vfioDeviceFd;
++};
++
++
+ void
+ qemuDomainNetworkPrivateClearFDs(qemuDomainNetworkPrivate *priv);
+ 
+@@ -1175,3 +1187,6 @@ qemuDomainCheckCPU(virArch arch,
+ bool
+ qemuDomainMachineSupportsFloppy(const char *machine,
+                                 virQEMUCaps *qemuCaps);
++
++virObject *
++qemuDomainHostdevPrivateNew(void);
+diff --git a/src/vbox/vbox_common.c b/src/vbox/vbox_common.c
+index 26c5fdfef6..d2a8cf8da4 100644
+--- a/src/vbox/vbox_common.c
++++ b/src/vbox/vbox_common.c
+@@ -3090,7 +3090,7 @@ vboxHostDeviceGetXMLDesc(struct _vboxDriver *data, virDomainDef *def, IMachine *
+     def->hostdevs = g_new0(virDomainHostdevDef *, def->nhostdevs);
+ 
+     for (i = 0; i < def->nhostdevs; i++)
+-        def->hostdevs[i] = virDomainHostdevDefNew();
++        def->hostdevs[i] = virDomainHostdevDefNew(NULL);
+ 
+     for (i = 0; i < deviceFilters.count; i++) {
+         PRBool active = PR_FALSE;
+diff --git a/tests/virhostdevtest.c b/tests/virhostdevtest.c
+index aec474a148..a35c1d9402 100644
+--- a/tests/virhostdevtest.c
++++ b/tests/virhostdevtest.c
+@@ -124,7 +124,7 @@ myInit(void)
+ 
+     for (i = 0; i < nhostdevs; i++) {
+         virDomainHostdevSubsys *subsys;
+-        hostdevs[i] = virDomainHostdevDefNew();
++        hostdevs[i] = virDomainHostdevDefNew(NULL);
+         if (!hostdevs[i])
+             goto cleanup;
+         hostdevs[i]->mode = VIR_DOMAIN_HOSTDEV_MODE_SUBSYS;
+-- 
+2.52.0

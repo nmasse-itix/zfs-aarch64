@@ -1,0 +1,190 @@
+From 3a5fc3778cb4ff0f09567f80947e000f74d513b4 Mon Sep 17 00:00:00 2001
+Message-ID: <3a5fc3778cb4ff0f09567f80947e000f74d513b4.1770383236.git.jdenemar@redhat.com>
+From: Nathan Chen <nathanc@nvidia.com>
+Date: Fri, 30 Jan 2026 10:59:12 -0800
+Subject: [PATCH] qemu: Implement support for associating iommufd to hostdev
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Implement a new iommufd attribute under hostdevs' PCI
+subsystem driver that can be used to specify associated
+iommufd object when launching a qemu VM.
+
+Signed-off-by: Ján Tomko <jtomko@redhat.com>
+Signed-off-by: Nathan Chen <nathanc@nvidia.com>
+Reviewed-by: Pavel Hrdina <phrdina@redhat.com>
+(cherry picked from commit fd113055bb174c7284081731d16959f73796e3d7)
+
+Resolves: https://issues.redhat.com/browse/RHEL-126345
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ docs/formatdomain.rst           |  6 +++++
+ src/conf/device_conf.c          | 11 ++++++++
+ src/conf/device_conf.h          |  1 +
+ src/conf/schemas/basictypes.rng |  5 ++++
+ src/qemu/qemu_command.c         | 46 +++++++++++++++++++++++++++++++++
+ 5 files changed, 69 insertions(+)
+
+diff --git a/docs/formatdomain.rst b/docs/formatdomain.rst
+index 1467fc7e10..167912348e 100644
+--- a/docs/formatdomain.rst
++++ b/docs/formatdomain.rst
+@@ -4907,6 +4907,12 @@ or:
+    found is "problematic" in some way, the generic vfio-pci driver
+    similarly be forced.
+ 
++   :since:`Since 12.1.0 (QEMU and KVM only)`, the ``iommufd`` element
++   can be used to enable IOMMUFD backend for VFIO device. This
++   provides an interface to propagate DMA mappings to kernel for
++   assigned devices. Libvirt will open the /dev/iommu and VFIO device
++   cdev and pass associated file descriptors to QEMU.
++
+    (Note: :since:`Since 1.0.5`, the ``name`` attribute has been
+    described to be used to select the type of PCI device assignment
+    ("vfio", "kvm", or "xen"), but those values have been mostly
+diff --git a/src/conf/device_conf.c b/src/conf/device_conf.c
+index c278b81652..d68232a4f4 100644
+--- a/src/conf/device_conf.c
++++ b/src/conf/device_conf.c
+@@ -67,6 +67,11 @@ virDeviceHostdevPCIDriverInfoParseXML(xmlNodePtr node,
+         return -1;
+     }
+ 
++    if (virXMLPropTristateBool(node, "iommufd",
++                               VIR_XML_PROP_NONE,
++                               &driver->iommufd) < 0)
++        return -1;
++
+     driver->model = virXMLPropString(node, "model");
+     return 0;
+ }
+@@ -93,6 +98,12 @@ virDeviceHostdevPCIDriverInfoFormat(virBuffer *buf,
+ 
+     virBufferEscapeString(&driverAttrBuf, " model='%s'", driver->model);
+ 
++    if (driver->iommufd == VIR_TRISTATE_BOOL_YES) {
++        virBufferAddLit(&driverAttrBuf, " iommufd='yes'");
++    } else if (driver->iommufd == VIR_TRISTATE_BOOL_NO) {
++        virBufferAddLit(&driverAttrBuf, " iommufd='no'");
++    }
++
+     virXMLFormatElement(buf, "driver", &driverAttrBuf, NULL);
+     return 0;
+ }
+diff --git a/src/conf/device_conf.h b/src/conf/device_conf.h
+index e570f51824..116b959143 100644
+--- a/src/conf/device_conf.h
++++ b/src/conf/device_conf.h
+@@ -47,6 +47,7 @@ VIR_ENUM_DECL(virDeviceHostdevPCIDriverName);
+ struct _virDeviceHostdevPCIDriverInfo {
+     virDeviceHostdevPCIDriverName name;
+     char *model;
++    virTristateBool iommufd;
+ };
+ 
+ typedef enum {
+diff --git a/src/conf/schemas/basictypes.rng b/src/conf/schemas/basictypes.rng
+index 5689170fad..381e0ac24f 100644
+--- a/src/conf/schemas/basictypes.rng
++++ b/src/conf/schemas/basictypes.rng
+@@ -673,6 +673,11 @@
+           <ref name="genericName"/>
+         </attribute>
+       </optional>
++      <optional>
++        <attribute name="iommufd">
++          <ref name="virYesNo"/>
++        </attribute>
++      </optional>
+       <empty/>
+     </element>
+   </define>
+diff --git a/src/qemu/qemu_command.c b/src/qemu/qemu_command.c
+index b69fe23236..96cd6edbfc 100644
+--- a/src/qemu/qemu_command.c
++++ b/src/qemu/qemu_command.c
+@@ -4754,6 +4754,7 @@ qemuBuildPCIHostdevDevProps(const virDomainDef *def,
+     g_autofree char *host = virPCIDeviceAddressAsString(&pcisrc->addr);
+     const char *failover_pair_id = NULL;
+     const char *driver = NULL;
++    const char *iommufdId = NULL;
+     /* 'ramfb' property must be omitted unless it's to be enabled */
+     bool ramfb = pcisrc->ramfb == VIR_TRISTATE_SWITCH_ON;
+ 
+@@ -4787,6 +4788,9 @@ qemuBuildPCIHostdevDevProps(const virDomainDef *def,
+         teaming->persistent)
+         failover_pair_id = teaming->persistent;
+ 
++    if (pcisrc->driver.iommufd == VIR_TRISTATE_BOOL_YES)
++        iommufdId = "iommufd0";
++
+     if (virJSONValueObjectAdd(&props,
+                               "s:driver", driver,
+                               "s:host", host,
+@@ -4795,6 +4799,7 @@ qemuBuildPCIHostdevDevProps(const virDomainDef *def,
+                               "S:failover_pair_id", failover_pair_id,
+                               "S:display", qemuOnOffAuto(pcisrc->display),
+                               "B:ramfb", ramfb,
++                              "S:iommufd", iommufdId,
+                               NULL) < 0)
+         return NULL;
+ 
+@@ -5314,6 +5319,44 @@ qemuBuildHostdevCommandLine(virCommand *cmd,
+ }
+ 
+ 
++static int
++qemuBuildIOMMUFDCommandLine(virCommand *cmd,
++                            const virDomainDef *def)
++{
++    size_t i;
++
++    for (i = 0; i < def->nhostdevs; i++) {
++        virDomainHostdevDef *hostdev = def->hostdevs[i];
++        virDomainHostdevSubsys *subsys = &hostdev->source.subsys;
++        g_autoptr(virJSONValue) props = NULL;
++
++        if (hostdev->mode != VIR_DOMAIN_HOSTDEV_MODE_SUBSYS)
++            continue;
++
++        if (subsys->type != VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_PCI)
++            continue;
++
++        if (hostdev->info->type == VIR_DOMAIN_DEVICE_ADDRESS_TYPE_UNASSIGNED)
++            continue;
++
++        if (subsys->u.pci.driver.iommufd != VIR_TRISTATE_BOOL_YES)
++            continue;
++
++        if (qemuMonitorCreateObjectProps(&props, "iommufd",
++                                         "iommufd0",
++                                         NULL) < 0)
++            return -1;
++
++        if (qemuBuildObjectCommandlineFromJSON(cmd, props) < 0)
++            return -1;
++
++        break;
++    }
++
++    return 0;
++}
++
++
+ static int
+ qemuBuildMonitorCommandLine(virCommand *cmd,
+                             qemuDomainObjPrivate *priv)
+@@ -10926,6 +10969,9 @@ qemuBuildCommandLine(virDomainObj *vm,
+     if (qemuBuildRedirdevCommandLine(cmd, def, qemuCaps) < 0)
+         return NULL;
+ 
++    if (qemuBuildIOMMUFDCommandLine(cmd, def) < 0)
++        return NULL;
++
+     if (qemuBuildHostdevCommandLine(cmd, def, qemuCaps) < 0)
+         return NULL;
+ 
+-- 
+2.52.0

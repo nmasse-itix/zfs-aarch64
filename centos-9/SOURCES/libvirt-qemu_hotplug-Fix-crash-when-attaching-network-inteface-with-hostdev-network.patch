@@ -1,0 +1,96 @@
+From dcfd8bc0e1ec0977e6911f5f566d9b1d1d27d310 Mon Sep 17 00:00:00 2001
+Message-ID: <dcfd8bc0e1ec0977e6911f5f566d9b1d1d27d310.1773154901.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Tue, 10 Mar 2026 09:34:48 +0100
+Subject: [PATCH] qemu_hotplug: Fix crash when attaching network inteface with
+ hostdev network
+
+The following interface XML will crash libvirt when attached to
+running VM:
+
+  <interface type='network'>
+    <source network='hostdev_net'/>
+  </interface>
+
+Instead of trying to figure out every single place where hostdev is used
+as struct directly and allocating empty private data check if iommufd
+is configured as that will happen only for <hostdev> device where the
+private data are correctly allocated.
+
+This patch is best viewed with `git show -w`.
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Jiri Denemark <jdenemar@redhat.com>
+(cherry picked from commit 25662b3700da9c32b5083d46ff3831aa4afc2eab)
+
+Resolves: https://issues.redhat.com/browse/RHEL-151953
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/qemu/qemu_hotplug.c | 37 +++++++++++++++++++++----------------
+ 1 file changed, 21 insertions(+), 16 deletions(-)
+
+diff --git a/src/qemu/qemu_hotplug.c b/src/qemu/qemu_hotplug.c
+index bb88815e27..845f42bf20 100644
+--- a/src/qemu/qemu_hotplug.c
++++ b/src/qemu/qemu_hotplug.c
+@@ -1638,20 +1638,23 @@ qemuDomainAttachHostPCIDevice(virQEMUDriver *driver,
+ 
+     qemuDomainObjEnterMonitor(vm);
+ 
+-    if (objprops) {
+-        if ((ret = qemuFDPassDirectTransferMonitor(priv->iommufd, priv->mon)) < 0)
+-            goto exit_monitor;
+ 
+-        if ((ret = qemuMonitorAddObject(priv->mon, &objprops, NULL)) < 0)
+-            goto exit_monitor;
++    if (virHostdevIsPCIDeviceWithIOMMUFD(hostdev)) {
++        if (objprops) {
++            if ((ret = qemuFDPassDirectTransferMonitor(priv->iommufd, priv->mon)) < 0)
++                goto exit_monitor;
+ 
+-        priv->iommufdState = true;
+-        removeiommufd = true;
++            if ((ret = qemuMonitorAddObject(priv->mon, &objprops, NULL)) < 0)
++                goto exit_monitor;
++
++            priv->iommufdState = true;
++            removeiommufd = true;
++        }
++
++        if ((ret = qemuFDPassDirectTransferMonitor(hostdevPriv->vfioDeviceFd, priv->mon)) < 0)
++            goto exit_monitor;
+     }
+ 
+-    if ((ret = qemuFDPassDirectTransferMonitor(hostdevPriv->vfioDeviceFd, priv->mon)) < 0)
+-        goto exit_monitor;
+-
+     if ((ret = qemuDomainAttachExtensionDevice(priv->mon, hostdev->info)) < 0)
+         goto exit_monitor;
+ 
+@@ -1682,15 +1685,17 @@ qemuDomainAttachHostPCIDevice(virQEMUDriver *driver,
+     if (teardownmemlock && qemuDomainAdjustMaxMemLock(vm) < 0)
+         VIR_WARN("Unable to reset maximum locked memory on hotplug fail");
+ 
+-    qemuDomainObjEnterMonitor(vm);
++    if (virHostdevIsPCIDeviceWithIOMMUFD(hostdev)) {
++        qemuDomainObjEnterMonitor(vm);
+ 
+-    if (removeiommufd)
+-        ignore_value(qemuMonitorDelObject(priv->mon, "iommufd0", false));
++        if (removeiommufd)
++            ignore_value(qemuMonitorDelObject(priv->mon, "iommufd0", false));
+ 
+-    qemuFDPassDirectTransferMonitorRollback(hostdevPriv->vfioDeviceFd, priv->mon);
+-    qemuFDPassDirectTransferMonitorRollback(priv->iommufd, priv->mon);
++        qemuFDPassDirectTransferMonitorRollback(hostdevPriv->vfioDeviceFd, priv->mon);
++        qemuFDPassDirectTransferMonitorRollback(priv->iommufd, priv->mon);
+ 
+-    qemuDomainObjExitMonitor(vm);
++        qemuDomainObjExitMonitor(vm);
++    }
+ 
+     if (releaseaddr)
+         qemuDomainReleaseDeviceAddress(vm, info);
+-- 
+2.53.0

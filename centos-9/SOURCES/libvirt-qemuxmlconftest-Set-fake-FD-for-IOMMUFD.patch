@@ -1,0 +1,98 @@
+From 8f562433cdcff89930c3a9ffac26803e733b796e Mon Sep 17 00:00:00 2001
+Message-ID: <8f562433cdcff89930c3a9ffac26803e733b796e.1771423832.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Sat, 14 Feb 2026 17:11:44 +0100
+Subject: [PATCH] qemuxmlconftest: Set fake FD for IOMMUFD
+
+Same as for VFIO FD for host device.
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 4a80a0468e21866d11f08bd64888f399cff98d94)
+
+Resolves: https://issues.redhat.com/browse/RHEL-150353
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ tests/qemuxmlconfdata/iommufd-q35.x86_64-latest.args          | 2 +-
+ .../iommufd-virt-pci-bus-single.aarch64-latest.args           | 2 +-
+ tests/qemuxmlconfdata/iommufd-virt.aarch64-latest.args        | 2 +-
+ tests/qemuxmlconfdata/iommufd.x86_64-latest.args              | 2 +-
+ tests/qemuxmlconftest.c                                       | 4 ++++
+ 5 files changed, 8 insertions(+), 4 deletions(-)
+
+diff --git a/tests/qemuxmlconfdata/iommufd-q35.x86_64-latest.args b/tests/qemuxmlconfdata/iommufd-q35.x86_64-latest.args
+index 7d819e141b..d5fe704021 100644
+--- a/tests/qemuxmlconfdata/iommufd-q35.x86_64-latest.args
++++ b/tests/qemuxmlconfdata/iommufd-q35.x86_64-latest.args
+@@ -35,7 +35,7 @@ XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-q35-test/.config \
+ -device '{"driver":"qxl-vga","id":"video0","max_outputs":1,"ram_size":67108864,"vram_size":33554432,"vram64_size_mb":0,"vgamem_mb":8,"bus":"pcie.0","addr":"0x1"}' \
+ -global ICH9-LPC.noreboot=off \
+ -watchdog-action reset \
+--object '{"qom-type":"iommufd","id":"iommufd0","fd":"-1"}' \
++-object '{"qom-type":"iommufd","id":"iommufd0","fd":"0"}' \
+ -device '{"driver":"vfio-pci","host":"0000:06:12.5","id":"hostdev0","iommufd":"iommufd0","fd":"0","bus":"pcie.0","addr":"0x3"}' \
+ -sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
+ -msg timestamp=on
+diff --git a/tests/qemuxmlconfdata/iommufd-virt-pci-bus-single.aarch64-latest.args b/tests/qemuxmlconfdata/iommufd-virt-pci-bus-single.aarch64-latest.args
+index dbfd395168..99886468fb 100644
+--- a/tests/qemuxmlconfdata/iommufd-virt-pci-bus-single.aarch64-latest.args
++++ b/tests/qemuxmlconfdata/iommufd-virt-pci-bus-single.aarch64-latest.args
+@@ -27,7 +27,7 @@ XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-foo/.config \
+ -no-shutdown \
+ -boot strict=on \
+ -audiodev '{"id":"audio1","driver":"none"}' \
+--object '{"qom-type":"iommufd","id":"iommufd0","fd":"-1"}' \
++-object '{"qom-type":"iommufd","id":"iommufd0","fd":"0"}' \
+ -device '{"driver":"vfio-pci","host":"0000:06:12.5","id":"hostdev0","iommufd":"iommufd0","fd":"0","bus":"pcie.0","addr":"0x1"}' \
+ -sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
+ -msg timestamp=on
+diff --git a/tests/qemuxmlconfdata/iommufd-virt.aarch64-latest.args b/tests/qemuxmlconfdata/iommufd-virt.aarch64-latest.args
+index d5713ff826..e3695c6982 100644
+--- a/tests/qemuxmlconfdata/iommufd-virt.aarch64-latest.args
++++ b/tests/qemuxmlconfdata/iommufd-virt.aarch64-latest.args
+@@ -30,7 +30,7 @@ XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-foo/.config \
+ -device '{"driver":"pcie-root-port","port":9,"chassis":2,"id":"pci.2","bus":"pcie.0","addr":"0x1.0x1"}' \
+ -device '{"driver":"pcie-root-port","port":10,"chassis":3,"id":"pci.3","bus":"pcie.0","addr":"0x1.0x2"}' \
+ -audiodev '{"id":"audio1","driver":"none"}' \
+--object '{"qom-type":"iommufd","id":"iommufd0","fd":"-1"}' \
++-object '{"qom-type":"iommufd","id":"iommufd0","fd":"0"}' \
+ -device '{"driver":"vfio-pci","host":"0000:06:12.5","id":"hostdev0","iommufd":"iommufd0","fd":"0","bus":"pci.1","addr":"0x0"}' \
+ -device '{"driver":"vfio-pci","host":"0000:07:12.5","id":"hostdev1","iommufd":"iommufd0","fd":"0","bus":"pci.2","addr":"0x0"}' \
+ -sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
+diff --git a/tests/qemuxmlconfdata/iommufd.x86_64-latest.args b/tests/qemuxmlconfdata/iommufd.x86_64-latest.args
+index 3130ba2e3a..15dabe197c 100644
+--- a/tests/qemuxmlconfdata/iommufd.x86_64-latest.args
++++ b/tests/qemuxmlconfdata/iommufd.x86_64-latest.args
+@@ -28,7 +28,7 @@ XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-foo/.config \
+ -boot strict=on \
+ -device '{"driver":"piix3-usb-uhci","id":"usb","bus":"pci.0","addr":"0x1.0x2"}' \
+ -audiodev '{"id":"audio1","driver":"none"}' \
+--object '{"qom-type":"iommufd","id":"iommufd0","fd":"-1"}' \
++-object '{"qom-type":"iommufd","id":"iommufd0","fd":"0"}' \
+ -device '{"driver":"vfio-pci","host":"0000:06:12.5","id":"hostdev0","iommufd":"iommufd0","fd":"0","bus":"pci.0","addr":"0x3"}' \
+ -device '{"driver":"virtio-balloon-pci","id":"balloon0","bus":"pci.0","addr":"0x2"}' \
+ -sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
+diff --git a/tests/qemuxmlconftest.c b/tests/qemuxmlconftest.c
+index 8275eacb3e..885512a38c 100644
+--- a/tests/qemuxmlconftest.c
++++ b/tests/qemuxmlconftest.c
+@@ -382,6 +382,7 @@ testQemuPrepareHostdevUSB(virDomainHostdevDef *hostdev)
+ static void
+ testQemuPrepareHostdev(virDomainObj *vm)
+ {
++    qemuDomainObjPrivate *priv = QEMU_DOMAIN_PRIVATE(vm);
+     size_t i;
+ 
+     for (i = 0; i < vm->def->nhostdevs; i++) {
+@@ -404,6 +405,9 @@ testQemuPrepareHostdev(virDomainObj *vm)
+             break;
+         }
+     }
++
++    if (virDomainDefHasPCIHostdevWithIOMMUFD(vm->def))
++        priv->iommufd = 0;
+ }
+ 
+ 
+-- 
+2.53.0

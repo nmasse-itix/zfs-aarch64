@@ -1,0 +1,86 @@
+From 053f28978ec5f7b3648ccb9b0b7af16b17a4c87a Mon Sep 17 00:00:00 2001
+Message-ID: <053f28978ec5f7b3648ccb9b0b7af16b17a4c87a.1772815312.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Thu, 27 Nov 2025 18:25:07 +0100
+Subject: [PATCH] qemu_firmware: Move format=raw compat exception
+
+We currently apply this exception, which is critical to ensure
+that the correct firmware is selected when working with older VMs,
+in the postparse callback.
+
+Move it to the firmware selection process instead, where it should
+have been added in the first place.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 5b374c5e3fe621126327aad4398f48da288ba521)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/qemu/qemu_firmware.c  | 20 ++++++++++++++++++++
+ src/qemu/qemu_postparse.c | 17 -----------------
+ 2 files changed, 20 insertions(+), 17 deletions(-)
+
+diff --git a/src/qemu/qemu_firmware.c b/src/qemu/qemu_firmware.c
+index 903b0a984d..6c609ece6a 100644
+--- a/src/qemu/qemu_firmware.c
++++ b/src/qemu/qemu_firmware.c
+@@ -1783,6 +1783,26 @@ qemuFirmwareFillDomain(virQEMUDriver *driver,
+     bool autoSelection = (def->os.firmware != VIR_DOMAIN_OS_DEF_FIRMWARE_NONE);
+     int ret;
+ 
++    /* If we're loading an existing configuration from disk, we
++     * should try as hard as possible to preserve historical
++     * behavior. In particular, firmware autoselection being enabled
++     * could never have resulted, before libvirt 9.2.0, in anything
++     * but a raw firmware image being selected.
++     *
++     * In order to ensure that existing domains keep working even if
++     * a firmware descriptor for a build with a different format is
++     * given higher priority, explicitly add this requirement to the
++     * definition before performing firmware selection */
++    if (!abiUpdate && autoSelection) {
++        if (!loader) {
++            def->os.loader = virDomainLoaderDefNew();
++            loader = def->os.loader;
++        }
++        if (!loader->format) {
++            loader->format = VIR_STORAGE_FILE_RAW;
++        }
++    }
++
+     /* Start by performing a thorough validation of the input.
+      *
+      * We need to do this here because the firmware selection logic
+diff --git a/src/qemu/qemu_postparse.c b/src/qemu/qemu_postparse.c
+index 840d6a1174..8940cb09b3 100644
+--- a/src/qemu/qemu_postparse.c
++++ b/src/qemu/qemu_postparse.c
+@@ -1051,23 +1051,6 @@ qemuDomainDefBootPostParse(virDomainDef *def,
+ {
+     bool abiUpdate = !!(parseFlags & VIR_DOMAIN_DEF_PARSE_ABI_UPDATE);
+ 
+-    /* If we're loading an existing configuration from disk, we
+-     * should try as hard as possible to preserve historical
+-     * behavior. In particular, firmware autoselection being enabled
+-     * could never have resulted, before libvirt 9.2.0, in anything
+-     * but a raw firmware image being selected.
+-     *
+-     * In order to ensure that existing domains keep working even if
+-     * a firmware descriptor for a build with a different format is
+-     * given higher priority, explicitly add this requirement to the
+-     * definition before performing firmware selection */
+-    if (!abiUpdate && def->os.firmware) {
+-        if (!def->os.loader)
+-            def->os.loader = virDomainLoaderDefNew();
+-        if (!def->os.loader->format)
+-            def->os.loader->format = VIR_STORAGE_FILE_RAW;
+-    }
+-
+     /* Firmware selection can fail for a number of reasons, but the
+      * most likely one is that the requested configuration contains
+      * mistakes or includes constraints that are impossible to
+-- 
+2.53.0

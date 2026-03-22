@@ -1,0 +1,53 @@
+From d4bacfba4087228a4a509f41a02aefaaeac187a0 Mon Sep 17 00:00:00 2001
+Message-ID: <d4bacfba4087228a4a509f41a02aefaaeac187a0.1770825107.git.jdenemar@redhat.com>
+From: "Richard W.M. Jones" <rjones@redhat.com>
+Date: Thu, 5 Feb 2026 10:55:12 +0000
+Subject: [PATCH] src/esx/esx_vi.c: Debug path element comparisons
+
+Libvirt vpx:// and esx:// URIs are quite obscure.  In particular it is
+very difficult to construct a correct path to a VMware resource.
+Basically you are iterating over VMware structures blindly with no way
+to know what your choices are at each level in the path.
+
+This commit doesn't directly address this.  It's still difficult.  But
+at least let's add the true path choices to the debug output so
+someone could in theory use 'LIBVIRT_DEBUG=1' to find out what
+possible choices exist at a path level.
+
+For example this command fails because the label (which looks like an
+IPv6 address, but is really a label) should use "::" instead of ":0:":
+
+  LIBVIRT_DEBUG=1 virsh -c 'vpx://root@.../data/aaaa:52:0:49e0:2eea:7fff:fee6:eca0/?no_verify=1'
+
+In the debugging output we now print:
+
+  2026-02-05 10:58:25.421+0000: 1528876: debug : esxVI_LookupManagedObjectHelper:4956 : comparing path element 'aaaa:52:0:49e0:2eea:7fff:fee6:eca0' with candidate name 'aaaa:52::49e0:2eea:7fff:fee6:eca0'
+  2026-02-05 10:58:25.421+0000: 1528876: error : esxVI_Context_LookupManagedObjectsByPath:1098 : internal error: Could not find compute resource specified in '/data/aaaa:52:0:49e0:2eea:7fff:fee6:eca0/'
+
+In an ideal world we should improve the error message to show the
+possible choices, but the way the code is structured makes that
+prohibitive.
+
+Related: https://issues.redhat.com/browse/RHEL-145080
+Reviewed-by: Peter Krempa <pkrempa@redhat.com>
+Signed-off-by: Richard W.M. Jones <rjones@redhat.com>
+(cherry picked from commit 090223d01a8b8128543fd717920982ba9517bd34)
+---
+ src/esx/esx_vi.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/esx/esx_vi.c b/src/esx/esx_vi.c
+index 8d2ffb3f8f..cfd783622d 100644
+--- a/src/esx/esx_vi.c
++++ b/src/esx/esx_vi.c
+@@ -4953,6 +4953,8 @@ esxVI_LookupManagedObjectHelper(esxVI_Context *ctx,
+                 goto cleanup;
+             }
+ 
++            VIR_DEBUG("comparing path element '%s' with candidate name '%s'",
++                      name, name_candidate);
+             if (STREQ(name_candidate, name)) {
+                 /* Found item with matching name */
+                 break;
+-- 
+2.53.0

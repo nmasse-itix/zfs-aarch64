@@ -1,0 +1,115 @@
+From e0e49da1ab66c90b0379ca246b8bdfeadb9ebdbe Mon Sep 17 00:00:00 2001
+Message-ID: <e0e49da1ab66c90b0379ca246b8bdfeadb9ebdbe.1771423658.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Sun, 15 Feb 2026 15:32:24 +0100
+Subject: [PATCH] util: Move openning IOMMU device to viriommufd
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit c684b83a68158cd15e262523db11259c9edabe4a)
+
+Resolves: https://issues.redhat.com/browse/RHEL-150351
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/libvirt_private.syms |  2 +-
+ src/qemu/qemu_process.c  |  9 +--------
+ src/util/viriommufd.c    | 22 +++++++++++++++++++---
+ src/util/viriommufd.h    |  2 +-
+ 4 files changed, 22 insertions(+), 13 deletions(-)
+
+diff --git a/src/libvirt_private.syms b/src/libvirt_private.syms
+index 0904265459..6c4918da9e 100644
+--- a/src/libvirt_private.syms
++++ b/src/libvirt_private.syms
+@@ -2653,7 +2653,7 @@ virInitctlFifos;
+ virInitctlSetRunLevel;
+ 
+ # util/viriommufd.h
+-virIOMMUFDSetRLimitMode;
++virIOMMUFDOpenDevice;
+ virIOMMUFDSupported;
+ 
+ # util/viriscsi.h
+diff --git a/src/qemu/qemu_process.c b/src/qemu/qemu_process.c
+index 479437fb34..dd165512f3 100644
+--- a/src/qemu/qemu_process.c
++++ b/src/qemu/qemu_process.c
+@@ -7689,15 +7689,8 @@ qemuProcessOpenIommuFd(virDomainObj *vm)
+ 
+     VIR_DEBUG("Opening IOMMU FD for domain %s", vm->def->name);
+ 
+-    if ((fd = open(VIR_IOMMU_DEV_PATH, O_RDWR | O_CLOEXEC)) < 0) {
+-        virReportSystemError(errno, "%s", _("cannot open /dev/iommu"));
++    if ((fd = virIOMMUFDOpenDevice()) < 0)
+         return -1;
+-    }
+-
+-    if (virIOMMUFDSetRLimitMode(fd, true) < 0) {
+-        VIR_FORCE_CLOSE(fd);
+-        return -1;
+-    }
+ 
+     VIR_DEBUG("Opened IOMMU FD %d for domain %s", fd, vm->def->name);
+     return fd;
+diff --git a/src/util/viriommufd.c b/src/util/viriommufd.c
+index 44b30029a5..1f3353eab4 100644
+--- a/src/util/viriommufd.c
++++ b/src/util/viriommufd.c
+@@ -1,5 +1,7 @@
+ #include <config.h>
+ 
++#include <fcntl.h>
++
+ #include "viriommufd.h"
+ #include "virlog.h"
+ #include "virerror.h"
+@@ -54,7 +56,7 @@ struct iommu_option {
+  *
+  * Returns: 0 on success, -1 on error
+  */
+-int
++static int
+ virIOMMUFDSetRLimitMode(int fd, bool processAccounting)
+ {
+     struct iommu_option option = {
+@@ -77,10 +79,24 @@ virIOMMUFDSetRLimitMode(int fd, bool processAccounting)
+     return 0;
+ }
+ 
++int
++virIOMMUFDOpenDevice(void)
++{
++    int fd = -1;
++
++    if ((fd = open(VIR_IOMMU_DEV_PATH, O_RDWR | O_CLOEXEC)) < 0)
++        virReportSystemError(errno, "%s", _("cannot open IOMMUFD device"));
++
++    if (virIOMMUFDSetRLimitMode(fd, true) < 0)
++        return -1;
++
++    return fd;
++}
++
+ #else
+ 
+-int virIOMMUFDSetRLimitMode(int fd G_GNUC_UNUSED,
+-                            bool processAccounting G_GNUC_UNUSED)
++int
++virIOMMUFDOpenDevice(void)
+ {
+     virReportError(VIR_ERR_NO_SUPPORT, "%s",
+                    _("IOMMUFD is not supported on this platform"));
+diff --git a/src/util/viriommufd.h b/src/util/viriommufd.h
+index ec6be9fa66..223f44eb5c 100644
+--- a/src/util/viriommufd.h
++++ b/src/util/viriommufd.h
+@@ -22,6 +22,6 @@
+ 
+ #define VIR_IOMMU_DEV_PATH "/dev/iommu"
+ 
+-int virIOMMUFDSetRLimitMode(int fd, bool processAccounting);
++int virIOMMUFDOpenDevice(void);
+ 
+ bool virIOMMUFDSupported(void);
+-- 
+2.53.0

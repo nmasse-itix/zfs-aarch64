@@ -1,0 +1,59 @@
+From 3c5a50888fffcc6fcc83745e24782dfbaf26519b Mon Sep 17 00:00:00 2001
+Message-ID: <3c5a50888fffcc6fcc83745e24782dfbaf26519b.1773154803.git.jdenemar@redhat.com>
+From: Jim Fehlig <jfehlig@suse.com>
+Date: Fri, 6 Mar 2026 09:56:16 -0700
+Subject: [PATCH] test: Default to ROM type for loader
+
+Commit 1504b7f687 moved the corresponding logic from the generic
+postparse code to drivers but failed to update the test driver,
+which causes failures in virt-manager's test suite.
+
+Fixes: 1504b7f687bdfc679377e605d076776b18533468
+Signed-off-by: Jim Fehlig <jfehlig@suse.com>
+Reviewed-by: Andrea Bolognani <abologna@redhat.com>
+(cherry picked from commit 3ea1550c64f689f1dff944cbe1e77c3e8f8f46f7)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/test/test_driver.c | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+diff --git a/src/test/test_driver.c b/src/test/test_driver.c
+index 1165689de7..536e291861 100644
+--- a/src/test/test_driver.c
++++ b/src/test/test_driver.c
+@@ -421,6 +421,22 @@ testDomainDevicesDefPostParse(virDomainDeviceDef *dev G_GNUC_UNUSED,
+ }
+ 
+ 
++static int
++testDomainDefPostParse(virDomainDef *def,
++                       unsigned int parseFlags G_GNUC_UNUSED,
++                       void *opaque G_GNUC_UNUSED,
++                       void *parseOpaque G_GNUC_UNUSED)
++{
++    if (def->os.loader &&
++        def->os.loader->path &&
++        !def->os.loader->type) {
++        def->os.loader->type = VIR_DOMAIN_LOADER_TYPE_ROM;
++    }
++
++    return 0;
++}
++
++
+ static void
+ testDomainObjPrivateFree(void *data)
+ {
+@@ -448,6 +464,7 @@ testDriverNew(void)
+                     VIR_DOMAIN_DEF_FEATURE_FW_AUTOSELECT |
+                     VIR_DOMAIN_DEF_FEATURE_NET_MODEL_STRING,
+         .devicesPostParseCallback = testDomainDevicesDefPostParse,
++        .domainPostParseCallback = testDomainDefPostParse,
+         .defArch = VIR_ARCH_I686,
+     };
+     virDomainXMLPrivateDataCallbacks privatecb = {
+-- 
+2.53.0

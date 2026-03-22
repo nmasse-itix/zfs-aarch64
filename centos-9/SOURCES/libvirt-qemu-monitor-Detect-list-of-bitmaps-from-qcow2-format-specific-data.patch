@@ -1,0 +1,173 @@
+From 94768f63a02ec5e9f25cb5db28b38ed6950c1df0 Mon Sep 17 00:00:00 2001
+Message-ID: <94768f63a02ec5e9f25cb5db28b38ed6950c1df0.1770203323.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Tue, 27 Jan 2026 20:07:32 +0100
+Subject: [PATCH] qemu: monitor: Detect list of bitmaps from 'qcow2' format
+ specific data
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+We currently probe dirty block tracking bitmaps by looking at the loaded
+ones ('dirty-bitmaps'). Unfortunately those may not yet be populated on
+incoming migration when the image was not yet activated, but we need to
+know which ones are stored in the image so that we don't migrate those
+explicitly, which would fail.
+
+Load the list of bitmaps in a qcow2 image from the format specific data,
+which is already loaded at that point.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Ján Tomko <jtomko@redhat.com>
+(cherry picked from commit b2fe3465de1db033e436f38fdd24648c8c884a3d)
+
+https://issues.redhat.com/browse/RHEL-145769 [rhel-10.2]
+https://issues.redhat.com/browse/RHEL-145770 [rhel-9.8]
+---
+ src/qemu/qemu_monitor.h                      |  4 ++++
+ src/qemu/qemu_monitor_json.c                 | 17 +++++++++++++++++
+ tests/qemublocktest.c                        | 11 +++++++++++
+ tests/qemublocktestdata/bitmap/snapshots.out |  5 +++++
+ tests/qemublocktestdata/bitmap/synthetic.out |  4 ++++
+ 5 files changed, 41 insertions(+)
+
+diff --git a/src/qemu/qemu_monitor.h b/src/qemu/qemu_monitor.h
+index d096f474c1..041aa7bc12 100644
+--- a/src/qemu/qemu_monitor.h
++++ b/src/qemu/qemu_monitor.h
+@@ -893,8 +893,12 @@ struct _qemuBlockNamedNodeData {
+     unsigned long long capacity;
+     unsigned long long physical;
+ 
++    /* Information about change block tracking bitmaps which are active and loaded */
+     qemuBlockNamedNodeDataBitmap **bitmaps;
+     size_t nbitmaps;
++    /* With qcow2 we have also a separate list of bitmaps present in the image
++     * but not yet activated, which happens when starting qemu during migration */
++    char **qcow2bitmaps;
+ 
+     /* hash table indexed by snapshot name containing data about snapshots
+      * (qemuBlockNamedNodeDataSnapshot) */
+diff --git a/src/qemu/qemu_monitor_json.c b/src/qemu/qemu_monitor_json.c
+index 494d7ef515..401a28ff9a 100644
+--- a/src/qemu/qemu_monitor_json.c
++++ b/src/qemu/qemu_monitor_json.c
+@@ -2730,6 +2730,7 @@ qemuMonitorJSONBlockNamedNodeDataFree(qemuBlockNamedNodeData *data)
+         qemuMonitorJSONBlockNamedNodeDataBitmapFree(data->bitmaps[i]);
+     g_clear_pointer(&data->snapshots, g_hash_table_unref);
+     g_free(data->bitmaps);
++    g_strfreev(data->qcow2bitmaps);
+     g_free(data);
+ }
+ G_DEFINE_AUTOPTR_CLEANUP_FUNC(qemuBlockNamedNodeData, qemuMonitorJSONBlockNamedNodeDataFree);
+@@ -2854,6 +2855,9 @@ qemuMonitorJSONBlockGetNamedNodeDataWorker(size_t pos G_GNUC_UNUSED,
+         virJSONValue *qcow2props = virJSONValueObjectGetObject(format_specific, "data");
+ 
+         if (qcow2props) {
++            virJSONValue *bmp;
++            size_t nbmp;
++
+             if (STREQ_NULLABLE(virJSONValueObjectGetString(qcow2props, "compat"), "0.10"))
+                 ent->qcow2v2 = true;
+ 
+@@ -2862,6 +2866,19 @@ qemuMonitorJSONBlockGetNamedNodeDataWorker(size_t pos G_GNUC_UNUSED,
+ 
+             ignore_value(virJSONValueObjectGetBoolean(qcow2props, "data-file-raw",
+                                                       &ent->qcow2dataFileRaw));
++
++            if ((bmp = virJSONValueObjectGetArray(qcow2props, "bitmaps")) &&
++                ((nbmp = virJSONValueArraySize(bmp)) > 0)) {
++                size_t i;
++
++                ent->qcow2bitmaps = g_new0(char *, nbmp + 1);
++
++                for (i = 0; i < nbmp; i++) {
++                    virJSONValue *b = virJSONValueArrayGet(bmp, i);
++
++                    ent->qcow2bitmaps[i] = g_strdup(virJSONValueObjectGetString(b, "name"));
++                }
++            }
+         }
+     }
+ 
+diff --git a/tests/qemublocktest.c b/tests/qemublocktest.c
+index 51d9268cdd..18ec90edf5 100644
+--- a/tests/qemublocktest.c
++++ b/tests/qemublocktest.c
+@@ -600,6 +600,17 @@ testQemuDetectBitmapsWorker(void *payload,
+                           bitmap->granularity, bitmap->dirtybytes);
+     }
+ 
++    if (data->qcow2bitmaps) {
++        char **b;
++
++        virBufferAddLit(buf, "qcow2 bitmaps:");
++
++        for (b = data->qcow2bitmaps; *b; b++)
++            virBufferAsprintf(buf, " %s", *b);
++
++        virBufferAddLit(buf, "\n");
++    }
++
+     if (data->snapshots) {
+         g_autofree virHashKeyValuePair *snaps = virHashGetItems(data->snapshots, NULL, true);
+         virHashKeyValuePair *n;
+diff --git a/tests/qemublocktestdata/bitmap/snapshots.out b/tests/qemublocktestdata/bitmap/snapshots.out
+index 29c586be7e..dedd77465c 100644
+--- a/tests/qemublocktestdata/bitmap/snapshots.out
++++ b/tests/qemublocktestdata/bitmap/snapshots.out
+@@ -4,21 +4,26 @@ libvirt-1-format:
+         b: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
+         c: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
+   current: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
++ qcow2 bitmaps: current c b a d
+ libvirt-1-storage:
+ libvirt-2-format:
+         c: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
+         b: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
+         a: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
+         d: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
++ qcow2 bitmaps: d a b c
+ libvirt-2-storage:
+ libvirt-3-format:
+         a: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
+         b: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
+         c: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
++ qcow2 bitmaps: c b a
+ libvirt-3-storage:
+ libvirt-4-format:
+         a: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
++ qcow2 bitmaps: a
+ libvirt-4-storage:
+ libvirt-5-format:
+         a: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
++ qcow2 bitmaps: a
+ libvirt-5-storage:
+diff --git a/tests/qemublocktestdata/bitmap/synthetic.out b/tests/qemublocktestdata/bitmap/synthetic.out
+index 2f4ae2b217..0a47a90107 100644
+--- a/tests/qemublocktestdata/bitmap/synthetic.out
++++ b/tests/qemublocktestdata/bitmap/synthetic.out
+@@ -6,17 +6,21 @@ libvirt-1-format:
+  top-inactive: record:0 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
+  top-transient: record:1 busy:0 persist:0 inconsist:0 gran:65536 dirty:0
+  top-transient-inactive: record:0 busy:0 persist:0 inconsist:0 gran:65536 dirty:0
++ qcow2 bitmaps: current
+ libvirt-1-storage:
+ libvirt-2-format:
+         d: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
++ qcow2 bitmaps: d
+ libvirt-2-storage:
+ libvirt-3-format:
+         b: record:1 busy:0 persist:0 inconsist:0 gran:65536 dirty:0
+         c: record:0 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
+         d: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
++ qcow2 bitmaps: c b
+ libvirt-3-storage:
+ libvirt-4-format:
+ libvirt-4-storage:
+ libvirt-5-format:
+         a: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
++ qcow2 bitmaps: a
+ libvirt-5-storage:
+-- 
+2.52.0

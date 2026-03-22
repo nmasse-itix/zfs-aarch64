@@ -1,0 +1,89 @@
+From 3864161a4d28f0ef71d435f2ae1e52e92afaac15 Mon Sep 17 00:00:00 2001
+Message-ID: <3864161a4d28f0ef71d435f2ae1e52e92afaac15.1771423832.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Sun, 15 Feb 2026 18:19:23 +0100
+Subject: [PATCH] conf: Introduce virHostdevIsPCIDeviceWithIOMMUFD
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 97eed30948e980be8b7552fff637e828768854e4)
+
+Resolves: https://issues.redhat.com/browse/RHEL-150353
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/conf/domain_conf.c   | 15 +++++++++++++++
+ src/conf/domain_conf.h   |  3 +++
+ src/libvirt_private.syms |  1 +
+ src/qemu/qemu_process.c  |  5 +----
+ 4 files changed, 20 insertions(+), 4 deletions(-)
+
+diff --git a/src/conf/domain_conf.c b/src/conf/domain_conf.c
+index 83c58ab5ff..9ae48e9abc 100644
+--- a/src/conf/domain_conf.c
++++ b/src/conf/domain_conf.c
+@@ -32758,6 +32758,21 @@ virHostdevIsPCIDevice(const virDomainHostdevDef *hostdev)
+ }
+ 
+ 
++/**
++ * virHostdevIsPCIDeviceWithIOMMUFD:
++ * @hostdev: host device to check
++ *
++ * Returns true if @hostdev is a PCI device with IOMMUFD enabled, false otherwise.
++ */
++bool
++virHostdevIsPCIDeviceWithIOMMUFD(const virDomainHostdevDef *hostdev)
++{
++    return virHostdevIsPCIDevice(hostdev) &&
++        hostdev->source.subsys.u.pci.driver.name == VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_VFIO &&
++        hostdev->source.subsys.u.pci.driver.iommufd == VIR_TRISTATE_BOOL_YES;
++}
++
++
+ static void
+ virDomainObjGetMessagesIOErrorsSrc(virStorageSource *src,
+                                    const char *diskdst,
+diff --git a/src/conf/domain_conf.h b/src/conf/domain_conf.h
+index b120d4a68e..d958ed04f9 100644
+--- a/src/conf/domain_conf.h
++++ b/src/conf/domain_conf.h
+@@ -4713,6 +4713,9 @@ virHostdevIsMdevDevice(const virDomainHostdevDef *hostdev)
+ bool
+ virHostdevIsPCIDevice(const virDomainHostdevDef *hostdev)
+     ATTRIBUTE_NONNULL(1);
++bool
++virHostdevIsPCIDeviceWithIOMMUFD(const virDomainHostdevDef *hostdev)
++    ATTRIBUTE_NONNULL(1);
+ 
+ void
+ virDomainObjGetMessagesIOErrorsChain(virStorageSource *src,
+diff --git a/src/libvirt_private.syms b/src/libvirt_private.syms
+index 9ae44e31b8..863e50ec4f 100644
+--- a/src/libvirt_private.syms
++++ b/src/libvirt_private.syms
+@@ -812,6 +812,7 @@ virDomainQemuMonitorEventNew;
+ virDomainQemuMonitorEventStateRegisterID;
+ virHostdevIsMdevDevice;
+ virHostdevIsPCIDevice;
++virHostdevIsPCIDeviceWithIOMMUFD;
+ virHostdevIsSCSIDevice;
+ 
+ 
+diff --git a/src/qemu/qemu_process.c b/src/qemu/qemu_process.c
+index 7e32325fa0..3bd81c55b3 100644
+--- a/src/qemu/qemu_process.c
++++ b/src/qemu/qemu_process.c
+@@ -7732,10 +7732,7 @@ qemuProcessOpenVfioFds(virDomainObj *vm)
+     for (i = 0; i < vm->def->nhostdevs; i++) {
+         virDomainHostdevDef *hostdev = vm->def->hostdevs[i];
+ 
+-        if (hostdev->mode == VIR_DOMAIN_HOSTDEV_MODE_SUBSYS &&
+-            hostdev->source.subsys.type == VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_PCI &&
+-            hostdev->source.subsys.u.pci.driver.name == VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_VFIO &&
+-            hostdev->source.subsys.u.pci.driver.iommufd == VIR_TRISTATE_BOOL_YES) {
++        if (virHostdevIsPCIDeviceWithIOMMUFD(hostdev)) {
+             /* Open VFIO device FD */
+             if (qemuProcessOpenVfioDeviceFd(hostdev) < 0)
+                 return -1;
+-- 
+2.53.0

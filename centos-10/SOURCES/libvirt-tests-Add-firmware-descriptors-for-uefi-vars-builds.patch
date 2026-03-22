@@ -1,0 +1,815 @@
+From 06806829491a9a5c758e3ede52813acc281b7a9c Mon Sep 17 00:00:00 2001
+Message-ID: <06806829491a9a5c758e3ede52813acc281b7a9c.1772815314.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Tue, 20 Jan 2026 15:28:17 +0100
+Subject: [PATCH] tests: Add firmware descriptors for uefi-vars builds
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Now that everything else is in place, we can finally add the
+firmware descriptors for the edk2 builds that use the uefi-vars
+QEMU device.
+
+Several existing test cases that were failing up until this
+point can pass now. This includes firmware-auto-efi-varstore-q35,
+firmware-auto-efi-varstore-aarch64 and
+firmware-auto-efi-enrolled-keys-aarch64, which were only failing
+because a matching firmware descriptor could not be found.
+
+firmware-manual-efi-varstore-aarch64 also passes now, because
+with the firmware descriptor in place libvirt is able to figure
+out that the manually-provided path corresponds to a UEFI
+firmware build, which means that the use of ACPI is fine.
+
+The test cases using older version of QEMU still fail, as is
+expected, though the error message is now slightly different and
+reflect the actual reason why that is.
+
+The qemufirmware and domaincaps tests are updated in the
+expected ways. In particular, versions QEMU 10.0 and newer now
+advertise varstore support as available.
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+Reviewed-by: Daniel P. Berrangé <berrange@redhat.com>
+(cherry picked from commit 0ea04024ef2963b1c348e2b634cd15b7fa381bc6)
+
+Conflicts:
+
+  * tests/domaincapsdata/qemu_10.2.0-virt.aarch64.xml
+    tests/domaincapsdata/qemu_10.2.0.aarch64.xml
+    tests/domaincapsdata/qemu_11.0.0-q35.x86_64.xml
+    tests/domaincapsdata/qemu_11.0.0-virt.aarch64.xml
+    tests/domaincapsdata/qemu_11.0.0.aarch64.xml
+
+    - Missing downstream
+
+  * tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-latest.args
+    tests/qemuxmlconfdata/firmware-auto-efi-varstore-aarch64.aarch64-latest.args
+    tests/qemuxmlconfdata/firmware-manual-efi-varstore-aarch64.aarch64-latest.args
+    tests/qemuxmlconfdata/firmware-manual-efi-varstore-aarch64.aarch64-latest.xml
+
+    - GIC version mismatch caused by capabilities files
+      being outdated or missing downstream
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ .../qemu_10.0.0-q35.x86_64+amdsev.xml         |  2 +-
+ .../domaincapsdata/qemu_10.0.0-q35.x86_64.xml |  2 +-
+ .../qemu_10.0.0-virt.aarch64.xml              |  4 ++-
+ tests/domaincapsdata/qemu_10.0.0.aarch64.xml  |  4 ++-
+ .../qemu_10.1.0-q35.x86_64+inteltdx.xml       |  2 +-
+ .../domaincapsdata/qemu_10.1.0-q35.x86_64.xml |  2 +-
+ .../qemu_10.2.0-q35.x86_64+mshv.xml           |  2 +-
+ .../domaincapsdata/qemu_10.2.0-q35.x86_64.xml |  2 +-
+ .../qemu_8.2.0-virt.aarch64.xml               |  2 ++
+ tests/domaincapsdata/qemu_8.2.0.aarch64.xml   |  2 ++
+ .../qemu_9.2.0-hvf.aarch64+hvf.xml            |  2 ++
+ .../90-edk2-aarch64-qemuvars-sb-enrolled.json | 29 ++++++++++++++++
+ ...90-edk2-ovmf-qemuvars-x64-sb-enrolled.json | 31 +++++++++++++++++
+ .../firmware/91-edk2-aarch64-qemuvars-sb.json | 28 +++++++++++++++
+ .../91-edk2-ovmf-qemuvars-x64-sb.json         | 30 ++++++++++++++++
+ tests/qemufirmwaretest.c                      | 20 ++++++++---
+ ...fi-enrolled-keys-aarch64.aarch64-8.2.0.err |  2 +-
+ ...-enrolled-keys-aarch64.aarch64-latest.args | 31 +++++++++++++++++
+ ...i-enrolled-keys-aarch64.aarch64-latest.err |  1 -
+ ...i-enrolled-keys-aarch64.aarch64-latest.xml |  4 ++-
+ ...o-efi-varstore-aarch64.aarch64-latest.args | 31 +++++++++++++++++
+ ...to-efi-varstore-aarch64.aarch64-latest.err |  1 -
+ ...to-efi-varstore-aarch64.aarch64-latest.xml |  8 +++--
+ ...e-auto-efi-varstore-q35.x86_64-latest.args | 34 +++++++++++++++++++
+ ...re-auto-efi-varstore-q35.x86_64-latest.err |  1 -
+ ...re-auto-efi-varstore-q35.x86_64-latest.xml |  8 +++--
+ ...ual-efi-varstore-aarch64.aarch64-8.2.0.err |  2 +-
+ ...l-efi-varstore-aarch64.aarch64-latest.args | 31 +++++++++++++++++
+ ...al-efi-varstore-aarch64.aarch64-latest.err |  1 -
+ ...l-efi-varstore-aarch64.aarch64-latest.xml} |  4 ++-
+ ...-manual-efi-varstore-q35.x86_64-latest.xml |  8 +++--
+ tests/qemuxmlconftest.c                       | 10 +++---
+ 32 files changed, 310 insertions(+), 31 deletions(-)
+ create mode 100644 tests/qemufirmwaredata/usr/share/qemu/firmware/90-edk2-aarch64-qemuvars-sb-enrolled.json
+ create mode 100644 tests/qemufirmwaredata/usr/share/qemu/firmware/90-edk2-ovmf-qemuvars-x64-sb-enrolled.json
+ create mode 100644 tests/qemufirmwaredata/usr/share/qemu/firmware/91-edk2-aarch64-qemuvars-sb.json
+ create mode 100644 tests/qemufirmwaredata/usr/share/qemu/firmware/91-edk2-ovmf-qemuvars-x64-sb.json
+ create mode 100644 tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-latest.args
+ delete mode 100644 tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-latest.err
+ create mode 100644 tests/qemuxmlconfdata/firmware-auto-efi-varstore-aarch64.aarch64-latest.args
+ delete mode 100644 tests/qemuxmlconfdata/firmware-auto-efi-varstore-aarch64.aarch64-latest.err
+ create mode 100644 tests/qemuxmlconfdata/firmware-auto-efi-varstore-q35.x86_64-latest.args
+ delete mode 100644 tests/qemuxmlconfdata/firmware-auto-efi-varstore-q35.x86_64-latest.err
+ create mode 100644 tests/qemuxmlconfdata/firmware-manual-efi-varstore-aarch64.aarch64-latest.args
+ delete mode 100644 tests/qemuxmlconfdata/firmware-manual-efi-varstore-aarch64.aarch64-latest.err
+ rename tests/qemuxmlconfdata/{firmware-auto-efi-enrolled-keys-aarch64.aarch64-8.2.0.xml => firmware-manual-efi-varstore-aarch64.aarch64-latest.xml} (78%)
+
+diff --git a/tests/domaincapsdata/qemu_10.0.0-q35.x86_64+amdsev.xml b/tests/domaincapsdata/qemu_10.0.0-q35.x86_64+amdsev.xml
+index 1fff8c7fc7..bf6393dc03 100644
+--- a/tests/domaincapsdata/qemu_10.0.0-q35.x86_64+amdsev.xml
++++ b/tests/domaincapsdata/qemu_10.0.0-q35.x86_64+amdsev.xml
+@@ -36,7 +36,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
+-    <varstore supported='no'/>
++    <varstore supported='yes'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_10.0.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_10.0.0-q35.x86_64.xml
+index 6c26e5b422..d6f710e56e 100644
+--- a/tests/domaincapsdata/qemu_10.0.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.0.0-q35.x86_64.xml
+@@ -36,7 +36,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
+-    <varstore supported='no'/>
++    <varstore supported='yes'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_10.0.0-virt.aarch64.xml b/tests/domaincapsdata/qemu_10.0.0-virt.aarch64.xml
+index 97064ea009..334aa5e31f 100644
+--- a/tests/domaincapsdata/qemu_10.0.0-virt.aarch64.xml
++++ b/tests/domaincapsdata/qemu_10.0.0-virt.aarch64.xml
+@@ -11,9 +11,11 @@
+     </enum>
+     <firmwareFeatures supported='yes'>
+       <enum name='secureBoot'>
++        <value>yes</value>
+         <value>no</value>
+       </enum>
+       <enum name='enrolledKeys'>
++        <value>yes</value>
+         <value>no</value>
+       </enum>
+     </firmwareFeatures>
+@@ -32,7 +34,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
+-    <varstore supported='no'/>
++    <varstore supported='yes'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_10.0.0.aarch64.xml b/tests/domaincapsdata/qemu_10.0.0.aarch64.xml
+index 97064ea009..334aa5e31f 100644
+--- a/tests/domaincapsdata/qemu_10.0.0.aarch64.xml
++++ b/tests/domaincapsdata/qemu_10.0.0.aarch64.xml
+@@ -11,9 +11,11 @@
+     </enum>
+     <firmwareFeatures supported='yes'>
+       <enum name='secureBoot'>
++        <value>yes</value>
+         <value>no</value>
+       </enum>
+       <enum name='enrolledKeys'>
++        <value>yes</value>
+         <value>no</value>
+       </enum>
+     </firmwareFeatures>
+@@ -32,7 +34,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
+-    <varstore supported='no'/>
++    <varstore supported='yes'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_10.1.0-q35.x86_64+inteltdx.xml b/tests/domaincapsdata/qemu_10.1.0-q35.x86_64+inteltdx.xml
+index 3105469bdc..4632a816f5 100644
+--- a/tests/domaincapsdata/qemu_10.1.0-q35.x86_64+inteltdx.xml
++++ b/tests/domaincapsdata/qemu_10.1.0-q35.x86_64+inteltdx.xml
+@@ -36,7 +36,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
+-    <varstore supported='no'/>
++    <varstore supported='yes'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_10.1.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_10.1.0-q35.x86_64.xml
+index e55d7d8ba6..60cc9eee3d 100644
+--- a/tests/domaincapsdata/qemu_10.1.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.1.0-q35.x86_64.xml
+@@ -36,7 +36,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
+-    <varstore supported='no'/>
++    <varstore supported='yes'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_10.2.0-q35.x86_64+mshv.xml b/tests/domaincapsdata/qemu_10.2.0-q35.x86_64+mshv.xml
+index 43fe2bff93..e30b64e068 100644
+--- a/tests/domaincapsdata/qemu_10.2.0-q35.x86_64+mshv.xml
++++ b/tests/domaincapsdata/qemu_10.2.0-q35.x86_64+mshv.xml
+@@ -35,7 +35,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
+-    <varstore supported='no'/>
++    <varstore supported='yes'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_10.2.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_10.2.0-q35.x86_64.xml
+index 6327aa7043..640e9e8f87 100644
+--- a/tests/domaincapsdata/qemu_10.2.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.2.0-q35.x86_64.xml
+@@ -36,7 +36,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
+-    <varstore supported='no'/>
++    <varstore supported='yes'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_8.2.0-virt.aarch64.xml b/tests/domaincapsdata/qemu_8.2.0-virt.aarch64.xml
+index 420fbedd72..83fc9e37a7 100644
+--- a/tests/domaincapsdata/qemu_8.2.0-virt.aarch64.xml
++++ b/tests/domaincapsdata/qemu_8.2.0-virt.aarch64.xml
+@@ -11,9 +11,11 @@
+     </enum>
+     <firmwareFeatures supported='yes'>
+       <enum name='secureBoot'>
++        <value>yes</value>
+         <value>no</value>
+       </enum>
+       <enum name='enrolledKeys'>
++        <value>yes</value>
+         <value>no</value>
+       </enum>
+     </firmwareFeatures>
+diff --git a/tests/domaincapsdata/qemu_8.2.0.aarch64.xml b/tests/domaincapsdata/qemu_8.2.0.aarch64.xml
+index 420fbedd72..83fc9e37a7 100644
+--- a/tests/domaincapsdata/qemu_8.2.0.aarch64.xml
++++ b/tests/domaincapsdata/qemu_8.2.0.aarch64.xml
+@@ -11,9 +11,11 @@
+     </enum>
+     <firmwareFeatures supported='yes'>
+       <enum name='secureBoot'>
++        <value>yes</value>
+         <value>no</value>
+       </enum>
+       <enum name='enrolledKeys'>
++        <value>yes</value>
+         <value>no</value>
+       </enum>
+     </firmwareFeatures>
+diff --git a/tests/domaincapsdata/qemu_9.2.0-hvf.aarch64+hvf.xml b/tests/domaincapsdata/qemu_9.2.0-hvf.aarch64+hvf.xml
+index f998177636..65bb9dc9bd 100644
+--- a/tests/domaincapsdata/qemu_9.2.0-hvf.aarch64+hvf.xml
++++ b/tests/domaincapsdata/qemu_9.2.0-hvf.aarch64+hvf.xml
+@@ -11,9 +11,11 @@
+     </enum>
+     <firmwareFeatures supported='yes'>
+       <enum name='secureBoot'>
++        <value>yes</value>
+         <value>no</value>
+       </enum>
+       <enum name='enrolledKeys'>
++        <value>yes</value>
+         <value>no</value>
+       </enum>
+     </firmwareFeatures>
+diff --git a/tests/qemufirmwaredata/usr/share/qemu/firmware/90-edk2-aarch64-qemuvars-sb-enrolled.json b/tests/qemufirmwaredata/usr/share/qemu/firmware/90-edk2-aarch64-qemuvars-sb-enrolled.json
+new file mode 100644
+index 0000000000..9142d8fecd
+--- /dev/null
++++ b/tests/qemufirmwaredata/usr/share/qemu/firmware/90-edk2-aarch64-qemuvars-sb-enrolled.json
+@@ -0,0 +1,29 @@
++{
++    "description": "UEFI firmware for ARM64 virtual machines, SB enabled, MS certs enrolled",
++    "interface-types": [
++        "uefi"
++    ],
++    "mapping": {
++        "device": "memory",
++        "filename": "/usr/share/edk2/aarch64/QEMU_EFI.qemuvars.fd",
++        "uefi-vars": {
++            "template": "/usr/share/edk2/aarch64/vars.secboot.json"
++        }
++    },
++    "targets": [
++        {
++            "architecture": "aarch64",
++            "machines": [
++                "virt-*"
++            ]
++        }
++    ],
++    "features": [
++        "enrolled-keys",
++        "secure-boot",
++        "host-uefi-vars"
++    ],
++    "tags": [
++
++    ]
++}
+diff --git a/tests/qemufirmwaredata/usr/share/qemu/firmware/90-edk2-ovmf-qemuvars-x64-sb-enrolled.json b/tests/qemufirmwaredata/usr/share/qemu/firmware/90-edk2-ovmf-qemuvars-x64-sb-enrolled.json
+new file mode 100644
+index 0000000000..5b1b483c1c
+--- /dev/null
++++ b/tests/qemufirmwaredata/usr/share/qemu/firmware/90-edk2-ovmf-qemuvars-x64-sb-enrolled.json
+@@ -0,0 +1,31 @@
++{
++    "description": "OVMF for qemu uefi-vars, SB enabled, MS certs enrolled",
++    "interface-types": [
++        "uefi"
++    ],
++    "mapping": {
++        "device": "memory",
++        "filename": "/usr/share/edk2/ovmf/OVMF.qemuvars.fd",
++        "uefi-vars": {
++            "template": "/usr/share/edk2/ovmf/vars.secboot.json"
++        }
++    },
++    "targets": [
++        {
++            "architecture": "x86_64",
++            "machines": [
++                "pc-q35-*"
++            ]
++        }
++    ],
++    "features": [
++        "acpi-s3",
++        "enrolled-keys",
++        "secure-boot",
++        "host-uefi-vars",
++        "verbose-dynamic"
++    ],
++    "tags": [
++
++    ]
++}
+diff --git a/tests/qemufirmwaredata/usr/share/qemu/firmware/91-edk2-aarch64-qemuvars-sb.json b/tests/qemufirmwaredata/usr/share/qemu/firmware/91-edk2-aarch64-qemuvars-sb.json
+new file mode 100644
+index 0000000000..95c25981dd
+--- /dev/null
++++ b/tests/qemufirmwaredata/usr/share/qemu/firmware/91-edk2-aarch64-qemuvars-sb.json
+@@ -0,0 +1,28 @@
++{
++    "description": "UEFI firmware for ARM64 virtual machines, SB disabled",
++    "interface-types": [
++        "uefi"
++    ],
++    "mapping": {
++        "device": "memory",
++        "filename": "/usr/share/edk2/aarch64/QEMU_EFI.qemuvars.fd",
++        "uefi-vars": {
++            "template": "/usr/share/edk2/aarch64/vars.blank.json"
++        }
++    },
++    "targets": [
++        {
++            "architecture": "aarch64",
++            "machines": [
++                "virt-*"
++            ]
++        }
++    ],
++    "features": [
++        "secure-boot",
++        "host-uefi-vars"
++    ],
++    "tags": [
++
++    ]
++}
+diff --git a/tests/qemufirmwaredata/usr/share/qemu/firmware/91-edk2-ovmf-qemuvars-x64-sb.json b/tests/qemufirmwaredata/usr/share/qemu/firmware/91-edk2-ovmf-qemuvars-x64-sb.json
+new file mode 100644
+index 0000000000..b3fb98cbce
+--- /dev/null
++++ b/tests/qemufirmwaredata/usr/share/qemu/firmware/91-edk2-ovmf-qemuvars-x64-sb.json
+@@ -0,0 +1,30 @@
++{
++    "description": "OVMF for qemu uefi-vars, SB disabled",
++    "interface-types": [
++        "uefi"
++    ],
++    "mapping": {
++        "device": "memory",
++        "filename": "/usr/share/edk2/ovmf/OVMF.qemuvars.fd",
++        "uefi-vars": {
++            "template": "/usr/share/edk2/ovmf/vars.blank.json"
++        }
++    },
++    "targets": [
++        {
++            "architecture": "x86_64",
++            "machines": [
++                "pc-q35-*"
++            ]
++        }
++    ],
++    "features": [
++        "acpi-s3",
++        "secure-boot",
++        "host-uefi-vars",
++        "verbose-dynamic"
++    ],
++    "tags": [
++
++    ]
++}
+diff --git a/tests/qemufirmwaretest.c b/tests/qemufirmwaretest.c
+index ee585b67d2..075e3e1d4c 100644
+--- a/tests/qemufirmwaretest.c
++++ b/tests/qemufirmwaretest.c
+@@ -101,7 +101,11 @@ testFWPrecedence(const void *opaque G_GNUC_UNUSED)
+         SYSCONFDIR "/qemu/firmware/59-libvirt-combined.json",
+         PREFIX "/share/qemu/firmware/60-edk2-ovmf-x64-amdsev.json",
+         PREFIX "/share/qemu/firmware/60-edk2-ovmf-x64-inteltdx.json",
++        PREFIX "/share/qemu/firmware/90-edk2-aarch64-qemuvars-sb-enrolled.json",
++        PREFIX "/share/qemu/firmware/90-edk2-ovmf-qemuvars-x64-sb-enrolled.json",
+         PREFIX "/share/qemu/firmware/90-libvirt-combined.json",
++        PREFIX "/share/qemu/firmware/91-edk2-aarch64-qemuvars-sb.json",
++        PREFIX "/share/qemu/firmware/91-edk2-ovmf-qemuvars-x64-sb.json",
+         PREFIX "/share/qemu/firmware/91-libvirt-bios.json",
+         PREFIX "/share/qemu/firmware/93-libvirt-invalid.json",
+         NULL
+@@ -296,7 +300,11 @@ mymain(void)
+     DO_PARSE_TEST("usr/share/qemu/firmware/53-edk2-aarch64-verbose-raw.json");
+     DO_PARSE_TEST("usr/share/qemu/firmware/60-edk2-ovmf-x64-amdsev.json");
+     DO_PARSE_TEST("usr/share/qemu/firmware/60-edk2-ovmf-x64-inteltdx.json");
++    DO_PARSE_TEST("usr/share/qemu/firmware/90-edk2-ovmf-qemuvars-x64-sb-enrolled.json");
++    DO_PARSE_TEST("usr/share/qemu/firmware/90-edk2-aarch64-qemuvars-sb-enrolled.json");
+     DO_PARSE_TEST("usr/share/qemu/firmware/90-libvirt-combined.json");
++    DO_PARSE_TEST("usr/share/qemu/firmware/91-edk2-ovmf-qemuvars-x64-sb.json");
++    DO_PARSE_TEST("usr/share/qemu/firmware/91-edk2-aarch64-qemuvars-sb.json");
+     DO_PARSE_TEST("usr/share/qemu/firmware/91-libvirt-bios.json");
+     DO_PARSE_FAILURE_TEST("usr/share/qemu/firmware/93-libvirt-invalid.json");
+ 
+@@ -325,7 +333,7 @@ mymain(void)
+     DO_SUPPORTED_TEST("pc-i440fx-3.1", VIR_ARCH_I686, false, false,
+                       "/usr/share/seabios/bios-256k.bin:NULL",
+                       VIR_DOMAIN_OS_DEF_FIRMWARE_BIOS);
+-    DO_SUPPORTED_TEST("pc-q35-3.1", VIR_ARCH_X86_64, true, false,
++    DO_SUPPORTED_TEST("pc-q35-3.1", VIR_ARCH_X86_64, true, true,
+                       "/usr/share/seabios/bios-256k.bin:NULL:"
+                       "/usr/share/edk2/ovmf/OVMF_CODE_4M.secboot.qcow2:/usr/share/edk2/ovmf/OVMF_VARS_4M.secboot.qcow2:"
+                       "/usr/share/edk2/ovmf/OVMF_CODE.secboot.fd:/usr/share/edk2/ovmf/OVMF_VARS.secboot.fd:"
+@@ -335,7 +343,9 @@ mymain(void)
+                       "/usr/share/edk2/ovmf/OVMF_CODE.fd:/usr/share/edk2/ovmf/OVMF_VARS.fd:"
+                       "/usr/share/edk2/ovmf/OVMF.combined.fd:NULL:"
+                       "/usr/share/edk2/ovmf/OVMF.amdsev.fd:NULL:"
+-                      "/usr/share/edk2/ovmf/OVMF.inteltdx.secboot.fd:NULL",
++                      "/usr/share/edk2/ovmf/OVMF.inteltdx.secboot.fd:NULL:"
++                      "/usr/share/edk2/ovmf/OVMF.qemuvars.fd:/usr/share/edk2/ovmf/vars.secboot.json:"
++                      "/usr/share/edk2/ovmf/OVMF.qemuvars.fd:/usr/share/edk2/ovmf/vars.blank.json",
+                       VIR_DOMAIN_OS_DEF_FIRMWARE_BIOS,
+                       VIR_DOMAIN_OS_DEF_FIRMWARE_EFI);
+     DO_SUPPORTED_TEST("pc-q35-3.1", VIR_ARCH_I686, false, false,
+@@ -344,11 +354,13 @@ mymain(void)
+     DO_SUPPORTED_TEST("microvm", VIR_ARCH_X86_64, false, false,
+                       "/usr/share/edk2/ovmf/MICROVM.fd:NULL",
+                       VIR_DOMAIN_OS_DEF_FIRMWARE_EFI);
+-    DO_SUPPORTED_TEST("virt-3.1", VIR_ARCH_AARCH64, false, false,
++    DO_SUPPORTED_TEST("virt-3.1", VIR_ARCH_AARCH64, false, true,
+                       "/usr/share/edk2/aarch64/QEMU_EFI-silent-pflash.qcow2:/usr/share/edk2/aarch64/vars-template-pflash.qcow2:"
+                       "/usr/share/edk2/aarch64/QEMU_EFI-silent-pflash.raw:/usr/share/edk2/aarch64/vars-template-pflash.raw:"
+                       "/usr/share/edk2/aarch64/QEMU_EFI-pflash.qcow2:/usr/share/edk2/aarch64/vars-template-pflash.qcow2:"
+-                      "/usr/share/edk2/aarch64/QEMU_EFI-pflash.raw:/usr/share/edk2/aarch64/vars-template-pflash.raw",
++                      "/usr/share/edk2/aarch64/QEMU_EFI-pflash.raw:/usr/share/edk2/aarch64/vars-template-pflash.raw:"
++                      "/usr/share/edk2/aarch64/QEMU_EFI.qemuvars.fd:/usr/share/edk2/aarch64/vars.secboot.json:"
++                      "/usr/share/edk2/aarch64/QEMU_EFI.qemuvars.fd:/usr/share/edk2/aarch64/vars.blank.json",
+                       VIR_DOMAIN_OS_DEF_FIRMWARE_EFI);
+     DO_SUPPORTED_TEST("virt", VIR_ARCH_RISCV64, false, false,
+                       "/usr/share/edk2/riscv/RISCV_VIRT_CODE.qcow2:/usr/share/edk2/riscv/RISCV_VIRT_VARS.qcow2",
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-8.2.0.err b/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-8.2.0.err
+index 3edb2b3451..e64c2b21aa 100644
+--- a/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-8.2.0.err
++++ b/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-8.2.0.err
+@@ -1 +1 @@
+-operation failed: Unable to find 'efi' firmware that is compatible with the current configuration
++unsupported configuration: The uefi-vars device is not supported by this QEMU binary
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-latest.args b/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-latest.args
+new file mode 100644
+index 0000000000..1cd04c87b1
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-latest.args
+@@ -0,0 +1,31 @@
++LC_ALL=C \
++PATH=/bin \
++HOME=/var/lib/libvirt/qemu/domain--1-guest \
++USER=test \
++LOGNAME=test \
++XDG_DATA_HOME=/var/lib/libvirt/qemu/domain--1-guest/.local/share \
++XDG_CACHE_HOME=/var/lib/libvirt/qemu/domain--1-guest/.cache \
++XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-guest/.config \
++/usr/bin/qemu-system-aarch64 \
++-name guest=guest,debug-threads=on \
++-S \
++-object '{"qom-type":"secret","id":"masterKey0","format":"raw","file":"/var/lib/libvirt/qemu/domain--1-guest/master-key.aes"}' \
++-machine virt-8.2,usb=off,gic-version=3,dump-guest-core=off,memory-backend=mach-virt.ram,acpi=on \
++-accel kvm \
++-bios /usr/share/edk2/aarch64/QEMU_EFI.qemuvars.fd \
++-m size=1048576k \
++-object '{"qom-type":"memory-backend-ram","id":"mach-virt.ram","size":1073741824}' \
++-overcommit mem-lock=off \
++-smp 1,sockets=1,cores=1,threads=1 \
++-uuid 63840878-0deb-4095-97e6-fc444d9bc9fa \
++-display none \
++-no-user-config \
++-nodefaults \
++-chardev socket,id=charmonitor,fd=1729,server=on,wait=off \
++-mon chardev=charmonitor,id=monitor,mode=control \
++-rtc base=utc \
++-no-shutdown \
++-boot strict=on \
++-audiodev '{"id":"audio1","driver":"none"}' \
++-sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
++-msg timestamp=on
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-latest.err b/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-latest.err
+deleted file mode 100644
+index 3edb2b3451..0000000000
+--- a/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-latest.err
++++ /dev/null
+@@ -1 +0,0 @@
+-operation failed: Unable to find 'efi' firmware that is compatible with the current configuration
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-latest.xml b/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-latest.xml
+index 5213a41b90..1509a65bf4 100644
+--- a/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-latest.xml
++++ b/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-latest.xml
+@@ -8,8 +8,10 @@
+     <type arch='aarch64' machine='virt-8.2'>hvm</type>
+     <firmware>
+       <feature enabled='yes' name='enrolled-keys'/>
++      <feature enabled='yes' name='secure-boot'/>
+     </firmware>
+-    <loader format='raw'/>
++    <loader type='rom' format='raw'>/usr/share/edk2/aarch64/QEMU_EFI.qemuvars.fd</loader>
++    <varstore template='/usr/share/edk2/aarch64/vars.secboot.json' path='/var/lib/libvirt/qemu/varstore/guest.json'/>
+     <boot dev='hd'/>
+   </os>
+   <features>
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-varstore-aarch64.aarch64-latest.args b/tests/qemuxmlconfdata/firmware-auto-efi-varstore-aarch64.aarch64-latest.args
+new file mode 100644
+index 0000000000..1cd04c87b1
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-auto-efi-varstore-aarch64.aarch64-latest.args
+@@ -0,0 +1,31 @@
++LC_ALL=C \
++PATH=/bin \
++HOME=/var/lib/libvirt/qemu/domain--1-guest \
++USER=test \
++LOGNAME=test \
++XDG_DATA_HOME=/var/lib/libvirt/qemu/domain--1-guest/.local/share \
++XDG_CACHE_HOME=/var/lib/libvirt/qemu/domain--1-guest/.cache \
++XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-guest/.config \
++/usr/bin/qemu-system-aarch64 \
++-name guest=guest,debug-threads=on \
++-S \
++-object '{"qom-type":"secret","id":"masterKey0","format":"raw","file":"/var/lib/libvirt/qemu/domain--1-guest/master-key.aes"}' \
++-machine virt-8.2,usb=off,gic-version=3,dump-guest-core=off,memory-backend=mach-virt.ram,acpi=on \
++-accel kvm \
++-bios /usr/share/edk2/aarch64/QEMU_EFI.qemuvars.fd \
++-m size=1048576k \
++-object '{"qom-type":"memory-backend-ram","id":"mach-virt.ram","size":1073741824}' \
++-overcommit mem-lock=off \
++-smp 1,sockets=1,cores=1,threads=1 \
++-uuid 63840878-0deb-4095-97e6-fc444d9bc9fa \
++-display none \
++-no-user-config \
++-nodefaults \
++-chardev socket,id=charmonitor,fd=1729,server=on,wait=off \
++-mon chardev=charmonitor,id=monitor,mode=control \
++-rtc base=utc \
++-no-shutdown \
++-boot strict=on \
++-audiodev '{"id":"audio1","driver":"none"}' \
++-sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
++-msg timestamp=on
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-varstore-aarch64.aarch64-latest.err b/tests/qemuxmlconfdata/firmware-auto-efi-varstore-aarch64.aarch64-latest.err
+deleted file mode 100644
+index 3edb2b3451..0000000000
+--- a/tests/qemuxmlconfdata/firmware-auto-efi-varstore-aarch64.aarch64-latest.err
++++ /dev/null
+@@ -1 +0,0 @@
+-operation failed: Unable to find 'efi' firmware that is compatible with the current configuration
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-varstore-aarch64.aarch64-latest.xml b/tests/qemuxmlconfdata/firmware-auto-efi-varstore-aarch64.aarch64-latest.xml
+index 867d8f03e3..1509a65bf4 100644
+--- a/tests/qemuxmlconfdata/firmware-auto-efi-varstore-aarch64.aarch64-latest.xml
++++ b/tests/qemuxmlconfdata/firmware-auto-efi-varstore-aarch64.aarch64-latest.xml
+@@ -6,8 +6,12 @@
+   <vcpu placement='static'>1</vcpu>
+   <os firmware='efi'>
+     <type arch='aarch64' machine='virt-8.2'>hvm</type>
+-    <loader format='raw'/>
+-    <varstore/>
++    <firmware>
++      <feature enabled='yes' name='enrolled-keys'/>
++      <feature enabled='yes' name='secure-boot'/>
++    </firmware>
++    <loader type='rom' format='raw'>/usr/share/edk2/aarch64/QEMU_EFI.qemuvars.fd</loader>
++    <varstore template='/usr/share/edk2/aarch64/vars.secboot.json' path='/var/lib/libvirt/qemu/varstore/guest.json'/>
+     <boot dev='hd'/>
+   </os>
+   <features>
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-varstore-q35.x86_64-latest.args b/tests/qemuxmlconfdata/firmware-auto-efi-varstore-q35.x86_64-latest.args
+new file mode 100644
+index 0000000000..9a899c2a65
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-auto-efi-varstore-q35.x86_64-latest.args
+@@ -0,0 +1,34 @@
++LC_ALL=C \
++PATH=/bin \
++HOME=/var/lib/libvirt/qemu/domain--1-guest \
++USER=test \
++LOGNAME=test \
++XDG_DATA_HOME=/var/lib/libvirt/qemu/domain--1-guest/.local/share \
++XDG_CACHE_HOME=/var/lib/libvirt/qemu/domain--1-guest/.cache \
++XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-guest/.config \
++/usr/bin/qemu-system-x86_64 \
++-name guest=guest,debug-threads=on \
++-S \
++-object '{"qom-type":"secret","id":"masterKey0","format":"raw","file":"/var/lib/libvirt/qemu/domain--1-guest/master-key.aes"}' \
++-machine pc-q35-8.2,usb=off,dump-guest-core=off,memory-backend=pc.ram,acpi=on \
++-accel kvm \
++-cpu qemu64 \
++-bios /usr/share/edk2/ovmf/OVMF.qemuvars.fd \
++-m size=1048576k \
++-object '{"qom-type":"memory-backend-ram","id":"pc.ram","size":1073741824}' \
++-overcommit mem-lock=off \
++-smp 1,sockets=1,cores=1,threads=1 \
++-uuid 63840878-0deb-4095-97e6-fc444d9bc9fa \
++-display none \
++-no-user-config \
++-nodefaults \
++-chardev socket,id=charmonitor,fd=1729,server=on,wait=off \
++-mon chardev=charmonitor,id=monitor,mode=control \
++-rtc base=utc \
++-no-shutdown \
++-boot strict=on \
++-audiodev '{"id":"audio1","driver":"none"}' \
++-global ICH9-LPC.noreboot=off \
++-watchdog-action reset \
++-sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
++-msg timestamp=on
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-varstore-q35.x86_64-latest.err b/tests/qemuxmlconfdata/firmware-auto-efi-varstore-q35.x86_64-latest.err
+deleted file mode 100644
+index 3edb2b3451..0000000000
+--- a/tests/qemuxmlconfdata/firmware-auto-efi-varstore-q35.x86_64-latest.err
++++ /dev/null
+@@ -1 +0,0 @@
+-operation failed: Unable to find 'efi' firmware that is compatible with the current configuration
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-varstore-q35.x86_64-latest.xml b/tests/qemuxmlconfdata/firmware-auto-efi-varstore-q35.x86_64-latest.xml
+index c4d70c9fc5..cfce35de3f 100644
+--- a/tests/qemuxmlconfdata/firmware-auto-efi-varstore-q35.x86_64-latest.xml
++++ b/tests/qemuxmlconfdata/firmware-auto-efi-varstore-q35.x86_64-latest.xml
+@@ -6,8 +6,12 @@
+   <vcpu placement='static'>1</vcpu>
+   <os firmware='efi'>
+     <type arch='x86_64' machine='pc-q35-8.2'>hvm</type>
+-    <loader format='raw'/>
+-    <varstore/>
++    <firmware>
++      <feature enabled='yes' name='enrolled-keys'/>
++      <feature enabled='yes' name='secure-boot'/>
++    </firmware>
++    <loader type='rom' format='raw'>/usr/share/edk2/ovmf/OVMF.qemuvars.fd</loader>
++    <varstore template='/usr/share/edk2/ovmf/vars.secboot.json' path='/var/lib/libvirt/qemu/varstore/guest.json'/>
+     <boot dev='hd'/>
+   </os>
+   <features>
+diff --git a/tests/qemuxmlconfdata/firmware-manual-efi-varstore-aarch64.aarch64-8.2.0.err b/tests/qemuxmlconfdata/firmware-manual-efi-varstore-aarch64.aarch64-8.2.0.err
+index 4fe79bdacf..e64c2b21aa 100644
+--- a/tests/qemuxmlconfdata/firmware-manual-efi-varstore-aarch64.aarch64-8.2.0.err
++++ b/tests/qemuxmlconfdata/firmware-manual-efi-varstore-aarch64.aarch64-8.2.0.err
+@@ -1 +1 @@
+-unsupported configuration: ACPI requires UEFI on this architecture
++unsupported configuration: The uefi-vars device is not supported by this QEMU binary
+diff --git a/tests/qemuxmlconfdata/firmware-manual-efi-varstore-aarch64.aarch64-latest.args b/tests/qemuxmlconfdata/firmware-manual-efi-varstore-aarch64.aarch64-latest.args
+new file mode 100644
+index 0000000000..1cd04c87b1
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-manual-efi-varstore-aarch64.aarch64-latest.args
+@@ -0,0 +1,31 @@
++LC_ALL=C \
++PATH=/bin \
++HOME=/var/lib/libvirt/qemu/domain--1-guest \
++USER=test \
++LOGNAME=test \
++XDG_DATA_HOME=/var/lib/libvirt/qemu/domain--1-guest/.local/share \
++XDG_CACHE_HOME=/var/lib/libvirt/qemu/domain--1-guest/.cache \
++XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-guest/.config \
++/usr/bin/qemu-system-aarch64 \
++-name guest=guest,debug-threads=on \
++-S \
++-object '{"qom-type":"secret","id":"masterKey0","format":"raw","file":"/var/lib/libvirt/qemu/domain--1-guest/master-key.aes"}' \
++-machine virt-8.2,usb=off,gic-version=3,dump-guest-core=off,memory-backend=mach-virt.ram,acpi=on \
++-accel kvm \
++-bios /usr/share/edk2/aarch64/QEMU_EFI.qemuvars.fd \
++-m size=1048576k \
++-object '{"qom-type":"memory-backend-ram","id":"mach-virt.ram","size":1073741824}' \
++-overcommit mem-lock=off \
++-smp 1,sockets=1,cores=1,threads=1 \
++-uuid 63840878-0deb-4095-97e6-fc444d9bc9fa \
++-display none \
++-no-user-config \
++-nodefaults \
++-chardev socket,id=charmonitor,fd=1729,server=on,wait=off \
++-mon chardev=charmonitor,id=monitor,mode=control \
++-rtc base=utc \
++-no-shutdown \
++-boot strict=on \
++-audiodev '{"id":"audio1","driver":"none"}' \
++-sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
++-msg timestamp=on
+diff --git a/tests/qemuxmlconfdata/firmware-manual-efi-varstore-aarch64.aarch64-latest.err b/tests/qemuxmlconfdata/firmware-manual-efi-varstore-aarch64.aarch64-latest.err
+deleted file mode 100644
+index 4fe79bdacf..0000000000
+--- a/tests/qemuxmlconfdata/firmware-manual-efi-varstore-aarch64.aarch64-latest.err
++++ /dev/null
+@@ -1 +0,0 @@
+-unsupported configuration: ACPI requires UEFI on this architecture
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-8.2.0.xml b/tests/qemuxmlconfdata/firmware-manual-efi-varstore-aarch64.aarch64-latest.xml
+similarity index 78%
+rename from tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-8.2.0.xml
+rename to tests/qemuxmlconfdata/firmware-manual-efi-varstore-aarch64.aarch64-latest.xml
+index 5213a41b90..bdc50cb87e 100644
+--- a/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-8.2.0.xml
++++ b/tests/qemuxmlconfdata/firmware-manual-efi-varstore-aarch64.aarch64-latest.xml
+@@ -8,8 +8,10 @@
+     <type arch='aarch64' machine='virt-8.2'>hvm</type>
+     <firmware>
+       <feature enabled='yes' name='enrolled-keys'/>
++      <feature enabled='yes' name='secure-boot'/>
+     </firmware>
+-    <loader format='raw'/>
++    <loader type='rom' format='raw'>/usr/share/edk2/aarch64/QEMU_EFI.qemuvars.fd</loader>
++    <varstore template='/usr/share/edk2/aarch64/vars.secboot.json' path='/path/to/guest.json'/>
+     <boot dev='hd'/>
+   </os>
+   <features>
+diff --git a/tests/qemuxmlconfdata/firmware-manual-efi-varstore-q35.x86_64-latest.xml b/tests/qemuxmlconfdata/firmware-manual-efi-varstore-q35.x86_64-latest.xml
+index 296c6e8f59..a7b54a3fac 100644
+--- a/tests/qemuxmlconfdata/firmware-manual-efi-varstore-q35.x86_64-latest.xml
++++ b/tests/qemuxmlconfdata/firmware-manual-efi-varstore-q35.x86_64-latest.xml
+@@ -4,10 +4,14 @@
+   <memory unit='KiB'>1048576</memory>
+   <currentMemory unit='KiB'>1048576</currentMemory>
+   <vcpu placement='static'>1</vcpu>
+-  <os>
++  <os firmware='efi'>
+     <type arch='x86_64' machine='pc-q35-8.2'>hvm</type>
++    <firmware>
++      <feature enabled='yes' name='enrolled-keys'/>
++      <feature enabled='yes' name='secure-boot'/>
++    </firmware>
+     <loader type='rom' format='raw'>/usr/share/edk2/ovmf/OVMF.qemuvars.fd</loader>
+-    <varstore path='/path/to/guest.json'/>
++    <varstore template='/usr/share/edk2/ovmf/vars.secboot.json' path='/path/to/guest.json'/>
+     <boot dev='hd'/>
+   </os>
+   <features>
+diff --git a/tests/qemuxmlconftest.c b/tests/qemuxmlconftest.c
+index e38a80c57a..3ec49a325e 100644
+--- a/tests/qemuxmlconftest.c
++++ b/tests/qemuxmlconftest.c
+@@ -1614,7 +1614,7 @@ mymain(void)
+ 
+     DO_TEST_CAPS_LATEST("firmware-manual-efi-varstore-q35");
+     DO_TEST_CAPS_VER_PARSE_ERROR("firmware-manual-efi-varstore-q35", "8.2.0");
+-    DO_TEST_CAPS_ARCH_LATEST_PARSE_ERROR("firmware-manual-efi-varstore-aarch64", "aarch64");
++    DO_TEST_CAPS_ARCH_LATEST("firmware-manual-efi-varstore-aarch64", "aarch64");
+     DO_TEST_CAPS_ARCH_VER_PARSE_ERROR("firmware-manual-efi-varstore-aarch64", "aarch64", "8.2.0");
+ 
+     /* Make sure all combinations of ACPI and UEFI behave as expected */
+@@ -1651,8 +1651,8 @@ mymain(void)
+     DO_TEST_CAPS_LATEST("firmware-auto-efi-secboot");
+     DO_TEST_CAPS_LATEST("firmware-auto-efi-no-secboot");
+     DO_TEST_CAPS_LATEST("firmware-auto-efi-enrolled-keys");
+-    DO_TEST_CAPS_ARCH_LATEST_FAILURE("firmware-auto-efi-enrolled-keys-aarch64", "aarch64");
+-    DO_TEST_CAPS_ARCH_VER_FAILURE("firmware-auto-efi-enrolled-keys-aarch64", "aarch64", "8.2.0");
++    DO_TEST_CAPS_ARCH_LATEST("firmware-auto-efi-enrolled-keys-aarch64", "aarch64");
++    DO_TEST_CAPS_ARCH_VER_PARSE_ERROR("firmware-auto-efi-enrolled-keys-aarch64", "aarch64", "8.2.0");
+     DO_TEST_CAPS_LATEST("firmware-auto-efi-no-enrolled-keys");
+     DO_TEST_CAPS_LATEST_PARSE_ERROR("firmware-auto-efi-enrolled-keys-no-secboot");
+     DO_TEST_CAPS_LATEST("firmware-auto-efi-smm-off");
+@@ -1667,8 +1667,8 @@ mymain(void)
+     DO_TEST_CAPS_LATEST("firmware-auto-efi-nvram-file");
+     DO_TEST_CAPS_LATEST("firmware-auto-efi-nvram-network-nbd");
+     DO_TEST_CAPS_LATEST("firmware-auto-efi-nvram-network-iscsi");
+-    DO_TEST_CAPS_LATEST_FAILURE("firmware-auto-efi-varstore-q35");
+-    DO_TEST_CAPS_ARCH_LATEST_FAILURE("firmware-auto-efi-varstore-aarch64", "aarch64");
++    DO_TEST_CAPS_LATEST("firmware-auto-efi-varstore-q35");
++    DO_TEST_CAPS_ARCH_LATEST("firmware-auto-efi-varstore-aarch64", "aarch64");
+ 
+     DO_TEST_CAPS_LATEST("firmware-auto-efi-format-loader-qcow2");
+     DO_TEST_CAPS_LATEST_PARSE_ERROR("firmware-auto-efi-format-loader-qcow2-rom");
+-- 
+2.53.0

@@ -1,0 +1,134 @@
+From 5cb651d76f287f1ae0212cf0f4d2d7618050e5d1 Mon Sep 17 00:00:00 2001
+Message-ID: <5cb651d76f287f1ae0212cf0f4d2d7618050e5d1.1771423659.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Sun, 15 Feb 2026 19:49:16 +0100
+Subject: [PATCH] qemu_command: Don't use host property if IOMMUFD is used
+
+They should not be used at the same time.
+
+Fixes: f6230804727df834da27370e835204672218ab23
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit f67e4ac4d071f6f05ae387bc3b09c6cebb10455d)
+
+Resolves: https://issues.redhat.com/browse/RHEL-150351
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/qemu/qemu_command.c                       | 24 +++++++++----------
+ .../iommufd-q35.x86_64-latest.args            |  2 +-
+ ...fd-virt-pci-bus-single.aarch64-latest.args |  2 +-
+ .../iommufd-virt.aarch64-latest.args          |  4 ++--
+ .../iommufd.x86_64-latest.args                |  2 +-
+ 5 files changed, 16 insertions(+), 18 deletions(-)
+
+diff --git a/src/qemu/qemu_command.c b/src/qemu/qemu_command.c
+index 33127fbc0a..d11d16e533 100644
+--- a/src/qemu/qemu_command.c
++++ b/src/qemu/qemu_command.c
+@@ -4755,10 +4755,11 @@ qemuBuildPCIHostdevDevProps(const virDomainDef *def,
+     g_autoptr(virJSONValue) props = NULL;
+     virDomainHostdevSubsysPCI *pcisrc = &dev->source.subsys.u.pci;
+     virDomainNetTeamingInfo *teaming;
+-    g_autofree char *host = virPCIDeviceAddressAsString(&pcisrc->addr);
++    g_autofree char *host = NULL;
+     const char *failover_pair_id = NULL;
+     const char *driver = NULL;
+     const char *iommufdId = NULL;
++    const char *fdstr = NULL;
+     /* 'ramfb' property must be omitted unless it's to be enabled */
+     bool ramfb = pcisrc->ramfb == VIR_TRISTATE_SWITCH_ON;
+ 
+@@ -4792,31 +4793,28 @@ qemuBuildPCIHostdevDevProps(const virDomainDef *def,
+         teaming->persistent)
+         failover_pair_id = teaming->persistent;
+ 
+-    if (pcisrc->driver.iommufd == VIR_TRISTATE_BOOL_YES)
++    if (virHostdevIsPCIDeviceWithIOMMUFD(dev)) {
++        qemuDomainHostdevPrivate *hostdevPriv = QEMU_DOMAIN_HOSTDEV_PRIVATE(dev);
++
++        fdstr = qemuFDPassDirectGetPath(hostdevPriv->vfioDeviceFd);
+         iommufdId = "iommufd0";
++    } else {
++        host = virPCIDeviceAddressAsString(&pcisrc->addr);
++    }
+ 
+     if (virJSONValueObjectAdd(&props,
+                               "s:driver", driver,
+-                              "s:host", host,
++                              "S:host", host,
+                               "s:id", dev->info->alias,
+                               "p:bootindex", dev->info->effectiveBootIndex,
+                               "S:failover_pair_id", failover_pair_id,
+                               "S:display", qemuOnOffAuto(pcisrc->display),
+                               "B:ramfb", ramfb,
+                               "S:iommufd", iommufdId,
++                              "S:fd", fdstr,
+                               NULL) < 0)
+         return NULL;
+ 
+-    if (pcisrc->driver.name == VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_VFIO &&
+-        pcisrc->driver.iommufd == VIR_TRISTATE_BOOL_YES) {
+-        qemuDomainHostdevPrivate *hostdevPriv = QEMU_DOMAIN_HOSTDEV_PRIVATE(dev);
+-
+-        if (virJSONValueObjectAdd(&props,
+-                                  "S:fd", qemuFDPassDirectGetPath(hostdevPriv->vfioDeviceFd),
+-                                  NULL) < 0)
+-            return NULL;
+-    }
+-
+     if (qemuBuildDeviceAddressProps(props, def, dev->info) < 0)
+         return NULL;
+ 
+diff --git a/tests/qemuxmlconfdata/iommufd-q35.x86_64-latest.args b/tests/qemuxmlconfdata/iommufd-q35.x86_64-latest.args
+index d5fe704021..f886c488e1 100644
+--- a/tests/qemuxmlconfdata/iommufd-q35.x86_64-latest.args
++++ b/tests/qemuxmlconfdata/iommufd-q35.x86_64-latest.args
+@@ -36,6 +36,6 @@ XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-q35-test/.config \
+ -global ICH9-LPC.noreboot=off \
+ -watchdog-action reset \
+ -object '{"qom-type":"iommufd","id":"iommufd0","fd":"0"}' \
+--device '{"driver":"vfio-pci","host":"0000:06:12.5","id":"hostdev0","iommufd":"iommufd0","fd":"0","bus":"pcie.0","addr":"0x3"}' \
++-device '{"driver":"vfio-pci","id":"hostdev0","iommufd":"iommufd0","fd":"0","bus":"pcie.0","addr":"0x3"}' \
+ -sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
+ -msg timestamp=on
+diff --git a/tests/qemuxmlconfdata/iommufd-virt-pci-bus-single.aarch64-latest.args b/tests/qemuxmlconfdata/iommufd-virt-pci-bus-single.aarch64-latest.args
+index 99886468fb..d6562f9be3 100644
+--- a/tests/qemuxmlconfdata/iommufd-virt-pci-bus-single.aarch64-latest.args
++++ b/tests/qemuxmlconfdata/iommufd-virt-pci-bus-single.aarch64-latest.args
+@@ -28,6 +28,6 @@ XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-foo/.config \
+ -boot strict=on \
+ -audiodev '{"id":"audio1","driver":"none"}' \
+ -object '{"qom-type":"iommufd","id":"iommufd0","fd":"0"}' \
+--device '{"driver":"vfio-pci","host":"0000:06:12.5","id":"hostdev0","iommufd":"iommufd0","fd":"0","bus":"pcie.0","addr":"0x1"}' \
++-device '{"driver":"vfio-pci","id":"hostdev0","iommufd":"iommufd0","fd":"0","bus":"pcie.0","addr":"0x1"}' \
+ -sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
+ -msg timestamp=on
+diff --git a/tests/qemuxmlconfdata/iommufd-virt.aarch64-latest.args b/tests/qemuxmlconfdata/iommufd-virt.aarch64-latest.args
+index e3695c6982..9fd2a6adee 100644
+--- a/tests/qemuxmlconfdata/iommufd-virt.aarch64-latest.args
++++ b/tests/qemuxmlconfdata/iommufd-virt.aarch64-latest.args
+@@ -31,7 +31,7 @@ XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-foo/.config \
+ -device '{"driver":"pcie-root-port","port":10,"chassis":3,"id":"pci.3","bus":"pcie.0","addr":"0x1.0x2"}' \
+ -audiodev '{"id":"audio1","driver":"none"}' \
+ -object '{"qom-type":"iommufd","id":"iommufd0","fd":"0"}' \
+--device '{"driver":"vfio-pci","host":"0000:06:12.5","id":"hostdev0","iommufd":"iommufd0","fd":"0","bus":"pci.1","addr":"0x0"}' \
+--device '{"driver":"vfio-pci","host":"0000:07:12.5","id":"hostdev1","iommufd":"iommufd0","fd":"0","bus":"pci.2","addr":"0x0"}' \
++-device '{"driver":"vfio-pci","id":"hostdev0","iommufd":"iommufd0","fd":"0","bus":"pci.1","addr":"0x0"}' \
++-device '{"driver":"vfio-pci","id":"hostdev1","iommufd":"iommufd0","fd":"0","bus":"pci.2","addr":"0x0"}' \
+ -sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
+ -msg timestamp=on
+diff --git a/tests/qemuxmlconfdata/iommufd.x86_64-latest.args b/tests/qemuxmlconfdata/iommufd.x86_64-latest.args
+index 15dabe197c..b9aefda39d 100644
+--- a/tests/qemuxmlconfdata/iommufd.x86_64-latest.args
++++ b/tests/qemuxmlconfdata/iommufd.x86_64-latest.args
+@@ -29,7 +29,7 @@ XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-foo/.config \
+ -device '{"driver":"piix3-usb-uhci","id":"usb","bus":"pci.0","addr":"0x1.0x2"}' \
+ -audiodev '{"id":"audio1","driver":"none"}' \
+ -object '{"qom-type":"iommufd","id":"iommufd0","fd":"0"}' \
+--device '{"driver":"vfio-pci","host":"0000:06:12.5","id":"hostdev0","iommufd":"iommufd0","fd":"0","bus":"pci.0","addr":"0x3"}' \
++-device '{"driver":"vfio-pci","id":"hostdev0","iommufd":"iommufd0","fd":"0","bus":"pci.0","addr":"0x3"}' \
+ -device '{"driver":"virtio-balloon-pci","id":"balloon0","bus":"pci.0","addr":"0x2"}' \
+ -sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
+ -msg timestamp=on
+-- 
+2.53.0

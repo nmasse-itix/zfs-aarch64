@@ -1,0 +1,221 @@
+From d1a6cd459afd2aeff61a36cf03d435dbcac3d840 Mon Sep 17 00:00:00 2001
+Message-ID: <d1a6cd459afd2aeff61a36cf03d435dbcac3d840.1772815314.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Wed, 28 Jan 2026 15:42:16 +0100
+Subject: [PATCH] security: Handle varstore file
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+Reviewed-by: Daniel P. Berrangé <berrange@redhat.com>
+(cherry picked from commit bcbb2667e206340702ce6ec7a5e862f771a11f9d)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/security/security_dac.c     | 22 +++++++++++---
+ src/security/security_selinux.c | 53 +++++++++++++++++++++------------
+ src/security/virt-aa-helper.c   | 40 +++++++++++++++----------
+ 3 files changed, 76 insertions(+), 39 deletions(-)
+
+diff --git a/src/security/security_dac.c b/src/security/security_dac.c
+index 704c8dbfec..390dfc7578 100644
+--- a/src/security/security_dac.c
++++ b/src/security/security_dac.c
+@@ -2061,11 +2061,17 @@ virSecurityDACRestoreAllLabel(virSecurityManager *mgr,
+             rc = -1;
+     }
+ 
+-    if (def->os.loader && def->os.loader->nvram) {
+-        if (virSecurityDACRestoreImageLabelInt(mgr, sharedFilesystems,
++    if (def->os.loader) {
++        if (def->os.loader->nvram &&
++            virSecurityDACRestoreImageLabelInt(mgr, sharedFilesystems,
+                                                def, def->os.loader->nvram,
+                                                migrated) < 0)
+             rc = -1;
++
++        if (def->os.varstore &&
++            def->os.varstore->path &&
++            virSecurityDACRestoreFileLabel(mgr, def->os.varstore->path) < 0)
++            rc = -1;
+     }
+ 
+     if (def->os.kernel &&
+@@ -2310,12 +2316,20 @@ virSecurityDACSetAllLabel(virSecurityManager *mgr,
+             return -1;
+     }
+ 
+-    if (def->os.loader && def->os.loader->nvram) {
+-        if (virSecurityDACSetImageLabel(mgr, sharedFilesystems,
++    if (def->os.loader) {
++        if (def->os.loader->nvram &&
++            virSecurityDACSetImageLabel(mgr, sharedFilesystems,
+                                         def, def->os.loader->nvram,
+                                         VIR_SECURITY_DOMAIN_IMAGE_LABEL_BACKING_CHAIN |
+                                         VIR_SECURITY_DOMAIN_IMAGE_PARENT_CHAIN_TOP) < 0)
+             return -1;
++
++        if (def->os.varstore &&
++            def->os.varstore->path &&
++            virSecurityDACSetOwnership(mgr, NULL,
++                                       def->os.varstore->path,
++                                       user, group, true) < 0)
++            return -1;
+     }
+ 
+     if (def->os.kernel &&
+diff --git a/src/security/security_selinux.c b/src/security/security_selinux.c
+index 4a5f61d16b..9c498ab5f8 100644
+--- a/src/security/security_selinux.c
++++ b/src/security/security_selinux.c
+@@ -2993,11 +2993,18 @@ virSecuritySELinuxRestoreAllLabel(virSecurityManager *mgr,
+             rc = -1;
+     }
+ 
+-    if (def->os.loader && def->os.loader->nvram) {
+-        if (virSecuritySELinuxRestoreImageLabelInt(mgr, sharedFilesystems,
++    if (def->os.loader) {
++        if (def->os.loader->nvram &&
++            virSecuritySELinuxRestoreImageLabelInt(mgr, sharedFilesystems,
+                                                    def, def->os.loader->nvram,
+                                                    migrated) < 0)
+             rc = -1;
++
++        if (def->os.varstore &&
++            def->os.varstore->path &&
++            virSecuritySELinuxRestoreFileLabel(mgr, def->os.varstore->path,
++                                               true, false) < 0)
++            rc = -1;
+     }
+ 
+     if (def->os.kernel &&
+@@ -3341,6 +3348,22 @@ virSecuritySELinuxSetSysinfoLabel(virSecurityManager *mgr,
+ }
+ 
+ 
++static int
++virSecuritySELinuxDomainSetPathLabel(virSecurityManager *mgr,
++                                     virDomainDef *def,
++                                     const char *path,
++                                     bool allowSubtree G_GNUC_UNUSED)
++{
++    virSecurityLabelDef *seclabel;
++
++    seclabel = virDomainDefGetSecurityLabelDef(def, SECURITY_SELINUX_NAME);
++    if (!seclabel || !seclabel->relabel)
++        return 0;
++
++    return virSecuritySELinuxSetFilecon(mgr, path, seclabel->imagelabel, true);
++}
++
++
+ static int
+ virSecuritySELinuxSetAllLabel(virSecurityManager *mgr,
+                               char *const *sharedFilesystems,
+@@ -3421,12 +3444,19 @@ virSecuritySELinuxSetAllLabel(virSecurityManager *mgr,
+             return -1;
+     }
+ 
+-    if (def->os.loader && def->os.loader->nvram) {
+-        if (virSecuritySELinuxSetImageLabel(mgr, sharedFilesystems,
++    if (def->os.loader) {
++        if (def->os.loader->nvram &&
++            virSecuritySELinuxSetImageLabel(mgr, sharedFilesystems,
+                                             def, def->os.loader->nvram,
+                                             VIR_SECURITY_DOMAIN_IMAGE_LABEL_BACKING_CHAIN |
+                                             VIR_SECURITY_DOMAIN_IMAGE_PARENT_CHAIN_TOP) < 0)
+             return -1;
++
++        if (def->os.varstore &&
++            def->os.varstore->path &&
++            virSecuritySELinuxDomainSetPathLabel(mgr, def,
++                                                 def->os.varstore->path, true) < 0)
++            return -1;
+     }
+ 
+     if (def->os.kernel &&
+@@ -3593,21 +3623,6 @@ virSecuritySELinuxGetSecurityMountOptions(virSecurityManager *mgr,
+     return opts;
+ }
+ 
+-static int
+-virSecuritySELinuxDomainSetPathLabel(virSecurityManager *mgr,
+-                                     virDomainDef *def,
+-                                     const char *path,
+-                                     bool allowSubtree G_GNUC_UNUSED)
+-{
+-    virSecurityLabelDef *seclabel;
+-
+-    seclabel = virDomainDefGetSecurityLabelDef(def, SECURITY_SELINUX_NAME);
+-    if (!seclabel || !seclabel->relabel)
+-        return 0;
+-
+-    return virSecuritySELinuxSetFilecon(mgr, path, seclabel->imagelabel, true);
+-}
+-
+ static int
+ virSecuritySELinuxDomainSetPathLabelRO(virSecurityManager *mgr,
+                                        virDomainDef *def,
+diff --git a/src/security/virt-aa-helper.c b/src/security/virt-aa-helper.c
+index 3099e56ec3..9a4e82f4e6 100644
+--- a/src/security/virt-aa-helper.c
++++ b/src/security/virt-aa-helper.c
+@@ -1019,27 +1019,35 @@ get_files(vahControl * ctl)
+         return -1;
+     }
+ 
+-    if (ctl->def->os.loader && ctl->def->os.loader->path) {
+-        bool readonly = false;
++    if (ctl->def->os.loader) {
++        if (ctl->def->os.loader->path) {
++            bool readonly = false;
+ 
+-        /* Look at the readonly attribute, but also keep in mind that ROMs
+-         * are always loaded read-only regardless of whether the attribute
+-         * is present. Validation ensures that nonsensical configurations
+-         * (type=rom readonly=no) are rejected long before we get here */
+-        virTristateBoolToBool(ctl->def->os.loader->readonly, &readonly);
+-        if (ctl->def->os.loader->type == VIR_DOMAIN_LOADER_TYPE_ROM)
+-            readonly = true;
++            /* Look at the readonly attribute, but also keep in mind that ROMs
++             * are always loaded read-only regardless of whether the attribute
++             * is present. Validation ensures that nonsensical configurations
++             * (type=rom readonly=no) are rejected long before we get here */
++            virTristateBoolToBool(ctl->def->os.loader->readonly, &readonly);
++            if (ctl->def->os.loader->type == VIR_DOMAIN_LOADER_TYPE_ROM)
++                readonly = true;
+ 
+-        if (vah_add_file(&buf,
+-                         ctl->def->os.loader->path,
+-                         readonly ? "rk" : "rwk") != 0) {
++            if (vah_add_file(&buf,
++                             ctl->def->os.loader->path,
++                             readonly ? "rk" : "rwk") != 0) {
++                return -1;
++            }
++        }
++
++        if (ctl->def->os.loader->nvram &&
++            storage_source_add_files(ctl->def->os.loader->nvram, &buf, 0) < 0) {
+             return -1;
+         }
+-    }
+ 
+-    if (ctl->def->os.loader && ctl->def->os.loader->nvram &&
+-        storage_source_add_files(ctl->def->os.loader->nvram, &buf, 0) < 0) {
+-        return -1;
++        if (ctl->def->os.varstore &&
++            ctl->def->os.varstore->path &&
++            vah_add_file(&buf, ctl->def->os.varstore->path, "rw") != 0) {
++            return -1;
++        }
+     }
+ 
+     for (i = 0; i < ctl->def->ngraphics; i++) {
+-- 
+2.53.0

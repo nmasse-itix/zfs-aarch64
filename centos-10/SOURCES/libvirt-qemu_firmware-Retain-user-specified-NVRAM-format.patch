@@ -1,0 +1,108 @@
+From b853a05f7fcf8c6c1a4f5b51071ab951d174e041 Mon Sep 17 00:00:00 2001
+Message-ID: <b853a05f7fcf8c6c1a4f5b51071ab951d174e041.1772815313.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Mon, 1 Dec 2025 16:30:43 +0100
+Subject: [PATCH] qemu_firmware: Retain user-specified NVRAM format
+
+Right now we throw the entire definition away if the path is
+not present, including the format. This effectively results in
+discarding user-provided information.
+
+This change fixes the firmware-auto-efi-format-mismatch test
+case. Until now, the NVRAM format ended up being raw (matching
+the NVRAM template) despite the user explicitly asking for it
+to be qcow2 instead.
+
+While this means that libvirt will no longer be able to start
+such a VM without user intervention, since it does not
+automatically perform conversion between formats, that's still
+preferrable to silently overriding an explicit user's request.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 91b6dee6d14cd804529d1cd7fdd010af58643543)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/qemu/qemu_firmware.c                       | 18 +++++++++++++-----
+ ...auto-efi-format-mismatch.x86_64-latest.args |  5 +++--
+ ...-auto-efi-format-mismatch.x86_64-latest.xml |  2 +-
+ 3 files changed, 17 insertions(+), 8 deletions(-)
+
+diff --git a/src/qemu/qemu_firmware.c b/src/qemu/qemu_firmware.c
+index b08fb95585..dca0a79868 100644
+--- a/src/qemu/qemu_firmware.c
++++ b/src/qemu/qemu_firmware.c
+@@ -971,6 +971,7 @@ qemuFirmwareEnsureNVRAM(virDomainDef *def,
+ {
+     g_autoptr(virQEMUDriverConfig) cfg = virQEMUDriverGetConfig(driver);
+     virDomainLoaderDef *loader = def->os.loader;
++    virStorageFileFormat nvramFormat = VIR_STORAGE_FILE_NONE;
+     const char *ext = NULL;
+ 
+     if (!loader)
+@@ -999,19 +1000,26 @@ qemuFirmwareEnsureNVRAM(virDomainDef *def,
+             return;
+         }
+ 
+-        /* otherwise we want to reset and re-populate the definition */
++        /* Otherwise we want to reset and re-populate the definition.
++         * In this case we still retain a single piece of information:
++         * the user-provided NVRAM format */
++        nvramFormat = loader->nvram->format;
++
+         virObjectUnref(loader->nvram);
+     }
+ 
+     loader->nvram = virStorageSourceNew();
+     loader->nvram->type = VIR_STORAGE_TYPE_FILE;
++    loader->nvram->format = nvramFormat;
+ 
+     /* The nvram template format should be always present but as a failsafe,
+      * duplicate the loader format if it is not available. */
+-    if (loader->nvramTemplateFormat > VIR_STORAGE_FILE_NONE)
+-        loader->nvram->format = loader->nvramTemplateFormat;
+-    else
+-        loader->nvram->format = loader->format;
++    if (!loader->nvram->format) {
++        if (loader->nvramTemplateFormat)
++            loader->nvram->format = loader->nvramTemplateFormat;
++        else
++            loader->nvram->format = loader->format;
++    }
+ 
+     if (loader->nvram->format == VIR_STORAGE_FILE_RAW) {
+         /* The extension used by raw edk2 builds has historically
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-format-mismatch.x86_64-latest.args b/tests/qemuxmlconfdata/firmware-auto-efi-format-mismatch.x86_64-latest.args
+index e7c9110c95..468d7ee048 100644
+--- a/tests/qemuxmlconfdata/firmware-auto-efi-format-mismatch.x86_64-latest.args
++++ b/tests/qemuxmlconfdata/firmware-auto-efi-format-mismatch.x86_64-latest.args
+@@ -12,8 +12,9 @@ XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-guest/.config \
+ -object '{"qom-type":"secret","id":"masterKey0","format":"raw","file":"/var/lib/libvirt/qemu/domain--1-guest/master-key.aes"}' \
+ -blockdev '{"driver":"file","filename":"/usr/share/edk2/ovmf/OVMF_CODE.secboot.fd","node-name":"libvirt-pflash0-storage","auto-read-only":true,"discard":"unmap"}' \
+ -blockdev '{"node-name":"libvirt-pflash0-format","read-only":true,"driver":"raw","file":"libvirt-pflash0-storage"}' \
+--blockdev '{"driver":"file","filename":"/var/lib/libvirt/qemu/nvram/guest_VARS.fd","node-name":"libvirt-pflash1-storage","read-only":false}' \
+--machine pc-q35-10.0,usb=off,smm=on,dump-guest-core=off,memory-backend=pc.ram,pflash0=libvirt-pflash0-format,pflash1=libvirt-pflash1-storage,acpi=on \
++-blockdev '{"driver":"file","filename":"/var/lib/libvirt/qemu/nvram/guest_VARS.qcow2","node-name":"libvirt-pflash1-storage","auto-read-only":true,"discard":"unmap"}' \
++-blockdev '{"node-name":"libvirt-pflash1-format","read-only":false,"driver":"qcow2","file":"libvirt-pflash1-storage","backing":null}' \
++-machine pc-q35-10.0,usb=off,smm=on,dump-guest-core=off,memory-backend=pc.ram,pflash0=libvirt-pflash0-format,pflash1=libvirt-pflash1-format,acpi=on \
+ -accel kvm \
+ -cpu qemu64 \
+ -global driver=cfi.pflash01,property=secure,value=on \
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-format-mismatch.x86_64-latest.xml b/tests/qemuxmlconfdata/firmware-auto-efi-format-mismatch.x86_64-latest.xml
+index f4df8c07ed..3a7536db2a 100644
+--- a/tests/qemuxmlconfdata/firmware-auto-efi-format-mismatch.x86_64-latest.xml
++++ b/tests/qemuxmlconfdata/firmware-auto-efi-format-mismatch.x86_64-latest.xml
+@@ -11,7 +11,7 @@
+       <feature enabled='yes' name='secure-boot'/>
+     </firmware>
+     <loader readonly='yes' secure='yes' type='pflash' format='raw'>/usr/share/edk2/ovmf/OVMF_CODE.secboot.fd</loader>
+-    <nvram template='/usr/share/edk2/ovmf/OVMF_VARS.secboot.fd' templateFormat='raw' format='raw'>/var/lib/libvirt/qemu/nvram/guest_VARS.fd</nvram>
++    <nvram template='/usr/share/edk2/ovmf/OVMF_VARS.secboot.fd' templateFormat='raw' format='qcow2'>/var/lib/libvirt/qemu/nvram/guest_VARS.qcow2</nvram>
+     <boot dev='hd'/>
+   </os>
+   <features>
+-- 
+2.53.0

@@ -1,0 +1,68 @@
+From eb094db2b8112409813105d4dcc313e8ea45ee1e Mon Sep 17 00:00:00 2001
+Message-ID: <eb094db2b8112409813105d4dcc313e8ea45ee1e.1770203323.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Tue, 27 Jan 2026 19:22:08 +0100
+Subject: [PATCH] qemuMigrationDstPrepareAnyBlockDirtyBitmaps: Fix check for
+ existing bitmaps
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+On incoming migration qemu doesn't load bitmaps into memory (which makes
+them available under the 'dirty-bitmaps' field which we parse as the
+'bitmaps' array in 'qemuBlockNamedNodeData') until after actually
+resuming CPUs, thus the check for existing bitmaps never actually
+worked.
+
+We need to check the 'qcow2bitmaps' field instead which is populated
+from the qcow2 headers prior to activating the image.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Ján Tomko <jtomko@redhat.com>
+(cherry picked from commit 0c75fc1747f039bf878ceab69cf12482ebb14095)
+
+https://issues.redhat.com/browse/RHEL-145769 [rhel-10.2]
+https://issues.redhat.com/browse/RHEL-145770 [rhel-9.8]
+---
+ src/qemu/qemu_migration.c | 16 +++++++---------
+ 1 file changed, 7 insertions(+), 9 deletions(-)
+
+diff --git a/src/qemu/qemu_migration.c b/src/qemu/qemu_migration.c
+index 9059f9aa3a..723e131c98 100644
+--- a/src/qemu/qemu_migration.c
++++ b/src/qemu/qemu_migration.c
+@@ -3227,6 +3227,8 @@ qemuMigrationDstPrepareAnyBlockDirtyBitmaps(virDomainObj *vm,
+         qemuBlockNamedNodeData *nodedata;
+         GSList *nextbitmap;
+ 
++        VIR_DEBUG("offer migrate bitmaps for '%s'", disk->target);
++
+         if (!(nodedata = virHashLookup(blockNamedNodeData, disk->nodename))) {
+             virReportError(VIR_ERR_INTERNAL_ERROR,
+                            _("failed to find data for block node '%1$s'"),
+@@ -3243,18 +3245,14 @@ qemuMigrationDstPrepareAnyBlockDirtyBitmaps(virDomainObj *vm,
+ 
+         for (nextbitmap = disk->bitmaps; nextbitmap; nextbitmap = nextbitmap->next) {
+             qemuMigrationBlockDirtyBitmapsDiskBitmap *bitmap = nextbitmap->data;
+-            size_t k;
+ 
+             /* don't migrate into existing bitmaps */
+-            for (k = 0; k < nodedata->nbitmaps; k++) {
+-                if (STREQ(bitmap->bitmapname, nodedata->bitmaps[k]->name)) {
+-                    bitmap->skip = true;
+-                    break;
+-                }
+-            }
++            if (nodedata->qcow2bitmaps)
++                bitmap->skip = g_strv_contains((const char **) nodedata->qcow2bitmaps, bitmap->bitmapname);
++
++            VIR_DEBUG("offer migrate bitmap '%s' disk '%s' -> skip: '%d'",
++                      bitmap->bitmapname, disk->target, bitmap->skip);
+ 
+-            if (bitmap->skip)
+-                continue;
+         }
+     }
+ 
+-- 
+2.52.0

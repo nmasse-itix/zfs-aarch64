@@ -1,0 +1,78 @@
+From ef36f155015cd42f1f631d4955b76173ca16b9f3 Mon Sep 17 00:00:00 2001
+Message-ID: <ef36f155015cd42f1f631d4955b76173ca16b9f3.1771423659.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Sat, 14 Feb 2026 11:48:53 +0100
+Subject: [PATCH] qemuxmlconftest: Rename and refactor
+ testSetupHostdevPrivateData
+
+There is no need to call qemuDomainHostdevPrivateNew() because
+privateData is allocated on creation by virDomainHostdevDefNew().
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 15ad45758bcb674924ddb2ebb86a767cf40b990d)
+
+Resolves: https://issues.redhat.com/browse/RHEL-150351
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ tests/qemuxmlconftest.c | 29 +++++++----------------------
+ 1 file changed, 7 insertions(+), 22 deletions(-)
+
+diff --git a/tests/qemuxmlconftest.c b/tests/qemuxmlconftest.c
+index 0c146601ed..f7e50dc655 100644
+--- a/tests/qemuxmlconftest.c
++++ b/tests/qemuxmlconftest.c
+@@ -352,28 +352,13 @@ fakeNetworkPortGetXMLDesc(virNetworkPortPtr port,
+ 
+ 
+ static void
+-testSetupHostdevPrivateData(virDomainDef *def)
++testQemuPrepareHostdevPCI(virDomainHostdevDef *hostdev)
+ {
+-    size_t i;
++    qemuDomainHostdevPrivate *hostdevPriv = QEMU_DOMAIN_HOSTDEV_PRIVATE(hostdev);
+ 
+-    for (i = 0; i < def->nhostdevs; i++) {
+-        virDomainHostdevDef *hostdev = def->hostdevs[i];
+-
+-        if (hostdev->mode == VIR_DOMAIN_HOSTDEV_MODE_SUBSYS &&
+-            hostdev->source.subsys.type == VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_PCI &&
+-            hostdev->source.subsys.u.pci.driver.name == VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_VFIO &&
+-            hostdev->source.subsys.u.pci.driver.iommufd == VIR_TRISTATE_BOOL_YES) {
+-
+-            qemuDomainHostdevPrivate *priv;
+-
+-            if (!hostdev->privateData) {
+-                hostdev->privateData = qemuDomainHostdevPrivateNew();
+-            }
+-
+-            priv = QEMU_DOMAIN_HOSTDEV_PRIVATE(hostdev);
+-            /* Use a placeholder FD value for tests */
+-            priv->vfioDeviceFd = 0;
+-        }
++    if (virHostdevIsPCIDeviceWithIOMMUFD(hostdev)) {
++        /* Use a placeholder FD value for tests */
++        hostdevPriv->vfioDeviceFd = 0;
+     }
+ }
+ 
+@@ -410,6 +395,8 @@ testQemuPrepareHostdev(virDomainObj *vm)
+             testQemuPrepareHostdevUSB(hostdev);
+             break;
+         case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_PCI:
++            testQemuPrepareHostdevPCI(hostdev);
++            break;
+         case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_SCSI:
+         case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_SCSI_HOST:
+         case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_MDEV:
+@@ -473,8 +460,6 @@ testCompareXMLToArgvCreateArgs(virQEMUDriver *drv,
+     if (testQemuPrepareHostBackendChardevOne(NULL, priv->monConfig, vm) < 0)
+         return NULL;
+ 
+-    testSetupHostdevPrivateData(vm->def);
+-
+     for (i = 0; i < vm->def->ndisks; i++) {
+         virDomainDiskDef *disk = vm->def->disks[i];
+         virStorageSource *src;
+-- 
+2.53.0

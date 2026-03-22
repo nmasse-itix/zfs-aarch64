@@ -1,0 +1,144 @@
+From 92a7fef67b736e20c8e94f3407df7a984ee59102 Mon Sep 17 00:00:00 2001
+Message-ID: <92a7fef67b736e20c8e94f3407df7a984ee59102.1771336681.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Thu, 29 Jan 2026 11:15:04 +0100
+Subject: [PATCH] qemu: Extract disk setup done via QMP into a separate helper
+
+Introduce 'qemuProcessSetupDiskPropsRuntime' helper function which will
+collect all code used for runtime setup of a disk.
+
+This is currently old-style throttling.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 1789a0f8a3623e8f0f6e50730feb58e3d8c48376)
+
+https://issues.redhat.com/browse/RHEL-147866 [rhel-9.8]
+https://issues.redhat.com/browse/RHEL-131335 [rhel-10.2]
+
+Conflicts:
+ - Commit b9b9092c9c1f8b42e311c524d9fc4a8e73ae28a6 which dropped disk
+   property refresh was not backported, thus the context around the call
+   to qemuProcessSetupDiskPropsRuntime was different
+---
+ src/qemu/qemu_hotplug.c | 23 +++++------------------
+ src/qemu/qemu_process.c | 37 +++++++++++++++++++++++++++----------
+ src/qemu/qemu_process.h |  3 +++
+ 3 files changed, 35 insertions(+), 28 deletions(-)
+
+diff --git a/src/qemu/qemu_hotplug.c b/src/qemu/qemu_hotplug.c
+index fb426deb1a..f2dc4469a3 100644
+--- a/src/qemu/qemu_hotplug.c
++++ b/src/qemu/qemu_hotplug.c
+@@ -569,13 +569,8 @@ qemuDomainChangeMediaBlockdev(virDomainObj *vm,
+     }
+ 
+     /* set throttling for the new image */
+-    if (rc == 0 &&
+-        !virStorageSourceIsEmpty(newsrc) &&
+-        qemuDiskConfigBlkdeviotuneEnabled(disk)) {
+-        rc = qemuMonitorSetBlockIoThrottle(priv->mon,
+-                                           diskPriv->qomName,
+-                                           &disk->blkdeviotune);
+-    }
++    if (rc == 0)
++        rc = qemuProcessSetupDiskPropsRuntime(priv->mon, disk);
+ 
+     if (rc == 0)
+         rc = qemuMonitorBlockdevTrayClose(priv->mon, diskPriv->qomName);
+@@ -795,21 +790,13 @@ qemuDomainAttachDiskGeneric(virDomainObj *vm,
+     if (rc == 0)
+         rc = qemuMonitorAddDeviceProps(priv->mon, &devprops);
+ 
+-    /* Setup throttling of disk via block_set_io_throttle QMP command. This
+-     * is a hack until the 'throttle' blockdev driver will support modification
+-     * of the trhottle group. See also qemuProcessSetupDiskThrottlingBlockdev.
+-     * As there isn't anything sane to do if this fails, let's just return
+-     * success.
+-     */
+     if (rc == 0) {
+         qemuDomainDiskPrivate *diskPriv = QEMU_DOMAIN_DISK_PRIVATE(disk);
+         g_autoptr(GHashTable) blockinfo = NULL;
+ 
+-        if (qemuDiskConfigBlkdeviotuneEnabled(disk)) {
+-            if (qemuMonitorSetBlockIoThrottle(priv->mon, diskPriv->qomName,
+-                                              &disk->blkdeviotune) < 0)
+-                VIR_WARN("failed to set blkdeviotune for '%s' of '%s'", disk->dst, vm->def->name);
+-        }
++        /* There isn't anything sane to do if this fails (rollback would
++         * require hot-unplug), let's just return success. */
++        ignore_value(qemuProcessSetupDiskPropsRuntime(priv->mon, disk));
+ 
+         if ((blockinfo = qemuMonitorGetBlockInfo(priv->mon))) {
+             struct qemuDomainDiskInfo *diskinfo;
+diff --git a/src/qemu/qemu_process.c b/src/qemu/qemu_process.c
+index d8f0c78fd1..c99bb36c93 100644
+--- a/src/qemu/qemu_process.c
++++ b/src/qemu/qemu_process.c
+@@ -7937,6 +7937,32 @@ qemuProcessGenID(virDomainObj *vm,
+ }
+ 
+ 
++/**
++ * qemuProcessSetupDiskPropsRuntime:
++ * @mon: qemu monitor object
++ * @disk: disk definition
++ *
++ * This function expects that caller already entered 'monitor' context.
++ *
++ * Sets up disk properties which are only possible to be set in runtime.
++ */
++int
++qemuProcessSetupDiskPropsRuntime(qemuMonitor *mon,
++                                 virDomainDiskDef *disk)
++{
++    if (virStorageSourceIsEmpty(disk->src))
++        return 0;
++
++    if (qemuDiskConfigBlkdeviotuneEnabled(disk) &&
++        qemuMonitorSetBlockIoThrottle(mon,
++                                      QEMU_DOMAIN_DISK_PRIVATE(disk)->qomName,
++                                      &disk->blkdeviotune) < 0)
++        return -1;
++
++    return 0;
++}
++
++
+ /**
+  * qemuProcessSetupDiskThrottling:
+  *
+@@ -7960,16 +7986,7 @@ qemuProcessSetupDiskThrottling(virDomainObj *vm,
+     for (i = 0; i < vm->def->ndisks; i++) {
+         virDomainDiskDef *disk = vm->def->disks[i];
+ 
+-        /* Setting throttling for empty drives fails */
+-        if (virStorageSourceIsEmpty(disk->src))
+-            continue;
+-
+-        if (!qemuDiskConfigBlkdeviotuneEnabled(disk))
+-            continue;
+-
+-        if (qemuMonitorSetBlockIoThrottle(qemuDomainGetMonitor(vm),
+-                                          QEMU_DOMAIN_DISK_PRIVATE(disk)->qomName,
+-                                          &disk->blkdeviotune) < 0)
++        if (qemuProcessSetupDiskPropsRuntime(qemuDomainGetMonitor(vm), disk) < 0)
+             goto cleanup;
+     }
+ 
+diff --git a/src/qemu/qemu_process.h b/src/qemu/qemu_process.h
+index 426e11d79e..df78b00abb 100644
+--- a/src/qemu/qemu_process.h
++++ b/src/qemu/qemu_process.h
+@@ -146,6 +146,9 @@ int qemuProcessPrepareHostStorageSourceChain(virDomainObj *vm,
+ int qemuProcessPrepareHostStorageDisk(virDomainObj *vm,
+                                   virDomainDiskDef *disk);
+ 
++int qemuProcessSetupDiskPropsRuntime(qemuMonitor *mon,
++                                     virDomainDiskDef *disk);
++
+ int qemuProcessDeleteThreadContext(virDomainObj *vm);
+ 
+ int qemuProcessLaunch(virConnectPtr conn,
+-- 
+2.53.0

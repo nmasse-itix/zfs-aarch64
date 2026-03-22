@@ -1,0 +1,168 @@
+From e02f5e7ca63bdaaec62c2fffa681b9354bee0792 Mon Sep 17 00:00:00 2001
+Message-ID: <e02f5e7ca63bdaaec62c2fffa681b9354bee0792.1771336681.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Thu, 29 Jan 2026 14:08:18 +0100
+Subject: [PATCH] qemu: monitor: Extract block latency histogram stats into
+ 'qemuBlockStats'
+
+Extract the 'rd_latency_histogram', 'wr_latency_histogram',
+'zone_append_latency_histogram', and 'flush_latency_histogram' stats
+objects into our internal data.
+
+Rather than storing 'boundaries' between bins we store them as start
+points.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 1c77d396ea9704eae09d7fea160cfd1a897beaf3)
+
+https://issues.redhat.com/browse/RHEL-147866 [rhel-9.8]
+https://issues.redhat.com/browse/RHEL-131335 [rhel-10.2]
+---
+ src/qemu/qemu_monitor.c      | 20 +++++++++++++
+ src/qemu/qemu_monitor.h      | 18 ++++++++++++
+ src/qemu/qemu_monitor_json.c | 55 ++++++++++++++++++++++++++++++++++++
+ 3 files changed, 93 insertions(+)
+
+diff --git a/src/qemu/qemu_monitor.c b/src/qemu/qemu_monitor.c
+index 504500c864..cdd08004fb 100644
+--- a/src/qemu/qemu_monitor.c
++++ b/src/qemu/qemu_monitor.c
+@@ -1986,6 +1986,26 @@ qemuBlockStatsFinalize(GObject *object)
+     g_free(stats->limits);
+     g_free(stats->timed_stats);
+ 
++    if (stats->histogram_read) {
++        g_free(stats->histogram_read->bins);
++        g_free(stats->histogram_read);
++    }
++
++    if (stats->histogram_write) {
++        g_free(stats->histogram_write->bins);
++        g_free(stats->histogram_write);
++    }
++
++    if (stats->histogram_zone) {
++        g_free(stats->histogram_zone->bins);
++        g_free(stats->histogram_zone);
++    }
++
++    if (stats->histogram_flush) {
++        g_free(stats->histogram_flush->bins);
++        g_free(stats->histogram_flush);
++    }
++
+     G_OBJECT_CLASS(qemu_block_stats_parent_class)->finalize(object);
+ }
+ 
+diff --git a/src/qemu/qemu_monitor.h b/src/qemu/qemu_monitor.h
+index 041aa7bc12..238f7be875 100644
+--- a/src/qemu/qemu_monitor.h
++++ b/src/qemu/qemu_monitor.h
+@@ -806,6 +806,18 @@ struct qemuBlockStatsLimits {
+ };
+ 
+ 
++struct qemuBlockStatsLatencyHistogramBin {
++    unsigned long long start;
++    unsigned long long value;
++};
++
++
++struct qemuBlockStatsLatencyHistogram {
++    struct qemuBlockStatsLatencyHistogramBin *bins;
++    size_t nbins;
++};
++
++
+ struct qemuBlockStatsTimed {
+     unsigned long long interval_length;
+ 
+@@ -858,6 +870,12 @@ struct _qemuBlockStats {
+     /* block accounting/timed stats from qemu - one entry per interval configured */
+     size_t n_timed_stats;
+     struct qemuBlockStatsTimed *timed_stats;
++
++    /* latency histograms */
++    struct qemuBlockStatsLatencyHistogram *histogram_read;
++    struct qemuBlockStatsLatencyHistogram *histogram_write;
++    struct qemuBlockStatsLatencyHistogram *histogram_zone;
++    struct qemuBlockStatsLatencyHistogram *histogram_flush;
+ };
+ G_DECLARE_FINAL_TYPE(qemuBlockStats, qemu_block_stats, QEMU, BLOCK_STATS, GObject);
+ 
+diff --git a/src/qemu/qemu_monitor_json.c b/src/qemu/qemu_monitor_json.c
+index 401a28ff9a..edeea22ee0 100644
+--- a/src/qemu/qemu_monitor_json.c
++++ b/src/qemu/qemu_monitor_json.c
+@@ -2425,6 +2425,52 @@ qemuMonitorJSONBlockStatsCollectDataTimed(virJSONValue *timed_stats,
+ }
+ 
+ 
++static void
++qemuMonitorJSONBlockStatsCollectDataLatencyHistogram(virJSONValue *stats,
++                                                     const char *histogram_field,
++                                                     struct qemuBlockStatsLatencyHistogram **histogram_data)
++{
++    virJSONValue *hist;
++    virJSONValue *hist_bins;
++    virJSONValue *hist_bounds;
++    g_autofree struct qemuBlockStatsLatencyHistogramBin *bins = NULL;
++    size_t nbins = 0;
++    size_t i;
++
++    if (!(hist = virJSONValueObjectGetObject(stats, histogram_field)))
++        return;
++
++    if (!(hist_bins = virJSONValueObjectGetArray(hist, "bins")) ||
++        !(hist_bounds = virJSONValueObjectGetArray(hist, "boundaries")) ||
++        virJSONValueArraySize(hist_bins) != (virJSONValueArraySize(hist_bounds) + 1)) {
++        VIR_DEBUG("malformed latency histogram container");
++        return;
++    }
++
++    nbins = virJSONValueArraySize(hist_bins);
++    bins = g_new0(struct qemuBlockStatsLatencyHistogramBin, nbins);
++
++    for (i = 0; i < nbins; i++) {
++        virJSONValue *bin = virJSONValueArrayGet(hist_bins, i);
++        virJSONValue *bound = NULL;
++
++        if (i > 0)
++            bound = virJSONValueArrayGet(hist_bounds, i - 1);
++
++        if (!bin ||
++            virJSONValueGetNumberUlong(bin, &(bins[i].value)) < 0 ||
++            (bound && virJSONValueGetNumberUlong(bound, &(bins[i].start)) < 0)) {
++            VIR_DEBUG("malformed latency histogram container");
++            return;
++        }
++    }
++
++    *histogram_data = g_new0(struct qemuBlockStatsLatencyHistogram, 1);
++    (*histogram_data)->bins = g_steal_pointer(&bins);
++    (*histogram_data)->nbins = nbins;
++}
++
++
+ static qemuBlockStats *
+ qemuMonitorJSONBlockStatsCollectData(virJSONValue *dev,
+                                      int *nstats)
+@@ -2469,6 +2515,15 @@ qemuMonitorJSONBlockStatsCollectData(virJSONValue *dev,
+             bstats->wr_highest_offset_valid = true;
+     }
+ 
++    qemuMonitorJSONBlockStatsCollectDataLatencyHistogram(stats, "rd_latency_histogram",
++                                                         &bstats->histogram_read);
++    qemuMonitorJSONBlockStatsCollectDataLatencyHistogram(stats, "wr_latency_histogram",
++                                                         &bstats->histogram_write);
++    qemuMonitorJSONBlockStatsCollectDataLatencyHistogram(stats, "zone_append_latency_histogram",
++                                                         &bstats->histogram_zone);
++    qemuMonitorJSONBlockStatsCollectDataLatencyHistogram(stats, "flush_latency_histogram",
++                                                         &bstats->histogram_flush);
++
+     if ((timed_stats = virJSONValueObjectGetArray(stats, "timed_stats")) &&
+         virJSONValueArraySize(timed_stats) > 0)
+         qemuMonitorJSONBlockStatsCollectDataTimed(timed_stats, bstats);
+-- 
+2.53.0

@@ -1,0 +1,161 @@
+From cb830f1506f2ce52a7f742fd962f74846e279666 Mon Sep 17 00:00:00 2001
+Message-ID: <cb830f1506f2ce52a7f742fd962f74846e279666.1772815312.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Wed, 26 Nov 2025 18:19:12 +0100
+Subject: [PATCH] tests: Add firmware-auto-efi-format-nvramtemplate-qcow2
+
+This test case demonstrates an issue with the current
+implementation of firmware autoselection.
+
+While the test case passes, the outcome is not the desired one.
+The domain XML explicitly requests that the NVRAM template is in
+qcow2 format, and yet the selected firmware build uses the raw
+format for the NVRAM template instead.
+
+The issue will be addressed in an upcoming commit.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 935879fb91cce1f1224500372de55aea2bfa8699)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ ...mat-nvramtemplate-qcow2.x86_64-latest.args | 37 +++++++++++++++++
+ ...rmat-nvramtemplate-qcow2.x86_64-latest.xml | 41 +++++++++++++++++++
+ ...re-auto-efi-format-nvramtemplate-qcow2.xml | 18 ++++++++
+ tests/qemuxmlconftest.c                       |  1 +
+ 4 files changed, 97 insertions(+)
+ create mode 100644 tests/qemuxmlconfdata/firmware-auto-efi-format-nvramtemplate-qcow2.x86_64-latest.args
+ create mode 100644 tests/qemuxmlconfdata/firmware-auto-efi-format-nvramtemplate-qcow2.x86_64-latest.xml
+ create mode 100644 tests/qemuxmlconfdata/firmware-auto-efi-format-nvramtemplate-qcow2.xml
+
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-format-nvramtemplate-qcow2.x86_64-latest.args b/tests/qemuxmlconfdata/firmware-auto-efi-format-nvramtemplate-qcow2.x86_64-latest.args
+new file mode 100644
+index 0000000000..e7c9110c95
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-auto-efi-format-nvramtemplate-qcow2.x86_64-latest.args
+@@ -0,0 +1,37 @@
++LC_ALL=C \
++PATH=/bin \
++HOME=/var/lib/libvirt/qemu/domain--1-guest \
++USER=test \
++LOGNAME=test \
++XDG_DATA_HOME=/var/lib/libvirt/qemu/domain--1-guest/.local/share \
++XDG_CACHE_HOME=/var/lib/libvirt/qemu/domain--1-guest/.cache \
++XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-guest/.config \
++/usr/bin/qemu-system-x86_64 \
++-name guest=guest,debug-threads=on \
++-S \
++-object '{"qom-type":"secret","id":"masterKey0","format":"raw","file":"/var/lib/libvirt/qemu/domain--1-guest/master-key.aes"}' \
++-blockdev '{"driver":"file","filename":"/usr/share/edk2/ovmf/OVMF_CODE.secboot.fd","node-name":"libvirt-pflash0-storage","auto-read-only":true,"discard":"unmap"}' \
++-blockdev '{"node-name":"libvirt-pflash0-format","read-only":true,"driver":"raw","file":"libvirt-pflash0-storage"}' \
++-blockdev '{"driver":"file","filename":"/var/lib/libvirt/qemu/nvram/guest_VARS.fd","node-name":"libvirt-pflash1-storage","read-only":false}' \
++-machine pc-q35-10.0,usb=off,smm=on,dump-guest-core=off,memory-backend=pc.ram,pflash0=libvirt-pflash0-format,pflash1=libvirt-pflash1-storage,acpi=on \
++-accel kvm \
++-cpu qemu64 \
++-global driver=cfi.pflash01,property=secure,value=on \
++-m size=1048576k \
++-object '{"qom-type":"memory-backend-ram","id":"pc.ram","size":1073741824}' \
++-overcommit mem-lock=off \
++-smp 1,sockets=1,cores=1,threads=1 \
++-uuid 63840878-0deb-4095-97e6-fc444d9bc9fa \
++-display none \
++-no-user-config \
++-nodefaults \
++-chardev socket,id=charmonitor,fd=1729,server=on,wait=off \
++-mon chardev=charmonitor,id=monitor,mode=control \
++-rtc base=utc \
++-no-shutdown \
++-boot strict=on \
++-audiodev '{"id":"audio1","driver":"none"}' \
++-global ICH9-LPC.noreboot=off \
++-watchdog-action reset \
++-sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
++-msg timestamp=on
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-format-nvramtemplate-qcow2.x86_64-latest.xml b/tests/qemuxmlconfdata/firmware-auto-efi-format-nvramtemplate-qcow2.x86_64-latest.xml
+new file mode 100644
+index 0000000000..f4df8c07ed
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-auto-efi-format-nvramtemplate-qcow2.x86_64-latest.xml
+@@ -0,0 +1,41 @@
++<domain type='kvm'>
++  <name>guest</name>
++  <uuid>63840878-0deb-4095-97e6-fc444d9bc9fa</uuid>
++  <memory unit='KiB'>1048576</memory>
++  <currentMemory unit='KiB'>1048576</currentMemory>
++  <vcpu placement='static'>1</vcpu>
++  <os firmware='efi'>
++    <type arch='x86_64' machine='pc-q35-10.0'>hvm</type>
++    <firmware>
++      <feature enabled='yes' name='enrolled-keys'/>
++      <feature enabled='yes' name='secure-boot'/>
++    </firmware>
++    <loader readonly='yes' secure='yes' type='pflash' format='raw'>/usr/share/edk2/ovmf/OVMF_CODE.secboot.fd</loader>
++    <nvram template='/usr/share/edk2/ovmf/OVMF_VARS.secboot.fd' templateFormat='raw' format='raw'>/var/lib/libvirt/qemu/nvram/guest_VARS.fd</nvram>
++    <boot dev='hd'/>
++  </os>
++  <features>
++    <acpi/>
++    <smm state='on'/>
++  </features>
++  <cpu mode='custom' match='exact' check='none'>
++    <model fallback='forbid'>qemu64</model>
++  </cpu>
++  <clock offset='utc'/>
++  <on_poweroff>destroy</on_poweroff>
++  <on_reboot>restart</on_reboot>
++  <on_crash>destroy</on_crash>
++  <devices>
++    <emulator>/usr/bin/qemu-system-x86_64</emulator>
++    <controller type='usb' index='0' model='none'/>
++    <controller type='sata' index='0'>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x1f' function='0x2'/>
++    </controller>
++    <controller type='pci' index='0' model='pcie-root'/>
++    <input type='mouse' bus='ps2'/>
++    <input type='keyboard' bus='ps2'/>
++    <audio id='1' type='none'/>
++    <watchdog model='itco' action='reset'/>
++    <memballoon model='none'/>
++  </devices>
++</domain>
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-format-nvramtemplate-qcow2.xml b/tests/qemuxmlconfdata/firmware-auto-efi-format-nvramtemplate-qcow2.xml
+new file mode 100644
+index 0000000000..582b2636e4
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-auto-efi-format-nvramtemplate-qcow2.xml
+@@ -0,0 +1,18 @@
++<domain type='kvm'>
++  <name>guest</name>
++  <uuid>63840878-0deb-4095-97e6-fc444d9bc9fa</uuid>
++  <memory unit='KiB'>1048576</memory>
++  <vcpu placement='static'>1</vcpu>
++  <os firmware='efi'>
++    <type arch='x86_64' machine='pc-q35-10.0'>hvm</type>
++    <nvram templateFormat='qcow2'/>
++  </os>
++  <features>
++    <acpi/>
++  </features>
++  <devices>
++    <emulator>/usr/bin/qemu-system-x86_64</emulator>
++    <controller type='usb' model='none'/>
++    <memballoon model='none'/>
++  </devices>
++</domain>
+diff --git a/tests/qemuxmlconftest.c b/tests/qemuxmlconftest.c
+index 88935b1e1b..3df0780708 100644
+--- a/tests/qemuxmlconftest.c
++++ b/tests/qemuxmlconftest.c
+@@ -1663,6 +1663,7 @@ mymain(void)
+     DO_TEST_CAPS_LATEST_FAILURE("firmware-auto-efi-format-nvram-raw-nvramtemplate-path");
+     DO_TEST_CAPS_ARCH_LATEST("firmware-auto-efi-format-loader-raw", "aarch64");
+     DO_TEST_CAPS_ARCH_LATEST_ABI_UPDATE("firmware-auto-efi-format-loader-raw", "aarch64");
++    DO_TEST_CAPS_LATEST("firmware-auto-efi-format-nvramtemplate-qcow2");
+     DO_TEST_CAPS_LATEST("firmware-auto-efi-format-mismatch");
+ 
+     /* This test passes, but the outcome is not the desired one: the
+-- 
+2.53.0

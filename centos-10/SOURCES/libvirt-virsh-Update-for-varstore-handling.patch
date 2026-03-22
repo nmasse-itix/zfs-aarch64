@@ -1,0 +1,150 @@
+From 284cc87f8c23f2a1baa2a7179421bb736277a5ef Mon Sep 17 00:00:00 2001
+Message-ID: <284cc87f8c23f2a1baa2a7179421bb736277a5ef.1772815314.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Mon, 2 Feb 2026 15:49:22 +0100
+Subject: [PATCH] virsh: Update for varstore handling
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Document the fact that the existing flags which apply to
+NVRAM files also do the right thing when varstore files are
+used instead.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+Reviewed-by: Daniel P. Berrangé <berrange@redhat.com>
+(cherry picked from commit 0151db88c235ccb9c949c9a700fd325ca1044d0a)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ docs/manpages/virsh.rst | 23 ++++++++++++-----------
+ tools/virsh-domain.c    | 10 +++++-----
+ tools/virsh-snapshot.c  |  2 +-
+ 3 files changed, 18 insertions(+), 17 deletions(-)
+
+diff --git a/docs/manpages/virsh.rst b/docs/manpages/virsh.rst
+index ff0cf1a715..b3e9289894 100644
+--- a/docs/manpages/virsh.rst
++++ b/docs/manpages/virsh.rst
+@@ -1722,8 +1722,8 @@ of open file descriptors which should be pass on into the guest. The
+ file descriptors will be re-numbered in the guest, starting from 3. This
+ is only supported with container based virtualization.
+ 
+-If *--reset-nvram* is specified, any existing NVRAM file will be deleted
+-and re-initialized from its pristine template.
++If *--reset-nvram* is specified, any existing NVRAM/varstore file will be
++deleted and re-initialized from its pristine template.
+ 
+ **Example:**
+ 
+@@ -4281,8 +4281,8 @@ save image to decide between running or paused; passing either the
+ *--running* or *--paused* flag will allow overriding which state the
+ domain should be started in.
+ 
+-If *--reset-nvram* is specified, any existing NVRAM file will be deleted
+-and re-initialized from its pristine template.
++If *--reset-nvram* is specified, any existing NVRAM/varstore file will be
++deleted and re-initialized from its pristine template.
+ 
+ *--parallel-channels* option can specify number of parallel IO channels
+ to be used when loading memory from file. Parallel save may significantly
+@@ -4925,8 +4925,8 @@ of open file descriptors which should be pass on into the guest. The
+ file descriptors will be re-numbered in the guest, starting from 3. This
+ is only supported with container based virtualization.
+ 
+-If *--reset-nvram* is specified, any existing NVRAM file will be deleted
+-and re-initialized from its pristine template.
++If *--reset-nvram* is specified, any existing NVRAM/varstore file will be
++deleted and re-initialized from its pristine template.
+ 
+ 
+ suspend
+@@ -4988,9 +4988,10 @@ domain.  Without the flag, attempts to undefine an inactive domain with
+ checkpoint metadata will fail.  If the domain is active, this flag is
+ ignored.
+ 
+-*--nvram* and *--keep-nvram* specify accordingly to delete or keep nvram
+-(/domain/os/nvram/) file. If the domain has an nvram file and the flags are
+-omitted, the undefine will fail.
++The *--nvram* and *--keep-nvram* flags specify whether to delete or keep the
++NVRAM (/domain/os/nvram/) or varstore (/domain/os/varstore) file respectively.
++If the domain has an NVRAM/varstore file and the flags are omitted, the
++undefine operation will fail.
+ 
+ The *--storage* flag takes a parameter ``volumes``, which is a comma separated
+ list of volume target names or source paths of storage volumes to be removed
+@@ -8174,8 +8175,8 @@ requires the use of *--force* to proceed:
+     likely cause extensive filesystem corruption or crashes due to swap content
+     mismatches when run.
+ 
+-If *--reset-nvram* is specified, any existing NVRAM file will be deleted
+-and re-initialized from its pristine template.
++If *--reset-nvram* is specified, any existing NVRAM/varstore file will be
++deleted and re-initialized from its pristine template.
+ 
+ 
+ snapshot-delete
+diff --git a/tools/virsh-domain.c b/tools/virsh-domain.c
+index 6e18d195e6..e73a33b709 100644
+--- a/tools/virsh-domain.c
++++ b/tools/virsh-domain.c
+@@ -3981,11 +3981,11 @@ static const vshCmdOptDef opts_undefine[] = {
+     },
+     {.name = "nvram",
+      .type = VSH_OT_BOOL,
+-     .help = N_("remove nvram file")
++     .help = N_("remove NVRAM/varstore file")
+     },
+     {.name = "keep-nvram",
+      .type = VSH_OT_BOOL,
+-     .help = N_("keep nvram file")
++     .help = N_("keep NVRAM/varstore file")
+     },
+     {.name = "tpm",
+      .type = VSH_OT_BOOL,
+@@ -4401,7 +4401,7 @@ static const vshCmdOptDef opts_start[] = {
+     },
+     {.name = "reset-nvram",
+      .type = VSH_OT_BOOL,
+-     .help = N_("re-initialize NVRAM from its pristine template")
++     .help = N_("re-initialize NVRAM/varstore from its pristine template")
+     },
+     {.name = NULL}
+ };
+@@ -5707,7 +5707,7 @@ static const vshCmdOptDef opts_restore[] = {
+     },
+     {.name = "reset-nvram",
+      .type = VSH_OT_BOOL,
+-     .help = N_("re-initialize NVRAM from its pristine template")
++     .help = N_("re-initialize NVRAM/varstore from its pristine template")
+     },
+     {.name = NULL}
+ };
+@@ -8499,7 +8499,7 @@ static const vshCmdOptDef opts_create[] = {
+     },
+     {.name = "reset-nvram",
+      .type = VSH_OT_BOOL,
+-     .help = N_("re-initialize NVRAM from its pristine template")
++     .help = N_("re-initialize NVRAM/varstore from its pristine template")
+     },
+     {.name = NULL}
+ };
+diff --git a/tools/virsh-snapshot.c b/tools/virsh-snapshot.c
+index 8e5b9d635c..08184576a7 100644
+--- a/tools/virsh-snapshot.c
++++ b/tools/virsh-snapshot.c
+@@ -1714,7 +1714,7 @@ static const vshCmdOptDef opts_snapshot_revert[] = {
+     },
+     {.name = "reset-nvram",
+      .type = VSH_OT_BOOL,
+-     .help = N_("re-initialize NVRAM from its pristine template")
++     .help = N_("re-initialize NVRAM/varstore from its pristine template")
+     },
+     {.name = NULL}
+ };
+-- 
+2.53.0

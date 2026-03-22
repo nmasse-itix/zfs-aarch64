@@ -1,0 +1,172 @@
+From 9daca4f4b8e914a09d86db07d1c7292a6e9e4048 Mon Sep 17 00:00:00 2001
+Message-ID: <9daca4f4b8e914a09d86db07d1c7292a6e9e4048.1772815313.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Fri, 21 Nov 2025 15:34:32 +0100
+Subject: [PATCH] qemu_capabilities: Introduce QEMU_CAPS_DEVICE_UEFI_VARS
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This capability indicates the availability of the uefi-vars
+device.
+
+The actual name of the QEMU device varies slightly depending on
+the architecture: it's uefi-vars-x64 on x86_64, uefi-vars-sysbus
+on other UEFI architectures (aarch64, riscv64, loongarch64).
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+Reviewed-by: Daniel P. Berrangé <berrange@redhat.com>
+(cherry picked from commit 12cdd613832c77d143bfa2b87539a22ec6911f6d)
+
+Conflicts:
+
+  * tests/qemucapabilitiesdata/caps_10.1.0_s390x.xml
+    tests/qemucapabilitiesdata/caps_10.2.0_aarch64.xml
+    tests/qemucapabilitiesdata/caps_11.0.0_aarch64.xml
+    tests/qemucapabilitiesdata/caps_11.0.0_x86_64.xml
+
+    - Missing downstream
+
+  * tests/qemucapabilitiesdata/caps_10.1.0_x86_64+inteltdx.xml
+    tests/qemucapabilitiesdata/caps_10.2.0_x86_64+mshv.xml
+    tests/qemucapabilitiesdata/caps_10.2.0_x86_64.xml
+
+    - Trivial context conflicts caused by capabilities files
+      being outdated downstream
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/qemu/qemu_capabilities.c                               | 3 +++
+ src/qemu/qemu_capabilities.h                               | 1 +
+ tests/qemucapabilitiesdata/caps_10.0.0_aarch64.xml         | 1 +
+ tests/qemucapabilitiesdata/caps_10.0.0_x86_64+amdsev.xml   | 1 +
+ tests/qemucapabilitiesdata/caps_10.0.0_x86_64.xml          | 1 +
+ tests/qemucapabilitiesdata/caps_10.1.0_x86_64+inteltdx.xml | 1 +
+ tests/qemucapabilitiesdata/caps_10.1.0_x86_64.xml          | 1 +
+ tests/qemucapabilitiesdata/caps_10.2.0_x86_64+mshv.xml     | 1 +
+ tests/qemucapabilitiesdata/caps_10.2.0_x86_64.xml          | 1 +
+ 9 files changed, 11 insertions(+)
+
+diff --git a/src/qemu/qemu_capabilities.c b/src/qemu/qemu_capabilities.c
+index 7d88b8521a..8b20ca9312 100644
+--- a/src/qemu/qemu_capabilities.c
++++ b/src/qemu/qemu_capabilities.c
+@@ -760,6 +760,7 @@ VIR_ENUM_IMPL(virQEMUCaps,
+ 
+               /* 490 */
+               "iommufd", /* QEMU_CAPS_OBJECT_IOMMUFD */
++              "uefi-vars", /* QEMU_CAPS_DEVICE_UEFI_VARS */
+     );
+ 
+ 
+@@ -1468,6 +1469,8 @@ struct virQEMUCapsStringFlags virQEMUCapsObjectTypes[] = {
+     { "tpm-passthrough", QEMU_CAPS_DEVICE_TPM_PASSTHROUGH },
+     { "acpi-generic-initiator", QEMU_CAPS_ACPI_GENERIC_INITIATOR },
+     { "iommufd", QEMU_CAPS_OBJECT_IOMMUFD },
++    { "uefi-vars-x64", QEMU_CAPS_DEVICE_UEFI_VARS },
++    { "uefi-vars-sysbus", QEMU_CAPS_DEVICE_UEFI_VARS },
+ };
+ 
+ 
+diff --git a/src/qemu/qemu_capabilities.h b/src/qemu/qemu_capabilities.h
+index f7c8680f94..4dcf464061 100644
+--- a/src/qemu/qemu_capabilities.h
++++ b/src/qemu/qemu_capabilities.h
+@@ -734,6 +734,7 @@ typedef enum { /* virQEMUCapsFlags grouping marker for syntax-check */
+ 
+     /* 490 */
+     QEMU_CAPS_OBJECT_IOMMUFD, /* -object iommufd */
++    QEMU_CAPS_DEVICE_UEFI_VARS, /* -device uefi-vars-{x64,sysbus} */
+ 
+     QEMU_CAPS_LAST /* this must always be the last item */
+ } virQEMUCapsFlags;
+diff --git a/tests/qemucapabilitiesdata/caps_10.0.0_aarch64.xml b/tests/qemucapabilitiesdata/caps_10.0.0_aarch64.xml
+index bbb8b33cde..1243a56fb8 100644
+--- a/tests/qemucapabilitiesdata/caps_10.0.0_aarch64.xml
++++ b/tests/qemucapabilitiesdata/caps_10.0.0_aarch64.xml
+@@ -164,6 +164,7 @@
+   <flag name='usb-bot'/>
+   <flag name='acpi-generic-initiator'/>
+   <flag name='iommufd'/>
++  <flag name='uefi-vars'/>
+   <version>10000000</version>
+   <microcodeVersion>61700285</microcodeVersion>
+   <package>v10.0.0</package>
+diff --git a/tests/qemucapabilitiesdata/caps_10.0.0_x86_64+amdsev.xml b/tests/qemucapabilitiesdata/caps_10.0.0_x86_64+amdsev.xml
+index 5acd1a33fd..cd77e934c8 100644
+--- a/tests/qemucapabilitiesdata/caps_10.0.0_x86_64+amdsev.xml
++++ b/tests/qemucapabilitiesdata/caps_10.0.0_x86_64+amdsev.xml
+@@ -210,6 +210,7 @@
+   <flag name='usb-bot'/>
+   <flag name='acpi-generic-initiator'/>
+   <flag name='iommufd'/>
++  <flag name='uefi-vars'/>
+   <version>10000000</version>
+   <microcodeVersion>43100285</microcodeVersion>
+   <package>v10.0.0</package>
+diff --git a/tests/qemucapabilitiesdata/caps_10.0.0_x86_64.xml b/tests/qemucapabilitiesdata/caps_10.0.0_x86_64.xml
+index 50f58791e6..f2567a2025 100644
+--- a/tests/qemucapabilitiesdata/caps_10.0.0_x86_64.xml
++++ b/tests/qemucapabilitiesdata/caps_10.0.0_x86_64.xml
+@@ -210,6 +210,7 @@
+   <flag name='usb-bot'/>
+   <flag name='acpi-generic-initiator'/>
+   <flag name='iommufd'/>
++  <flag name='uefi-vars'/>
+   <version>10000000</version>
+   <microcodeVersion>43100285</microcodeVersion>
+   <package>v10.0.0</package>
+diff --git a/tests/qemucapabilitiesdata/caps_10.1.0_x86_64+inteltdx.xml b/tests/qemucapabilitiesdata/caps_10.1.0_x86_64+inteltdx.xml
+index e321c352a3..a80aca9244 100644
+--- a/tests/qemucapabilitiesdata/caps_10.1.0_x86_64+inteltdx.xml
++++ b/tests/qemucapabilitiesdata/caps_10.1.0_x86_64+inteltdx.xml
+@@ -192,6 +192,7 @@
+   <flag name='tdx-guest'/>
+   <flag name='acpi-generic-initiator'/>
+   <flag name='iommufd'/>
++  <flag name='uefi-vars'/>
+   <version>10000050</version>
+   <microcodeVersion>43100286</microcodeVersion>
+   <package>v10.0.0-1724-gf9a3def17b</package>
+diff --git a/tests/qemucapabilitiesdata/caps_10.1.0_x86_64.xml b/tests/qemucapabilitiesdata/caps_10.1.0_x86_64.xml
+index 2d52659520..03790f4e31 100644
+--- a/tests/qemucapabilitiesdata/caps_10.1.0_x86_64.xml
++++ b/tests/qemucapabilitiesdata/caps_10.1.0_x86_64.xml
+@@ -215,6 +215,7 @@
+   <flag name='qom-list-get'/>
+   <flag name='acpi-generic-initiator'/>
+   <flag name='iommufd'/>
++  <flag name='uefi-vars'/>
+   <version>10001000</version>
+   <microcodeVersion>43100286</microcodeVersion>
+   <package>v10.1.0</package>
+diff --git a/tests/qemucapabilitiesdata/caps_10.2.0_x86_64+mshv.xml b/tests/qemucapabilitiesdata/caps_10.2.0_x86_64+mshv.xml
+index eb2ab001a6..0ba4d2f990 100644
+--- a/tests/qemucapabilitiesdata/caps_10.2.0_x86_64+mshv.xml
++++ b/tests/qemucapabilitiesdata/caps_10.2.0_x86_64+mshv.xml
+@@ -202,6 +202,7 @@
+   <flag name='query-accelerators'/>
+   <flag name='mshv'/>
+   <flag name='iommufd'/>
++  <flag name='uefi-vars'/>
+   <version>10001050</version>
+   <microcodeVersion>43100287</microcodeVersion>
+   <package>v10.1.0-1778-ge090e0312d</package>
+diff --git a/tests/qemucapabilitiesdata/caps_10.2.0_x86_64.xml b/tests/qemucapabilitiesdata/caps_10.2.0_x86_64.xml
+index c4ea924c1f..47bb94527f 100644
+--- a/tests/qemucapabilitiesdata/caps_10.2.0_x86_64.xml
++++ b/tests/qemucapabilitiesdata/caps_10.2.0_x86_64.xml
+@@ -217,6 +217,7 @@
+   <flag name='query-accelerators'/>
+   <flag name='scsi-block.migrate-pr'/>
+   <flag name='iommufd'/>
++  <flag name='uefi-vars'/>
+   <version>10001091</version>
+   <microcodeVersion>43100287</microcodeVersion>
+   <package>v10.2.0-rc1-38-gfb241d0a1f</package>
+-- 
+2.53.0

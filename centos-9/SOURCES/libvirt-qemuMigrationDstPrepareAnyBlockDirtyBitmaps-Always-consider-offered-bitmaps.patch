@@ -1,0 +1,98 @@
+From 73e383336be99821e588ef0fb8a6da8ad9fa7414 Mon Sep 17 00:00:00 2001
+Message-ID: <73e383336be99821e588ef0fb8a6da8ad9fa7414.1770203323.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Tue, 27 Jan 2026 17:28:48 +0100
+Subject: [PATCH] qemuMigrationDstPrepareAnyBlockDirtyBitmaps: Always consider
+ offered bitmaps
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Consider bitmaps for incoming migration regardless of non-shared storage
+flag.
+
+When bitmaps are offered from the source, consult the local image if the
+bitmap is present and if not accept migration. Migration of bitmaps
+which exist in the qcow2 metadata is skipped because qemu rejects such
+setup (although handles it correctly in case of shared storage setup;
+see below).
+
+This allows bitmap propagation for cases when the qcow2 image is not
+actually shared between destinations but the data is (using the
+data_file feature).
+
+At the same time this preserves existing bitmap handling semantics for
+other cases. Specifically qemu, in case of shared storage properly
+propagates the bitmap which was already recorded in the qcow2 metadata
+on disk even if libvirt doesn't instruct migration, yet tolerates
+migration instruction if the file is not yet recorded in the on-disk
+metadata. In both cases the contents are preserved correctly.
+
+When storage is not shared (which includes even cases when we migrate
+it via NBD) it's expected that the bitmaps don't exist on the
+destination and thus all will be picked for migration. We can also
+infer that this wasn't ever a problem by the fact that the code skipping
+migration of existing bitmaps was broken until recently, and qemu
+would refuse such config.
+
+I've tested all the above scenarios including verifying that the
+resulting bitmaps capture dirtied regions before and after migration.
+For testing this the following command is useful:
+
+  virsh qemu-monitor-command --domain DOMNAME --hmp 'qemu-io -d /machine/peripheral/virtio-disk0/virtio-backend "write -P 0xcc 4M 1M"'
+
+Which simulates a write from the guest side without the need to interact
+with the guest OS.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Ján Tomko <jtomko@redhat.com>
+(cherry picked from commit bf34b90bb4e39b3a2fd22a5531f5ea5a95681015)
+
+https://issues.redhat.com/browse/RHEL-145769 [rhel-10.2]
+https://issues.redhat.com/browse/RHEL-145770 [rhel-9.8]
+---
+ src/qemu/qemu_migration.c | 10 +++-------
+ 1 file changed, 3 insertions(+), 7 deletions(-)
+
+diff --git a/src/qemu/qemu_migration.c b/src/qemu/qemu_migration.c
+index 755b9a5e1a..2a4df1191d 100644
+--- a/src/qemu/qemu_migration.c
++++ b/src/qemu/qemu_migration.c
+@@ -3183,7 +3183,6 @@ qemuMigrationDstPrepare(virQEMUDriver *driver,
+  * @vm: domain object
+  * @mig: migration cookie
+  * @migParams: migration parameters
+- * @flags: migration flags
+  *
+  * Checks whether block dirty bitmaps offered by the migration source are
+  * to be migrated (e.g. they don't exist, the destination is compatible etc)
+@@ -3194,16 +3193,13 @@ qemuMigrationDstPrepare(virQEMUDriver *driver,
+ static int
+ qemuMigrationDstPrepareAnyBlockDirtyBitmaps(virDomainObj *vm,
+                                             qemuMigrationCookie *mig,
+-                                            qemuMigrationParams *migParams,
+-                                            unsigned int flags)
++                                            qemuMigrationParams *migParams)
+ {
+     g_autoptr(virJSONValue) mapping = NULL;
+     g_autoptr(GHashTable) blockNamedNodeData = NULL;
+     GSList *nextdisk;
+ 
+-    if (!mig->nbd ||
+-        !mig->blockDirtyBitmaps ||
+-        !(flags & (VIR_MIGRATE_NON_SHARED_DISK | VIR_MIGRATE_NON_SHARED_INC)))
++    if (!mig->blockDirtyBitmaps)
+         return 0;
+ 
+     if (qemuMigrationCookieBlockDirtyBitmapsMatchDisks(vm->def, mig->blockDirtyBitmaps) < 0)
+@@ -3350,7 +3346,7 @@ qemuMigrationDstPrepareActive(virQEMUDriver *driver,
+         goto error;
+     }
+ 
+-    if (qemuMigrationDstPrepareAnyBlockDirtyBitmaps(vm, mig, migParams, flags) < 0)
++    if (qemuMigrationDstPrepareAnyBlockDirtyBitmaps(vm, mig, migParams) < 0)
+         goto error;
+ 
+     if (qemuMigrationParamsCheck(vm, VIR_ASYNC_JOB_MIGRATION_IN, migParams,
+-- 
+2.52.0

@@ -1,0 +1,72 @@
+From 9c29beb017582822dc341bdc34d78b4b2b95162f Mon Sep 17 00:00:00 2001
+Message-ID: <9c29beb017582822dc341bdc34d78b4b2b95162f.1772815312.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Wed, 26 Nov 2025 19:01:12 +0100
+Subject: [PATCH] qemu_firmware: Ignore stateless/combined when NVRAM is
+ configured
+
+For combined firmware builds, the variable storage is part of the
+same image as the executable code, whereas stateless builds don't
+support variable storage at all.
+
+In both cases, the use of a separate NVRAM storage area is not
+supported, so if attributes connected to one are present in the
+domain XML, firmware descriptors for stateless/combined builds
+should be ignored.
+
+ROM firmware builds are stateless by definition, so the same
+handling applies to them as well.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 3463e543fec8ac7f8173f8f6712f05bc912319cd)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/qemu/qemu_firmware.c | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/src/qemu/qemu_firmware.c b/src/qemu/qemu_firmware.c
+index a22853361b..47a3987b64 100644
+--- a/src/qemu/qemu_firmware.c
++++ b/src/qemu/qemu_firmware.c
+@@ -1285,6 +1285,17 @@ qemuFirmwareMatchDomain(const virDomainDef *def,
+                           flash->nvram_template.format);
+                 return false;
+             }
++        } else {
++            if (loader && loader->nvram &&
++                (loader->nvram->path || loader->nvram->format)) {
++                VIR_DEBUG("Discarding non split loader (nvram configured)");
++                return false;
++            }
++            if (loader &&
++                (loader->nvramTemplate || loader->nvramTemplateFormat)) {
++                VIR_DEBUG("Discarding non split loader (nvram template configured)");
++                return false;
++            }
+         }
+     } else if (fw->mapping.device == QEMU_FIRMWARE_DEVICE_MEMORY) {
+         if (loader && loader->type &&
+@@ -1302,6 +1313,17 @@ qemuFirmwareMatchDomain(const virDomainDef *def,
+             VIR_DEBUG("Discarding readonly loader");
+             return false;
+         }
++
++        if (loader && loader->nvram &&
++            (loader->nvram->path || loader->nvram->format)) {
++            VIR_DEBUG("Discarding rom loader (nvram configured)");
++            return false;
++        }
++        if (loader &&
++            (loader->nvramTemplate || loader->nvramTemplateFormat)) {
++            VIR_DEBUG("Discarding rom loader (nvram template configured)");
++            return false;
++        }
+     }
+ 
+     if (def->sec) {
+-- 
+2.53.0

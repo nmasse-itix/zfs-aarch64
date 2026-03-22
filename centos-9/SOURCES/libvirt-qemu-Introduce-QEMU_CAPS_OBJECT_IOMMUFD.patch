@@ -1,0 +1,266 @@
+From 634e8902ffca6246e5066816d52063f3c82dddb7 Mon Sep 17 00:00:00 2001
+Message-ID: <634e8902ffca6246e5066816d52063f3c82dddb7.1771423832.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Mon, 16 Feb 2026 08:59:39 +0100
+Subject: [PATCH] qemu: Introduce QEMU_CAPS_OBJECT_IOMMUFD
+
+Detect if QEMU was compiled with IOMMUFD.
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 4a0ea9bcf13ea05c90f294ba70c767bc79e2ebbe)
+
+Conflicts:
+  These files don't exist in downstream:
+    tests/qemucapabilitiesdata/caps_10.1.0_s390x.xml
+    tests/qemucapabilitiesdata/caps_10.2.0_aarch64.xml
+    tests/qemucapabilitiesdata/caps_11.0.0_aarch64.xml
+    tests/qemucapabilitiesdata/caps_11.0.0_x86_64.xml
+
+Resolves: https://issues.redhat.com/browse/RHEL-150353
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/qemu/qemu_capabilities.c                              | 4 ++++
+ src/qemu/qemu_capabilities.h                              | 3 +++
+ src/qemu/qemu_validate.c                                  | 8 ++++++++
+ tests/qemucapabilitiesdata/caps_10.0.0_aarch64.xml        | 1 +
+ tests/qemucapabilitiesdata/caps_10.0.0_s390x.xml          | 1 +
+ tests/qemucapabilitiesdata/caps_10.0.0_x86_64+amdsev.xml  | 1 +
+ tests/qemucapabilitiesdata/caps_10.0.0_x86_64.xml         | 1 +
+ .../qemucapabilitiesdata/caps_10.1.0_x86_64+inteltdx.xml  | 1 +
+ tests/qemucapabilitiesdata/caps_10.1.0_x86_64.xml         | 1 +
+ tests/qemucapabilitiesdata/caps_10.2.0_x86_64+mshv.xml    | 1 +
+ tests/qemucapabilitiesdata/caps_10.2.0_x86_64.xml         | 1 +
+ tests/qemucapabilitiesdata/caps_9.0.0_x86_64.xml          | 1 +
+ tests/qemucapabilitiesdata/caps_9.1.0_s390x.xml           | 1 +
+ tests/qemucapabilitiesdata/caps_9.1.0_x86_64.xml          | 1 +
+ tests/qemucapabilitiesdata/caps_9.2.0_s390x.xml           | 1 +
+ tests/qemucapabilitiesdata/caps_9.2.0_x86_64+amdsev.xml   | 1 +
+ tests/qemucapabilitiesdata/caps_9.2.0_x86_64.xml          | 1 +
+ 17 files changed, 29 insertions(+)
+
+diff --git a/src/qemu/qemu_capabilities.c b/src/qemu/qemu_capabilities.c
+index 2c8bd62c99..c23ff5539a 100644
+--- a/src/qemu/qemu_capabilities.c
++++ b/src/qemu/qemu_capabilities.c
+@@ -756,6 +756,9 @@ VIR_ENUM_IMPL(virQEMUCaps,
+               "query-accelerators", /* QEMU_CAPS_QUERY_ACCELERATORS */
+               "mshv", /* QEMU_CAPS_MSHV */
+               "scsi-block.migrate-pr", /* QEMU_CAPS_DEVICE_SCSI_BLOCK_MIGRATE_PR */
++
++              /* 490 */
++              "iommufd", /* QEMU_CAPS_OBJECT_IOMMUFD */
+     );
+ 
+ 
+@@ -1463,6 +1466,7 @@ struct virQEMUCapsStringFlags virQEMUCapsObjectTypes[] = {
+     { "tpm-emulator", QEMU_CAPS_DEVICE_TPM_EMULATOR },
+     { "tpm-passthrough", QEMU_CAPS_DEVICE_TPM_PASSTHROUGH },
+     { "acpi-generic-initiator", QEMU_CAPS_ACPI_GENERIC_INITIATOR },
++    { "iommufd", QEMU_CAPS_OBJECT_IOMMUFD },
+ };
+ 
+ 
+diff --git a/src/qemu/qemu_capabilities.h b/src/qemu/qemu_capabilities.h
+index 0c76f2edda..f7c8680f94 100644
+--- a/src/qemu/qemu_capabilities.h
++++ b/src/qemu/qemu_capabilities.h
+@@ -732,6 +732,9 @@ typedef enum { /* virQEMUCapsFlags grouping marker for syntax-check */
+     QEMU_CAPS_MSHV, /* -accel mshv */
+     QEMU_CAPS_DEVICE_SCSI_BLOCK_MIGRATE_PR, /* persistent reservation migration support */
+ 
++    /* 490 */
++    QEMU_CAPS_OBJECT_IOMMUFD, /* -object iommufd */
++
+     QEMU_CAPS_LAST /* this must always be the last item */
+ } virQEMUCapsFlags;
+ 
+diff --git a/src/qemu/qemu_validate.c b/src/qemu/qemu_validate.c
+index 9ab285f768..9886ddaf1d 100644
+--- a/src/qemu/qemu_validate.c
++++ b/src/qemu/qemu_validate.c
+@@ -2720,6 +2720,14 @@ qemuValidateDomainDeviceDefHostdev(const virDomainHostdevDef *hostdev,
+                                    _("VFIO PCI device assignment is not supported by this version of qemu"));
+                     return -1;
+                 }
++
++                if (hostdev->source.subsys.u.pci.driver.iommufd == VIR_TRISTATE_BOOL_YES) {
++                    if (!virQEMUCapsGet(qemuCaps, QEMU_CAPS_OBJECT_IOMMUFD)) {
++                        virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
++                                       _("IOMMUFD is not supported by this version of qemu"));
++                        return -1;
++                    }
++                }
+             }
+ 
+             if (hostdev->writeFiltering != VIR_TRISTATE_BOOL_ABSENT) {
+diff --git a/tests/qemucapabilitiesdata/caps_10.0.0_aarch64.xml b/tests/qemucapabilitiesdata/caps_10.0.0_aarch64.xml
+index 90e8d868cc..bbb8b33cde 100644
+--- a/tests/qemucapabilitiesdata/caps_10.0.0_aarch64.xml
++++ b/tests/qemucapabilitiesdata/caps_10.0.0_aarch64.xml
+@@ -163,6 +163,7 @@
+   <flag name='nvme-ns'/>
+   <flag name='usb-bot'/>
+   <flag name='acpi-generic-initiator'/>
++  <flag name='iommufd'/>
+   <version>10000000</version>
+   <microcodeVersion>61700285</microcodeVersion>
+   <package>v10.0.0</package>
+diff --git a/tests/qemucapabilitiesdata/caps_10.0.0_s390x.xml b/tests/qemucapabilitiesdata/caps_10.0.0_s390x.xml
+index 82a66a6524..cf00ac4ea0 100644
+--- a/tests/qemucapabilitiesdata/caps_10.0.0_s390x.xml
++++ b/tests/qemucapabilitiesdata/caps_10.0.0_s390x.xml
+@@ -136,6 +136,7 @@
+   <flag name='nvme'/>
+   <flag name='nvme-ns'/>
+   <flag name='usb-bot'/>
++  <flag name='iommufd'/>
+   <version>10000000</version>
+   <microcodeVersion>39100285</microcodeVersion>
+   <package>v10.0.0</package>
+diff --git a/tests/qemucapabilitiesdata/caps_10.0.0_x86_64+amdsev.xml b/tests/qemucapabilitiesdata/caps_10.0.0_x86_64+amdsev.xml
+index cfce1c963d..5acd1a33fd 100644
+--- a/tests/qemucapabilitiesdata/caps_10.0.0_x86_64+amdsev.xml
++++ b/tests/qemucapabilitiesdata/caps_10.0.0_x86_64+amdsev.xml
+@@ -209,6 +209,7 @@
+   <flag name='amd-iommu'/>
+   <flag name='usb-bot'/>
+   <flag name='acpi-generic-initiator'/>
++  <flag name='iommufd'/>
+   <version>10000000</version>
+   <microcodeVersion>43100285</microcodeVersion>
+   <package>v10.0.0</package>
+diff --git a/tests/qemucapabilitiesdata/caps_10.0.0_x86_64.xml b/tests/qemucapabilitiesdata/caps_10.0.0_x86_64.xml
+index f94c8388d6..50f58791e6 100644
+--- a/tests/qemucapabilitiesdata/caps_10.0.0_x86_64.xml
++++ b/tests/qemucapabilitiesdata/caps_10.0.0_x86_64.xml
+@@ -209,6 +209,7 @@
+   <flag name='amd-iommu.pci-id'/>
+   <flag name='usb-bot'/>
+   <flag name='acpi-generic-initiator'/>
++  <flag name='iommufd'/>
+   <version>10000000</version>
+   <microcodeVersion>43100285</microcodeVersion>
+   <package>v10.0.0</package>
+diff --git a/tests/qemucapabilitiesdata/caps_10.1.0_x86_64+inteltdx.xml b/tests/qemucapabilitiesdata/caps_10.1.0_x86_64+inteltdx.xml
+index 8e989a139f..e321c352a3 100644
+--- a/tests/qemucapabilitiesdata/caps_10.1.0_x86_64+inteltdx.xml
++++ b/tests/qemucapabilitiesdata/caps_10.1.0_x86_64+inteltdx.xml
+@@ -191,6 +191,7 @@
+   <flag name='usb-bot'/>
+   <flag name='tdx-guest'/>
+   <flag name='acpi-generic-initiator'/>
++  <flag name='iommufd'/>
+   <version>10000050</version>
+   <microcodeVersion>43100286</microcodeVersion>
+   <package>v10.0.0-1724-gf9a3def17b</package>
+diff --git a/tests/qemucapabilitiesdata/caps_10.1.0_x86_64.xml b/tests/qemucapabilitiesdata/caps_10.1.0_x86_64.xml
+index 520a3d8ee8..2d52659520 100644
+--- a/tests/qemucapabilitiesdata/caps_10.1.0_x86_64.xml
++++ b/tests/qemucapabilitiesdata/caps_10.1.0_x86_64.xml
+@@ -214,6 +214,7 @@
+   <flag name='tdx-guest'/>
+   <flag name='qom-list-get'/>
+   <flag name='acpi-generic-initiator'/>
++  <flag name='iommufd'/>
+   <version>10001000</version>
+   <microcodeVersion>43100286</microcodeVersion>
+   <package>v10.1.0</package>
+diff --git a/tests/qemucapabilitiesdata/caps_10.2.0_x86_64+mshv.xml b/tests/qemucapabilitiesdata/caps_10.2.0_x86_64+mshv.xml
+index 874fd7bddb..eb2ab001a6 100644
+--- a/tests/qemucapabilitiesdata/caps_10.2.0_x86_64+mshv.xml
++++ b/tests/qemucapabilitiesdata/caps_10.2.0_x86_64+mshv.xml
+@@ -201,6 +201,7 @@
+   <flag name='acpi-generic-initiator'/>
+   <flag name='query-accelerators'/>
+   <flag name='mshv'/>
++  <flag name='iommufd'/>
+   <version>10001050</version>
+   <microcodeVersion>43100287</microcodeVersion>
+   <package>v10.1.0-1778-ge090e0312d</package>
+diff --git a/tests/qemucapabilitiesdata/caps_10.2.0_x86_64.xml b/tests/qemucapabilitiesdata/caps_10.2.0_x86_64.xml
+index 7d5a75ce88..c4ea924c1f 100644
+--- a/tests/qemucapabilitiesdata/caps_10.2.0_x86_64.xml
++++ b/tests/qemucapabilitiesdata/caps_10.2.0_x86_64.xml
+@@ -216,6 +216,7 @@
+   <flag name='disk-timed-stats'/>
+   <flag name='query-accelerators'/>
+   <flag name='scsi-block.migrate-pr'/>
++  <flag name='iommufd'/>
+   <version>10001091</version>
+   <microcodeVersion>43100287</microcodeVersion>
+   <package>v10.2.0-rc1-38-gfb241d0a1f</package>
+diff --git a/tests/qemucapabilitiesdata/caps_9.0.0_x86_64.xml b/tests/qemucapabilitiesdata/caps_9.0.0_x86_64.xml
+index 1f2e27a218..88bd502fee 100644
+--- a/tests/qemucapabilitiesdata/caps_9.0.0_x86_64.xml
++++ b/tests/qemucapabilitiesdata/caps_9.0.0_x86_64.xml
+@@ -204,6 +204,7 @@
+   <flag name='amd-iommu'/>
+   <flag name='usb-bot'/>
+   <flag name='acpi-generic-initiator'/>
++  <flag name='iommufd'/>
+   <version>9000000</version>
+   <microcodeVersion>43100245</microcodeVersion>
+   <package>v9.0.0</package>
+diff --git a/tests/qemucapabilitiesdata/caps_9.1.0_s390x.xml b/tests/qemucapabilitiesdata/caps_9.1.0_s390x.xml
+index b961f79808..3d2692b02c 100644
+--- a/tests/qemucapabilitiesdata/caps_9.1.0_s390x.xml
++++ b/tests/qemucapabilitiesdata/caps_9.1.0_s390x.xml
+@@ -126,6 +126,7 @@
+   <flag name='nvme'/>
+   <flag name='nvme-ns'/>
+   <flag name='usb-bot'/>
++  <flag name='iommufd'/>
+   <version>9001000</version>
+   <microcodeVersion>39100246</microcodeVersion>
+   <package>v9.1.0</package>
+diff --git a/tests/qemucapabilitiesdata/caps_9.1.0_x86_64.xml b/tests/qemucapabilitiesdata/caps_9.1.0_x86_64.xml
+index 35ddf30736..66578099a7 100644
+--- a/tests/qemucapabilitiesdata/caps_9.1.0_x86_64.xml
++++ b/tests/qemucapabilitiesdata/caps_9.1.0_x86_64.xml
+@@ -203,6 +203,7 @@
+   <flag name='amd-iommu'/>
+   <flag name='usb-bot'/>
+   <flag name='acpi-generic-initiator'/>
++  <flag name='iommufd'/>
+   <version>9001000</version>
+   <microcodeVersion>43100246</microcodeVersion>
+   <package>v9.1.0</package>
+diff --git a/tests/qemucapabilitiesdata/caps_9.2.0_s390x.xml b/tests/qemucapabilitiesdata/caps_9.2.0_s390x.xml
+index e9f79261f7..9f95ed891e 100644
+--- a/tests/qemucapabilitiesdata/caps_9.2.0_s390x.xml
++++ b/tests/qemucapabilitiesdata/caps_9.2.0_s390x.xml
+@@ -129,6 +129,7 @@
+   <flag name='nvme'/>
+   <flag name='nvme-ns'/>
+   <flag name='usb-bot'/>
++  <flag name='iommufd'/>
+   <version>9002000</version>
+   <microcodeVersion>39100247</microcodeVersion>
+   <package>v9.2.0</package>
+diff --git a/tests/qemucapabilitiesdata/caps_9.2.0_x86_64+amdsev.xml b/tests/qemucapabilitiesdata/caps_9.2.0_x86_64+amdsev.xml
+index 0e52c3e23d..6636346bc5 100644
+--- a/tests/qemucapabilitiesdata/caps_9.2.0_x86_64+amdsev.xml
++++ b/tests/qemucapabilitiesdata/caps_9.2.0_x86_64+amdsev.xml
+@@ -207,6 +207,7 @@
+   <flag name='amd-iommu'/>
+   <flag name='usb-bot'/>
+   <flag name='acpi-generic-initiator'/>
++  <flag name='iommufd'/>
+   <version>9002000</version>
+   <microcodeVersion>43100247</microcodeVersion>
+   <package>v9.2.0</package>
+diff --git a/tests/qemucapabilitiesdata/caps_9.2.0_x86_64.xml b/tests/qemucapabilitiesdata/caps_9.2.0_x86_64.xml
+index 95f8a4d878..dee30415aa 100644
+--- a/tests/qemucapabilitiesdata/caps_9.2.0_x86_64.xml
++++ b/tests/qemucapabilitiesdata/caps_9.2.0_x86_64.xml
+@@ -205,6 +205,7 @@
+   <flag name='amd-iommu'/>
+   <flag name='usb-bot'/>
+   <flag name='acpi-generic-initiator'/>
++  <flag name='iommufd'/>
+   <version>9002000</version>
+   <microcodeVersion>43100247</microcodeVersion>
+   <package>v9.2.0</package>
+-- 
+2.53.0

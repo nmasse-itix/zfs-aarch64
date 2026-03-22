@@ -1,0 +1,140 @@
+From af94300604718604a70a5d587e56187ffe5e6557 Mon Sep 17 00:00:00 2001
+Message-ID: <af94300604718604a70a5d587e56187ffe5e6557.1772815313.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Fri, 30 Jan 2026 17:46:30 +0100
+Subject: [PATCH] conf: Include varstore element in domcaps
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+We want to advertise whether the element is usable when
+defining new domains.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+Reviewed-by: Daniel P. Berrangé <berrange@redhat.com>
+(cherry picked from commit 3d6987914bb10beb11b9eb5e83ec2194dfab1659)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ docs/formatdomaincaps.rst       |  7 +++++++
+ src/conf/domain_capabilities.c  | 10 ++++++++++
+ src/conf/domain_capabilities.h  |  6 ++++++
+ src/conf/schemas/domaincaps.rng |  9 +++++++++
+ 4 files changed, 32 insertions(+)
+
+diff --git a/docs/formatdomaincaps.rst b/docs/formatdomaincaps.rst
+index 3426b7c9cd..5a1d3f2670 100644
+--- a/docs/formatdomaincaps.rst
++++ b/docs/formatdomaincaps.rst
+@@ -141,6 +141,7 @@ domains.
+            <value>no</value>
+          </enum>
+        </loader>
++       <varstore supported='yes'/>
+      </os>
+      ...
+    <domainCapabilities>
+@@ -227,6 +228,12 @@ are the following:
+    possible to enforce Secure Boot, look at the ``enrolledKeys`` enum inside
+    the ``<firmwareFeatures/>`` element instead.
+ 
++The ``<varstore/>`` element :since:`(since 12.1.0)` indicates whether UEFI
++variable storage backed by the ``uefi-vars`` QEMU device can be used as an
++alternative to pflash-based NVRAM storage. This is the only type of variable
++storage compatible with Secure Boot on non-x86 architectures, but it can be
++used on x86 too.
++
+ CPU configuration
+ ~~~~~~~~~~~~~~~~~
+ 
+diff --git a/src/conf/domain_capabilities.c b/src/conf/domain_capabilities.c
+index 9b3577cd08..78b8e6e6e1 100644
+--- a/src/conf/domain_capabilities.c
++++ b/src/conf/domain_capabilities.c
+@@ -449,12 +449,21 @@ virDomainCapsLoaderFormat(virBuffer *buf,
+     FORMAT_EPILOGUE(loader);
+ }
+ 
++static void
++virDomainCapsVarstoreFormat(virBuffer *buf,
++                            const virDomainCapsVarstore *varstore)
++{
++    FORMAT_PROLOGUE(varstore);
++    FORMAT_EPILOGUE(varstore);
++}
++
+ static void
+ virDomainCapsOSFormat(virBuffer *buf,
+                       const virDomainCapsOS *os)
+ {
+     const virDomainCapsFirmwareFeatures *firmwareFeatures = &os->firmwareFeatures;
+     const virDomainCapsLoader *loader = &os->loader;
++    const virDomainCapsVarstore *varstore = &os->varstore;
+ 
+     FORMAT_PROLOGUE(os);
+ 
+@@ -462,6 +471,7 @@ virDomainCapsOSFormat(virBuffer *buf,
+ 
+     virDomainCapsFirmwareFeaturesFormat(&childBuf, firmwareFeatures);
+     virDomainCapsLoaderFormat(&childBuf, loader);
++    virDomainCapsVarstoreFormat(&childBuf, varstore);
+ 
+     FORMAT_EPILOGUE(os);
+ }
+diff --git a/src/conf/domain_capabilities.h b/src/conf/domain_capabilities.h
+index a68fafe235..02344fd9b6 100644
+--- a/src/conf/domain_capabilities.h
++++ b/src/conf/domain_capabilities.h
+@@ -61,6 +61,11 @@ struct _virDomainCapsLoader {
+     virDomainCapsEnum secure;   /* Info about secure:virTristateBool */
+ };
+ 
++typedef struct _virDomainCapsVarstore virDomainCapsVarstore;
++struct _virDomainCapsVarstore {
++    virTristateBool supported;
++};
++
+ STATIC_ASSERT_ENUM(VIR_DOMAIN_OS_DEF_FIRMWARE_LAST);
+ typedef struct _virDomainCapsOS virDomainCapsOS;
+ struct _virDomainCapsOS {
+@@ -68,6 +73,7 @@ struct _virDomainCapsOS {
+     virDomainCapsEnum firmware;     /* Info about virDomainOsDefFirmware */
+     virDomainCapsFirmwareFeatures firmwareFeatures;
+     virDomainCapsLoader loader;     /* Info about virDomainLoaderDef */
++    virDomainCapsVarstore varstore;
+ };
+ 
+ STATIC_ASSERT_ENUM(VIR_DOMAIN_MEMORY_SOURCE_LAST);
+diff --git a/src/conf/schemas/domaincaps.rng b/src/conf/schemas/domaincaps.rng
+index 3b24caeca6..4682abbf41 100644
+--- a/src/conf/schemas/domaincaps.rng
++++ b/src/conf/schemas/domaincaps.rng
+@@ -87,6 +87,12 @@
+     </element>
+   </define>
+ 
++  <define name="varstore">
++    <element name="varstore">
++      <ref name="supported"/>
++    </element>
++  </define>
++
+   <define name="os">
+     <element name="os">
+       <interleave>
+@@ -98,6 +104,9 @@
+         <optional>
+           <ref name="loader"/>
+         </optional>
++        <optional>
++          <ref name="varstore"/>
++        </optional>
+       </interleave>
+     </element>
+   </define>
+-- 
+2.53.0

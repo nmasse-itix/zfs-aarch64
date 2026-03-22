@@ -1,0 +1,58 @@
+From ede04a5034d7b97d06033e9ccf77471afab41e04 Mon Sep 17 00:00:00 2001
+Message-ID: <ede04a5034d7b97d06033e9ccf77471afab41e04.1772815312.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Sun, 28 Dec 2025 18:31:38 +0100
+Subject: [PATCH] qemu_firmware: Drop 'nvram' local variable
+
+We access the NVRAM information via the 'loader' local variable
+throughout the file, and this is the only spot where the 'nvram'
+local variable exists. It makes things inconsistent and opens up
+the possibility of the values for 'loader' and 'nvram' going out
+of sync, especially after a future commit will introduce the
+need to set the former. Just get rid of the additional variable.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit aaa0db64b4e5d44d7bb8aeee9c7b71a4f277a675)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/qemu/qemu_firmware.c | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/src/qemu/qemu_firmware.c b/src/qemu/qemu_firmware.c
+index b168ec7cf7..903b0a984d 100644
+--- a/src/qemu/qemu_firmware.c
++++ b/src/qemu/qemu_firmware.c
+@@ -1780,7 +1780,6 @@ qemuFirmwareFillDomain(virQEMUDriver *driver,
+                        bool abiUpdate)
+ {
+     virDomainLoaderDef *loader = def->os.loader;
+-    virStorageSource *nvram = loader ? loader->nvram : NULL;
+     bool autoSelection = (def->os.firmware != VIR_DOMAIN_OS_DEF_FIRMWARE_NONE);
+     int ret;
+ 
+@@ -1804,13 +1803,14 @@ qemuFirmwareFillDomain(virQEMUDriver *driver,
+                        virStorageFileFormatTypeToString(loader->format));
+         return -1;
+     }
+-    if (nvram &&
+-        nvram->format &&
+-        nvram->format != VIR_STORAGE_FILE_RAW &&
+-        nvram->format != VIR_STORAGE_FILE_QCOW2) {
++    if (loader &&
++        loader->nvram &&
++        loader->nvram->format &&
++        loader->nvram->format != VIR_STORAGE_FILE_RAW &&
++        loader->nvram->format != VIR_STORAGE_FILE_QCOW2) {
+         virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
+                        _("Unsupported nvram format '%1$s'"),
+-                       virStorageFileFormatTypeToString(nvram->format));
++                       virStorageFileFormatTypeToString(loader->nvram->format));
+         return -1;
+     }
+ 
+-- 
+2.53.0

@@ -1,0 +1,88 @@
+From 8754c491f66e5d13290aaf221a29b19bd855a171 Mon Sep 17 00:00:00 2001
+Message-ID: <8754c491f66e5d13290aaf221a29b19bd855a171.1772815313.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Wed, 11 Feb 2026 00:48:18 +0100
+Subject: [PATCH] docs: Document firmwareFeature element for domaincaps
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit cf4dfcf7951779a815324adebcdaa8a845d4c0e1)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ docs/formatdomaincaps.rst | 51 +++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 51 insertions(+)
+
+diff --git a/docs/formatdomaincaps.rst b/docs/formatdomaincaps.rst
+index 6ba7f84f96..cca827923c 100644
+--- a/docs/formatdomaincaps.rst
++++ b/docs/formatdomaincaps.rst
+@@ -111,6 +111,16 @@ be passed to its children.
+          <value>bios</value>
+          <value>efi</value>
+        </enum>
++       <firmwareFeatures supported='yes'>
++         <enum name='secureBoot'>
++           <value>yes</value>
++           <value>no</value>
++         </enum>
++         <enum name='enrolledKeys'>
++           <value>yes</value>
++           <value>no</value>
++         </enum>
++       </firmwareFeatures>
+        <loader supported='yes'>
+          <value>/usr/share/OVMF/OVMF_CODE.fd</value>
+          <enum name='type'>
+@@ -140,6 +150,47 @@ about a given BIOS or UEFI binary on the host, e.g. the firmware binary path,
+ its architecture, supported machine types, NVRAM template, etc. This ensures
+ that the reported values won't cause a failure on guest boot.
+ 
++The ``<firmwareFeatures/>`` element :since:`(since 12.1.0)` contains one
++enum for each of the features that can be used to fine-tune the firmware
++autoselection process. For example:
++
++::
++
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>yes</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
++
++indicates that a domain XML such as:
++
++::
++
++    <os firmware='efi'>
++      <firmware>
++        <feature name='secure-boot' enabled='yes'/>
++        <feature name='enrolled-keys' enabled='no'/>
++      </firmware>
++    </os>
++
++can be used to allow unsigned operating system to run, whereas a domain XML
++such as:
++
++::
++
++    <os firmware='efi'>
++      <firmware>
++        <feature name='secure-boot' enabled='no'/>
++      </firmware>
++    </os>
++
++would not work, since ``no`` is not one of the valid values advertised by
++the ``secureBoot`` enum.
++
+ For the ``loader`` element, the following can occur:
+ 
+ ``value``
+-- 
+2.53.0

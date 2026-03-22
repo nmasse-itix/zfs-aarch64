@@ -1,0 +1,1257 @@
+From 39012db60da1f09027c4aa016ddf1c7da9b3d73d Mon Sep 17 00:00:00 2001
+Message-ID: <39012db60da1f09027c4aa016ddf1c7da9b3d73d.1771423659.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Mon, 16 Feb 2026 10:44:57 +0100
+Subject: [PATCH] qemu: Fill iommufd domain capability
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 63434db800b921e96fec424a667b7161af1f02de)
+
+Conflicts:
+  These files don't exist in downstream:
+    tests/domaincapsdata/qemu_10.1.0.s390x.xml
+    tests/domaincapsdata/qemu_10.2.0-virt.aarch64.xml
+    tests/domaincapsdata/qemu_10.2.0.aarch64.xml
+    tests/domaincapsdata/qemu_11.0.0-q35.x86_64.xml
+    tests/domaincapsdata/qemu_11.0.0-tcg.x86_64.xml
+    tests/domaincapsdata/qemu_11.0.0-virt.aarch64.xml
+    tests/domaincapsdata/qemu_11.0.0.aarch64.xml
+    tests/domaincapsdata/qemu_11.0.0.x86_64.xml
+
+Resolves: https://issues.redhat.com/browse/RHEL-148135
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/qemu/qemu_capabilities.c                  | 21 ++++++++++++++-----
+ .../qemu_10.0.0-q35.x86_64+amdsev.xml         |  4 ++++
+ .../domaincapsdata/qemu_10.0.0-q35.x86_64.xml |  4 ++++
+ .../qemu_10.0.0-tcg.x86_64+amdsev.xml         |  4 ++++
+ .../domaincapsdata/qemu_10.0.0-tcg.x86_64.xml |  4 ++++
+ .../qemu_10.0.0-virt.aarch64.xml              |  4 ++++
+ tests/domaincapsdata/qemu_10.0.0.aarch64.xml  |  4 ++++
+ tests/domaincapsdata/qemu_10.0.0.ppc64.xml    |  3 +++
+ tests/domaincapsdata/qemu_10.0.0.s390x.xml    |  4 ++++
+ .../qemu_10.0.0.x86_64+amdsev.xml             |  4 ++++
+ tests/domaincapsdata/qemu_10.0.0.x86_64.xml   |  4 ++++
+ .../qemu_10.1.0-q35.x86_64+inteltdx.xml       |  4 ++++
+ .../domaincapsdata/qemu_10.1.0-q35.x86_64.xml |  4 ++++
+ .../qemu_10.1.0-tcg.x86_64+inteltdx.xml       |  4 ++++
+ .../domaincapsdata/qemu_10.1.0-tcg.x86_64.xml |  4 ++++
+ .../qemu_10.1.0.x86_64+inteltdx.xml           |  4 ++++
+ tests/domaincapsdata/qemu_10.1.0.x86_64.xml   |  4 ++++
+ .../qemu_10.2.0-q35.x86_64+mshv.xml           |  4 ++++
+ .../domaincapsdata/qemu_10.2.0-q35.x86_64.xml |  4 ++++
+ .../qemu_10.2.0-tcg.x86_64+mshv.xml           |  4 ++++
+ .../domaincapsdata/qemu_10.2.0-tcg.x86_64.xml |  4 ++++
+ .../qemu_10.2.0.x86_64+mshv.xml               |  4 ++++
+ tests/domaincapsdata/qemu_10.2.0.x86_64.xml   |  4 ++++
+ .../domaincapsdata/qemu_6.2.0-q35.x86_64.xml  |  3 +++
+ .../domaincapsdata/qemu_6.2.0-tcg.x86_64.xml  |  3 +++
+ tests/domaincapsdata/qemu_6.2.0.ppc64.xml     |  3 +++
+ tests/domaincapsdata/qemu_6.2.0.x86_64.xml    |  3 +++
+ .../domaincapsdata/qemu_7.0.0-q35.x86_64.xml  |  3 +++
+ .../domaincapsdata/qemu_7.0.0-tcg.x86_64.xml  |  3 +++
+ tests/domaincapsdata/qemu_7.0.0.ppc64.xml     |  3 +++
+ tests/domaincapsdata/qemu_7.0.0.x86_64.xml    |  3 +++
+ .../domaincapsdata/qemu_7.1.0-q35.x86_64.xml  |  3 +++
+ .../domaincapsdata/qemu_7.1.0-tcg.x86_64.xml  |  3 +++
+ tests/domaincapsdata/qemu_7.1.0.ppc64.xml     |  3 +++
+ tests/domaincapsdata/qemu_7.1.0.x86_64.xml    |  3 +++
+ .../qemu_7.2.0-hvf.x86_64+hvf.xml             |  3 +++
+ .../domaincapsdata/qemu_7.2.0-q35.x86_64.xml  |  3 +++
+ .../qemu_7.2.0-tcg.x86_64+hvf.xml             |  3 +++
+ .../domaincapsdata/qemu_7.2.0-tcg.x86_64.xml  |  3 +++
+ tests/domaincapsdata/qemu_7.2.0.ppc.xml       |  3 +++
+ tests/domaincapsdata/qemu_7.2.0.x86_64.xml    |  3 +++
+ .../domaincapsdata/qemu_8.0.0-q35.x86_64.xml  |  3 +++
+ .../domaincapsdata/qemu_8.0.0-tcg.x86_64.xml  |  3 +++
+ tests/domaincapsdata/qemu_8.0.0.x86_64.xml    |  3 +++
+ .../domaincapsdata/qemu_8.1.0-q35.x86_64.xml  |  3 +++
+ .../domaincapsdata/qemu_8.1.0-tcg.x86_64.xml  |  3 +++
+ tests/domaincapsdata/qemu_8.1.0.s390x.xml     |  3 +++
+ tests/domaincapsdata/qemu_8.1.0.x86_64.xml    |  3 +++
+ .../domaincapsdata/qemu_8.2.0-q35.x86_64.xml  |  3 +++
+ .../qemu_8.2.0-tcg-virt.loongarch64.xml       |  3 +++
+ .../domaincapsdata/qemu_8.2.0-tcg.x86_64.xml  |  3 +++
+ .../qemu_8.2.0-virt.aarch64.xml               |  3 +++
+ .../qemu_8.2.0-virt.loongarch64.xml           |  3 +++
+ tests/domaincapsdata/qemu_8.2.0.aarch64.xml   |  3 +++
+ tests/domaincapsdata/qemu_8.2.0.armv7l.xml    |  3 +++
+ tests/domaincapsdata/qemu_8.2.0.s390x.xml     |  3 +++
+ tests/domaincapsdata/qemu_8.2.0.x86_64.xml    |  3 +++
+ .../domaincapsdata/qemu_9.0.0-q35.x86_64.xml  |  4 ++++
+ .../domaincapsdata/qemu_9.0.0-tcg.x86_64.xml  |  4 ++++
+ tests/domaincapsdata/qemu_9.0.0.sparc.xml     |  3 +++
+ tests/domaincapsdata/qemu_9.0.0.x86_64.xml    |  4 ++++
+ .../domaincapsdata/qemu_9.1.0-q35.x86_64.xml  |  4 ++++
+ .../qemu_9.1.0-tcg-virt.riscv64.xml           |  3 +++
+ .../domaincapsdata/qemu_9.1.0-tcg.x86_64.xml  |  4 ++++
+ .../qemu_9.1.0-virt.riscv64.xml               |  3 +++
+ tests/domaincapsdata/qemu_9.1.0.s390x.xml     |  4 ++++
+ tests/domaincapsdata/qemu_9.1.0.x86_64.xml    |  4 ++++
+ .../qemu_9.2.0-hvf.aarch64+hvf.xml            |  3 +++
+ .../qemu_9.2.0-q35.x86_64+amdsev.xml          |  4 ++++
+ .../domaincapsdata/qemu_9.2.0-q35.x86_64.xml  |  4 ++++
+ .../qemu_9.2.0-tcg.x86_64+amdsev.xml          |  4 ++++
+ .../domaincapsdata/qemu_9.2.0-tcg.x86_64.xml  |  4 ++++
+ tests/domaincapsdata/qemu_9.2.0.s390x.xml     |  4 ++++
+ .../qemu_9.2.0.x86_64+amdsev.xml              |  4 ++++
+ tests/domaincapsdata/qemu_9.2.0.x86_64.xml    |  4 ++++
+ tests/domaincapsmock.c                        | 17 ++++++++++++++-
+ 76 files changed, 289 insertions(+), 6 deletions(-)
+
+diff --git a/src/qemu/qemu_capabilities.c b/src/qemu/qemu_capabilities.c
+index c23ff5539a..ed6aa86da2 100644
+--- a/src/qemu/qemu_capabilities.c
++++ b/src/qemu/qemu_capabilities.c
+@@ -45,6 +45,7 @@
+ #include "qemu_firmware.h"
+ #include "virutil.h"
+ #include "virtpm.h"
++#include "viriommufd.h"
+ 
+ #include <fcntl.h>
+ #include <sys/stat.h>
+@@ -6777,6 +6778,7 @@ virQEMUCapsFillDomainDeviceHostdevCaps(virQEMUCaps *qemuCaps,
+     hostdev->subsysType.report = true;
+     hostdev->capsType.report = true;
+     hostdev->pciBackend.report = true;
++    hostdev->iommufd.report = true;
+ 
+     /* VIR_DOMAIN_HOSTDEV_MODE_CAPABILITIES is for containers only */
+     VIR_DOMAIN_CAPS_ENUM_SET(hostdev->mode,
+@@ -6808,11 +6810,20 @@ virQEMUCapsFillDomainDeviceHostdevCaps(virQEMUCaps *qemuCaps,
+     virDomainCapsEnumClear(&hostdev->capsType);
+ 
+     virDomainCapsEnumClear(&hostdev->pciBackend);
+-    if (supportsPassthroughVFIO &&
+-        virQEMUCapsGet(qemuCaps, QEMU_CAPS_DEVICE_VFIO_PCI)) {
+-        VIR_DOMAIN_CAPS_ENUM_SET(hostdev->pciBackend,
+-                                 VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_DEFAULT,
+-                                 VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_VFIO);
++
++    VIR_DOMAIN_CAPS_ENUM_SET(hostdev->iommufd, VIR_TRISTATE_BOOL_NO);
++
++    if (supportsPassthroughVFIO) {
++        if (virQEMUCapsGet(qemuCaps, QEMU_CAPS_DEVICE_VFIO_PCI)) {
++            VIR_DOMAIN_CAPS_ENUM_SET(hostdev->pciBackend,
++                                     VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_DEFAULT,
++                                     VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_VFIO);
++        }
++
++        if (virQEMUCapsGet(qemuCaps, QEMU_CAPS_OBJECT_IOMMUFD) &&
++            virIOMMUFDSupported()) {
++            VIR_DOMAIN_CAPS_ENUM_SET(hostdev->iommufd, VIR_TRISTATE_BOOL_YES);
++        }
+     }
+ }
+ 
+diff --git a/tests/domaincapsdata/qemu_10.0.0-q35.x86_64+amdsev.xml b/tests/domaincapsdata/qemu_10.0.0-q35.x86_64+amdsev.xml
+index 8cb51d795c..aeccdf612d 100644
+--- a/tests/domaincapsdata/qemu_10.0.0-q35.x86_64+amdsev.xml
++++ b/tests/domaincapsdata/qemu_10.0.0-q35.x86_64+amdsev.xml
+@@ -856,6 +856,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_10.0.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_10.0.0-q35.x86_64.xml
+index 56192354ac..86a740099b 100644
+--- a/tests/domaincapsdata/qemu_10.0.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.0.0-q35.x86_64.xml
+@@ -1755,6 +1755,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64+amdsev.xml b/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64+amdsev.xml
+index 4242f2fe9c..5d9ce948f8 100644
+--- a/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64+amdsev.xml
++++ b/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64+amdsev.xml
+@@ -1840,6 +1840,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64.xml
+index 76d5fdd0d9..3915ec38cf 100644
+--- a/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64.xml
+@@ -1840,6 +1840,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_10.0.0-virt.aarch64.xml b/tests/domaincapsdata/qemu_10.0.0-virt.aarch64.xml
+index 30863d3d6b..058bd84a33 100644
+--- a/tests/domaincapsdata/qemu_10.0.0-virt.aarch64.xml
++++ b/tests/domaincapsdata/qemu_10.0.0-virt.aarch64.xml
+@@ -154,6 +154,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_10.0.0.aarch64.xml b/tests/domaincapsdata/qemu_10.0.0.aarch64.xml
+index 30863d3d6b..058bd84a33 100644
+--- a/tests/domaincapsdata/qemu_10.0.0.aarch64.xml
++++ b/tests/domaincapsdata/qemu_10.0.0.aarch64.xml
+@@ -154,6 +154,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_10.0.0.ppc64.xml b/tests/domaincapsdata/qemu_10.0.0.ppc64.xml
+index 5136e7a20d..f3ff165aa1 100644
+--- a/tests/domaincapsdata/qemu_10.0.0.ppc64.xml
++++ b/tests/domaincapsdata/qemu_10.0.0.ppc64.xml
+@@ -107,6 +107,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_10.0.0.s390x.xml b/tests/domaincapsdata/qemu_10.0.0.s390x.xml
+index 3bbdbd68d0..220afb9d7d 100644
+--- a/tests/domaincapsdata/qemu_10.0.0.s390x.xml
++++ b/tests/domaincapsdata/qemu_10.0.0.s390x.xml
+@@ -283,6 +283,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_10.0.0.x86_64+amdsev.xml b/tests/domaincapsdata/qemu_10.0.0.x86_64+amdsev.xml
+index 8b02db8802..9dcc7f2e44 100644
+--- a/tests/domaincapsdata/qemu_10.0.0.x86_64+amdsev.xml
++++ b/tests/domaincapsdata/qemu_10.0.0.x86_64+amdsev.xml
+@@ -856,6 +856,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_10.0.0.x86_64.xml b/tests/domaincapsdata/qemu_10.0.0.x86_64.xml
+index 6dac17808c..c0c3a2e6db 100644
+--- a/tests/domaincapsdata/qemu_10.0.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.0.0.x86_64.xml
+@@ -1755,6 +1755,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_10.1.0-q35.x86_64+inteltdx.xml b/tests/domaincapsdata/qemu_10.1.0-q35.x86_64+inteltdx.xml
+index e3170bf2b3..346a94c1ec 100644
+--- a/tests/domaincapsdata/qemu_10.1.0-q35.x86_64+inteltdx.xml
++++ b/tests/domaincapsdata/qemu_10.1.0-q35.x86_64+inteltdx.xml
+@@ -860,6 +860,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_10.1.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_10.1.0-q35.x86_64.xml
+index 6213908152..fc82987630 100644
+--- a/tests/domaincapsdata/qemu_10.1.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.1.0-q35.x86_64.xml
+@@ -2100,6 +2100,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64+inteltdx.xml b/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64+inteltdx.xml
+index 949b85bd25..07fe65d429 100644
+--- a/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64+inteltdx.xml
++++ b/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64+inteltdx.xml
+@@ -2088,6 +2088,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64.xml
+index 804848b8a7..34e5812613 100644
+--- a/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64.xml
+@@ -2226,6 +2226,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_10.1.0.x86_64+inteltdx.xml b/tests/domaincapsdata/qemu_10.1.0.x86_64+inteltdx.xml
+index 93ce017e97..1d476275a2 100644
+--- a/tests/domaincapsdata/qemu_10.1.0.x86_64+inteltdx.xml
++++ b/tests/domaincapsdata/qemu_10.1.0.x86_64+inteltdx.xml
+@@ -860,6 +860,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_10.1.0.x86_64.xml b/tests/domaincapsdata/qemu_10.1.0.x86_64.xml
+index 35c9b8c6d3..3be5e34fe6 100644
+--- a/tests/domaincapsdata/qemu_10.1.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.1.0.x86_64.xml
+@@ -2100,6 +2100,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_10.2.0-q35.x86_64+mshv.xml b/tests/domaincapsdata/qemu_10.2.0-q35.x86_64+mshv.xml
+index ebba8fd49f..6914726a8b 100644
+--- a/tests/domaincapsdata/qemu_10.2.0-q35.x86_64+mshv.xml
++++ b/tests/domaincapsdata/qemu_10.2.0-q35.x86_64+mshv.xml
+@@ -110,6 +110,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_10.2.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_10.2.0-q35.x86_64.xml
+index 78e8b774e6..baf8f458db 100644
+--- a/tests/domaincapsdata/qemu_10.2.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.2.0-q35.x86_64.xml
+@@ -1072,6 +1072,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64+mshv.xml b/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64+mshv.xml
+index 6c6f1e84c3..35331dc4d4 100644
+--- a/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64+mshv.xml
++++ b/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64+mshv.xml
+@@ -2223,6 +2223,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64.xml
+index 14e8e30f1c..7fba7f45f3 100644
+--- a/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64.xml
+@@ -2226,6 +2226,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_10.2.0.x86_64+mshv.xml b/tests/domaincapsdata/qemu_10.2.0.x86_64+mshv.xml
+index c8f2585d7d..faf9b15e0d 100644
+--- a/tests/domaincapsdata/qemu_10.2.0.x86_64+mshv.xml
++++ b/tests/domaincapsdata/qemu_10.2.0.x86_64+mshv.xml
+@@ -110,6 +110,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_10.2.0.x86_64.xml b/tests/domaincapsdata/qemu_10.2.0.x86_64.xml
+index 59370259e7..354653d49a 100644
+--- a/tests/domaincapsdata/qemu_10.2.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.2.0.x86_64.xml
+@@ -1072,6 +1072,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_6.2.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_6.2.0-q35.x86_64.xml
+index b14cbddc59..0b66b77e73 100644
+--- a/tests/domaincapsdata/qemu_6.2.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_6.2.0-q35.x86_64.xml
+@@ -1060,6 +1060,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_6.2.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_6.2.0-tcg.x86_64.xml
+index 51547bf505..ce4b14f28c 100644
+--- a/tests/domaincapsdata/qemu_6.2.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_6.2.0-tcg.x86_64.xml
+@@ -1862,6 +1862,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_6.2.0.ppc64.xml b/tests/domaincapsdata/qemu_6.2.0.ppc64.xml
+index 411925ad66..fb8361ae97 100644
+--- a/tests/domaincapsdata/qemu_6.2.0.ppc64.xml
++++ b/tests/domaincapsdata/qemu_6.2.0.ppc64.xml
+@@ -108,6 +108,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_6.2.0.x86_64.xml b/tests/domaincapsdata/qemu_6.2.0.x86_64.xml
+index ab387c862e..33b2e4905e 100644
+--- a/tests/domaincapsdata/qemu_6.2.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_6.2.0.x86_64.xml
+@@ -1060,6 +1060,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_7.0.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_7.0.0-q35.x86_64.xml
+index 4bbcb516ec..2d7519ae94 100644
+--- a/tests/domaincapsdata/qemu_7.0.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.0.0-q35.x86_64.xml
+@@ -1089,6 +1089,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_7.0.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_7.0.0-tcg.x86_64.xml
+index 839f0600c2..01975a5e34 100644
+--- a/tests/domaincapsdata/qemu_7.0.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.0.0-tcg.x86_64.xml
+@@ -1888,6 +1888,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_7.0.0.ppc64.xml b/tests/domaincapsdata/qemu_7.0.0.ppc64.xml
+index 147d1bf7fb..03bbe16497 100644
+--- a/tests/domaincapsdata/qemu_7.0.0.ppc64.xml
++++ b/tests/domaincapsdata/qemu_7.0.0.ppc64.xml
+@@ -110,6 +110,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_7.0.0.x86_64.xml b/tests/domaincapsdata/qemu_7.0.0.x86_64.xml
+index 612b5a44cc..8fa3d3e0f4 100644
+--- a/tests/domaincapsdata/qemu_7.0.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.0.0.x86_64.xml
+@@ -1089,6 +1089,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_7.1.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_7.1.0-q35.x86_64.xml
+index a031b673dd..1991133a62 100644
+--- a/tests/domaincapsdata/qemu_7.1.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.1.0-q35.x86_64.xml
+@@ -1056,6 +1056,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_7.1.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_7.1.0-tcg.x86_64.xml
+index 9360f8fadf..41bfdbecb6 100644
+--- a/tests/domaincapsdata/qemu_7.1.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.1.0-tcg.x86_64.xml
+@@ -1836,6 +1836,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_7.1.0.ppc64.xml b/tests/domaincapsdata/qemu_7.1.0.ppc64.xml
+index f3a2dfe6ff..03d6b23a45 100644
+--- a/tests/domaincapsdata/qemu_7.1.0.ppc64.xml
++++ b/tests/domaincapsdata/qemu_7.1.0.ppc64.xml
+@@ -103,6 +103,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_7.1.0.x86_64.xml b/tests/domaincapsdata/qemu_7.1.0.x86_64.xml
+index 6738d8f852..54e8e9d87a 100644
+--- a/tests/domaincapsdata/qemu_7.1.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.1.0.x86_64.xml
+@@ -1056,6 +1056,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_7.2.0-hvf.x86_64+hvf.xml b/tests/domaincapsdata/qemu_7.2.0-hvf.x86_64+hvf.xml
+index b338bcc470..58ef1bde99 100644
+--- a/tests/domaincapsdata/qemu_7.2.0-hvf.x86_64+hvf.xml
++++ b/tests/domaincapsdata/qemu_7.2.0-hvf.x86_64+hvf.xml
+@@ -1061,6 +1061,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_7.2.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_7.2.0-q35.x86_64.xml
+index 39eb10dc7a..7c325b52aa 100644
+--- a/tests/domaincapsdata/qemu_7.2.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.2.0-q35.x86_64.xml
+@@ -1061,6 +1061,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64+hvf.xml b/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64+hvf.xml
+index 77fce0eb95..27ecea6fe0 100644
+--- a/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64+hvf.xml
++++ b/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64+hvf.xml
+@@ -1541,6 +1541,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64.xml
+index 77fce0eb95..27ecea6fe0 100644
+--- a/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64.xml
+@@ -1541,6 +1541,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_7.2.0.ppc.xml b/tests/domaincapsdata/qemu_7.2.0.ppc.xml
+index 8bda6af431..7cbde763ef 100644
+--- a/tests/domaincapsdata/qemu_7.2.0.ppc.xml
++++ b/tests/domaincapsdata/qemu_7.2.0.ppc.xml
+@@ -102,6 +102,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_7.2.0.x86_64.xml b/tests/domaincapsdata/qemu_7.2.0.x86_64.xml
+index 16708c3d85..b9a174368a 100644
+--- a/tests/domaincapsdata/qemu_7.2.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.2.0.x86_64.xml
+@@ -1061,6 +1061,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_8.0.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_8.0.0-q35.x86_64.xml
+index 4acd9b76b2..60893adebf 100644
+--- a/tests/domaincapsdata/qemu_8.0.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.0.0-q35.x86_64.xml
+@@ -1143,6 +1143,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_8.0.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_8.0.0-tcg.x86_64.xml
+index c8efc8f183..23e41eb13c 100644
+--- a/tests/domaincapsdata/qemu_8.0.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.0.0-tcg.x86_64.xml
+@@ -1636,6 +1636,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_8.0.0.x86_64.xml b/tests/domaincapsdata/qemu_8.0.0.x86_64.xml
+index cfa00f3150..daa91d428f 100644
+--- a/tests/domaincapsdata/qemu_8.0.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.0.0.x86_64.xml
+@@ -1143,6 +1143,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_8.1.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_8.1.0-q35.x86_64.xml
+index 83a703da52..df003825ea 100644
+--- a/tests/domaincapsdata/qemu_8.1.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.1.0-q35.x86_64.xml
+@@ -1402,6 +1402,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_8.1.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_8.1.0-tcg.x86_64.xml
+index 725002966d..10330281bd 100644
+--- a/tests/domaincapsdata/qemu_8.1.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.1.0-tcg.x86_64.xml
+@@ -1658,6 +1658,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_8.1.0.s390x.xml b/tests/domaincapsdata/qemu_8.1.0.s390x.xml
+index 0872931dd7..c86f0113f3 100644
+--- a/tests/domaincapsdata/qemu_8.1.0.s390x.xml
++++ b/tests/domaincapsdata/qemu_8.1.0.s390x.xml
+@@ -371,6 +371,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_8.1.0.x86_64.xml b/tests/domaincapsdata/qemu_8.1.0.x86_64.xml
+index 6a3cb84342..205334e84b 100644
+--- a/tests/domaincapsdata/qemu_8.1.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.1.0.x86_64.xml
+@@ -1402,6 +1402,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_8.2.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_8.2.0-q35.x86_64.xml
+index a25cf01799..bd9dbf8cba 100644
+--- a/tests/domaincapsdata/qemu_8.2.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.2.0-q35.x86_64.xml
+@@ -1403,6 +1403,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_8.2.0-tcg-virt.loongarch64.xml b/tests/domaincapsdata/qemu_8.2.0-tcg-virt.loongarch64.xml
+index eead5ff076..10e514dd45 100644
+--- a/tests/domaincapsdata/qemu_8.2.0-tcg-virt.loongarch64.xml
++++ b/tests/domaincapsdata/qemu_8.2.0-tcg-virt.loongarch64.xml
+@@ -106,6 +106,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_8.2.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_8.2.0-tcg.x86_64.xml
+index 3b986eb386..60e5cb8632 100644
+--- a/tests/domaincapsdata/qemu_8.2.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.2.0-tcg.x86_64.xml
+@@ -1624,6 +1624,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_8.2.0-virt.aarch64.xml b/tests/domaincapsdata/qemu_8.2.0-virt.aarch64.xml
+index bb563d6e6c..f67204a14c 100644
+--- a/tests/domaincapsdata/qemu_8.2.0-virt.aarch64.xml
++++ b/tests/domaincapsdata/qemu_8.2.0-virt.aarch64.xml
+@@ -154,6 +154,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_8.2.0-virt.loongarch64.xml b/tests/domaincapsdata/qemu_8.2.0-virt.loongarch64.xml
+index 4d441289a4..6e05a09abb 100644
+--- a/tests/domaincapsdata/qemu_8.2.0-virt.loongarch64.xml
++++ b/tests/domaincapsdata/qemu_8.2.0-virt.loongarch64.xml
+@@ -110,6 +110,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_8.2.0.aarch64.xml b/tests/domaincapsdata/qemu_8.2.0.aarch64.xml
+index bb563d6e6c..f67204a14c 100644
+--- a/tests/domaincapsdata/qemu_8.2.0.aarch64.xml
++++ b/tests/domaincapsdata/qemu_8.2.0.aarch64.xml
+@@ -154,6 +154,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_8.2.0.armv7l.xml b/tests/domaincapsdata/qemu_8.2.0.armv7l.xml
+index 5c467d4a14..7a537a1abc 100644
+--- a/tests/domaincapsdata/qemu_8.2.0.armv7l.xml
++++ b/tests/domaincapsdata/qemu_8.2.0.armv7l.xml
+@@ -104,6 +104,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_8.2.0.s390x.xml b/tests/domaincapsdata/qemu_8.2.0.s390x.xml
+index 5126dd4d00..ad80492e30 100644
+--- a/tests/domaincapsdata/qemu_8.2.0.s390x.xml
++++ b/tests/domaincapsdata/qemu_8.2.0.s390x.xml
+@@ -372,6 +372,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_8.2.0.x86_64.xml b/tests/domaincapsdata/qemu_8.2.0.x86_64.xml
+index 57cd4d63de..c6558915c1 100644
+--- a/tests/domaincapsdata/qemu_8.2.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.2.0.x86_64.xml
+@@ -1403,6 +1403,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_9.0.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_9.0.0-q35.x86_64.xml
+index c7932014ad..930014727d 100644
+--- a/tests/domaincapsdata/qemu_9.0.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.0.0-q35.x86_64.xml
+@@ -1403,6 +1403,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_9.0.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_9.0.0-tcg.x86_64.xml
+index 3593d70166..19adcfe249 100644
+--- a/tests/domaincapsdata/qemu_9.0.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.0.0-tcg.x86_64.xml
+@@ -1553,6 +1553,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_9.0.0.sparc.xml b/tests/domaincapsdata/qemu_9.0.0.sparc.xml
+index 6b4dd3c3b5..062e55718b 100644
+--- a/tests/domaincapsdata/qemu_9.0.0.sparc.xml
++++ b/tests/domaincapsdata/qemu_9.0.0.sparc.xml
+@@ -90,6 +90,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'/>
+diff --git a/tests/domaincapsdata/qemu_9.0.0.x86_64.xml b/tests/domaincapsdata/qemu_9.0.0.x86_64.xml
+index 96303a31cd..bc4e7fa1ee 100644
+--- a/tests/domaincapsdata/qemu_9.0.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.0.0.x86_64.xml
+@@ -1403,6 +1403,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_9.1.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_9.1.0-q35.x86_64.xml
+index 518a6811fe..927c1b4fab 100644
+--- a/tests/domaincapsdata/qemu_9.1.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.1.0-q35.x86_64.xml
+@@ -1539,6 +1539,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_9.1.0-tcg-virt.riscv64.xml b/tests/domaincapsdata/qemu_9.1.0-tcg-virt.riscv64.xml
+index ce7fe71141..cb519f348c 100644
+--- a/tests/domaincapsdata/qemu_9.1.0-tcg-virt.riscv64.xml
++++ b/tests/domaincapsdata/qemu_9.1.0-tcg-virt.riscv64.xml
+@@ -117,6 +117,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_9.1.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_9.1.0-tcg.x86_64.xml
+index 70928471b3..a8b1bfed73 100644
+--- a/tests/domaincapsdata/qemu_9.1.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.1.0-tcg.x86_64.xml
+@@ -1658,6 +1658,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_9.1.0-virt.riscv64.xml b/tests/domaincapsdata/qemu_9.1.0-virt.riscv64.xml
+index fabb09bf72..8e9bd3a15b 100644
+--- a/tests/domaincapsdata/qemu_9.1.0-virt.riscv64.xml
++++ b/tests/domaincapsdata/qemu_9.1.0-virt.riscv64.xml
+@@ -106,6 +106,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_9.1.0.s390x.xml b/tests/domaincapsdata/qemu_9.1.0.s390x.xml
+index d4649de513..2854713ca3 100644
+--- a/tests/domaincapsdata/qemu_9.1.0.s390x.xml
++++ b/tests/domaincapsdata/qemu_9.1.0.s390x.xml
+@@ -235,6 +235,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_9.1.0.x86_64.xml b/tests/domaincapsdata/qemu_9.1.0.x86_64.xml
+index ee101364cc..e4d36b95ac 100644
+--- a/tests/domaincapsdata/qemu_9.1.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.1.0.x86_64.xml
+@@ -1539,6 +1539,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_9.2.0-hvf.aarch64+hvf.xml b/tests/domaincapsdata/qemu_9.2.0-hvf.aarch64+hvf.xml
+index ae657c7f72..db51e7b120 100644
+--- a/tests/domaincapsdata/qemu_9.2.0-hvf.aarch64+hvf.xml
++++ b/tests/domaincapsdata/qemu_9.2.0-hvf.aarch64+hvf.xml
+@@ -151,6 +151,9 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_9.2.0-q35.x86_64+amdsev.xml b/tests/domaincapsdata/qemu_9.2.0-q35.x86_64+amdsev.xml
+index 35dc5785bc..39bdb2615b 100644
+--- a/tests/domaincapsdata/qemu_9.2.0-q35.x86_64+amdsev.xml
++++ b/tests/domaincapsdata/qemu_9.2.0-q35.x86_64+amdsev.xml
+@@ -736,6 +736,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_9.2.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_9.2.0-q35.x86_64.xml
+index baaaf4f91c..cc31c01dee 100644
+--- a/tests/domaincapsdata/qemu_9.2.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.2.0-q35.x86_64.xml
+@@ -1597,6 +1597,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64+amdsev.xml b/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64+amdsev.xml
+index 033004a1f4..d01e029394 100644
+--- a/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64+amdsev.xml
++++ b/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64+amdsev.xml
+@@ -1705,6 +1705,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64.xml
+index f20fe882c6..6088c4b905 100644
+--- a/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64.xml
+@@ -1705,6 +1705,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_9.2.0.s390x.xml b/tests/domaincapsdata/qemu_9.2.0.s390x.xml
+index 21a1b4f5a9..ef379afe69 100644
+--- a/tests/domaincapsdata/qemu_9.2.0.s390x.xml
++++ b/tests/domaincapsdata/qemu_9.2.0.s390x.xml
+@@ -235,6 +235,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_9.2.0.x86_64+amdsev.xml b/tests/domaincapsdata/qemu_9.2.0.x86_64+amdsev.xml
+index 39390d2ab6..c0485f8ffa 100644
+--- a/tests/domaincapsdata/qemu_9.2.0.x86_64+amdsev.xml
++++ b/tests/domaincapsdata/qemu_9.2.0.x86_64+amdsev.xml
+@@ -736,6 +736,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsdata/qemu_9.2.0.x86_64.xml b/tests/domaincapsdata/qemu_9.2.0.x86_64.xml
+index c477a1d2c4..dcb78a93c6 100644
+--- a/tests/domaincapsdata/qemu_9.2.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.2.0.x86_64.xml
+@@ -1597,6 +1597,10 @@
+         <value>default</value>
+         <value>vfio</value>
+       </enum>
++      <enum name='iommufd'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
+     </hostdev>
+     <rng supported='yes'>
+       <enum name='model'>
+diff --git a/tests/domaincapsmock.c b/tests/domaincapsmock.c
+index 7bece6c8c1..370ce35709 100644
+--- a/tests/domaincapsmock.c
++++ b/tests/domaincapsmock.c
+@@ -16,11 +16,13 @@
+ 
+ #include <config.h>
+ 
++#include "virfile.h"
+ #include "virhostcpu.h"
+ #include "virhostmem.h"
++#include "viriommufd.h"
++#include "virmock.h"
+ 
+ #if WITH_QEMU
+-# include "virmock.h"
+ # include "qemu/qemu_capabilities.h"
+ #endif
+ 
+@@ -78,3 +80,16 @@ virHostMemGetTHPSize(unsigned long long *size)
+     *size = 2048;
+     return 0;
+ }
++
++static bool (*real_virFileExists)(const char *path);
++
++bool
++virFileExists(const char *path)
++{
++    VIR_MOCK_REAL_INIT(virFileExists);
++
++    if (STREQ(path, VIR_IOMMU_DEV_PATH))
++        return true;
++
++    return real_virFileExists(path);
++}
+-- 
+2.53.0

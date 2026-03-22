@@ -1,0 +1,120 @@
+From 72aea6c308d9885d16ea0b81d982cfe256048677 Mon Sep 17 00:00:00 2001
+Message-ID: <72aea6c308d9885d16ea0b81d982cfe256048677.1772815312.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Mon, 15 Dec 2025 20:29:11 +0100
+Subject: [PATCH] tests: Add
+ firmware-auto-efi-format-nvram-raw-nvramtemplate-path
+
+This test case demonstrates an issue with the current
+implementation of firmware autoselection.
+
+There is no requirement for the format of the NVRAM file (raw in
+this case) to match that of the NVRAM template (qcow2 in this
+case), and yet libvirt incorrectly rejects the configuration.
+
+The issue will be addressed in an upcoming commit.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit a4f33d72287f68789f1d288d78b872d42dfe3b12)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ ...m-raw-nvramtemplate-path.x86_64-latest.err |  1 +
+ ...m-raw-nvramtemplate-path.x86_64-latest.xml | 36 +++++++++++++++++++
+ ...fi-format-nvram-raw-nvramtemplate-path.xml | 18 ++++++++++
+ tests/qemuxmlconftest.c                       |  1 +
+ 4 files changed, 56 insertions(+)
+ create mode 100644 tests/qemuxmlconfdata/firmware-auto-efi-format-nvram-raw-nvramtemplate-path.x86_64-latest.err
+ create mode 100644 tests/qemuxmlconfdata/firmware-auto-efi-format-nvram-raw-nvramtemplate-path.x86_64-latest.xml
+ create mode 100644 tests/qemuxmlconfdata/firmware-auto-efi-format-nvram-raw-nvramtemplate-path.xml
+
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-format-nvram-raw-nvramtemplate-path.x86_64-latest.err b/tests/qemuxmlconfdata/firmware-auto-efi-format-nvram-raw-nvramtemplate-path.x86_64-latest.err
+new file mode 100644
+index 0000000000..3edb2b3451
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-auto-efi-format-nvram-raw-nvramtemplate-path.x86_64-latest.err
+@@ -0,0 +1 @@
++operation failed: Unable to find 'efi' firmware that is compatible with the current configuration
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-format-nvram-raw-nvramtemplate-path.x86_64-latest.xml b/tests/qemuxmlconfdata/firmware-auto-efi-format-nvram-raw-nvramtemplate-path.x86_64-latest.xml
+new file mode 100644
+index 0000000000..8bb8f1b26c
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-auto-efi-format-nvram-raw-nvramtemplate-path.x86_64-latest.xml
+@@ -0,0 +1,36 @@
++<domain type='kvm'>
++  <name>guest</name>
++  <uuid>63840878-0deb-4095-97e6-fc444d9bc9fa</uuid>
++  <memory unit='KiB'>1048576</memory>
++  <currentMemory unit='KiB'>1048576</currentMemory>
++  <vcpu placement='static'>1</vcpu>
++  <os firmware='efi'>
++    <type arch='x86_64' machine='pc-q35-10.0'>hvm</type>
++    <loader format='raw'/>
++    <nvram template='/usr/share/edk2/ovmf/OVMF_VARS_4M.secboot.qcow2' format='raw'/>
++    <boot dev='hd'/>
++  </os>
++  <features>
++    <acpi/>
++  </features>
++  <cpu mode='custom' match='exact' check='none'>
++    <model fallback='forbid'>qemu64</model>
++  </cpu>
++  <clock offset='utc'/>
++  <on_poweroff>destroy</on_poweroff>
++  <on_reboot>restart</on_reboot>
++  <on_crash>destroy</on_crash>
++  <devices>
++    <emulator>/usr/bin/qemu-system-x86_64</emulator>
++    <controller type='usb' index='0' model='none'/>
++    <controller type='sata' index='0'>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x1f' function='0x2'/>
++    </controller>
++    <controller type='pci' index='0' model='pcie-root'/>
++    <input type='mouse' bus='ps2'/>
++    <input type='keyboard' bus='ps2'/>
++    <audio id='1' type='none'/>
++    <watchdog model='itco' action='reset'/>
++    <memballoon model='none'/>
++  </devices>
++</domain>
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-format-nvram-raw-nvramtemplate-path.xml b/tests/qemuxmlconfdata/firmware-auto-efi-format-nvram-raw-nvramtemplate-path.xml
+new file mode 100644
+index 0000000000..1e1174a11a
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-auto-efi-format-nvram-raw-nvramtemplate-path.xml
+@@ -0,0 +1,18 @@
++<domain type='kvm'>
++  <name>guest</name>
++  <uuid>63840878-0deb-4095-97e6-fc444d9bc9fa</uuid>
++  <memory unit='KiB'>1048576</memory>
++  <vcpu placement='static'>1</vcpu>
++  <os firmware='efi'>
++    <type arch='x86_64' machine='pc-q35-10.0'>hvm</type>
++    <nvram template='/usr/share/edk2/ovmf/OVMF_VARS_4M.secboot.qcow2' format='raw'/>
++  </os>
++  <features>
++    <acpi/>
++  </features>
++  <devices>
++    <emulator>/usr/bin/qemu-system-x86_64</emulator>
++    <controller type='usb' model='none'/>
++    <memballoon model='none'/>
++  </devices>
++</domain>
+diff --git a/tests/qemuxmlconftest.c b/tests/qemuxmlconftest.c
+index 343af22303..88935b1e1b 100644
+--- a/tests/qemuxmlconftest.c
++++ b/tests/qemuxmlconftest.c
+@@ -1660,6 +1660,7 @@ mymain(void)
+     DO_TEST_CAPS_LATEST("firmware-auto-efi-format-nvram-raw");
+     DO_TEST_CAPS_LATEST_ABI_UPDATE("firmware-auto-efi-format-nvram-raw");
+     DO_TEST_CAPS_LATEST_FAILURE("firmware-auto-efi-format-nvram-raw-loader-path");
++    DO_TEST_CAPS_LATEST_FAILURE("firmware-auto-efi-format-nvram-raw-nvramtemplate-path");
+     DO_TEST_CAPS_ARCH_LATEST("firmware-auto-efi-format-loader-raw", "aarch64");
+     DO_TEST_CAPS_ARCH_LATEST_ABI_UPDATE("firmware-auto-efi-format-loader-raw", "aarch64");
+     DO_TEST_CAPS_LATEST("firmware-auto-efi-format-mismatch");
+-- 
+2.53.0

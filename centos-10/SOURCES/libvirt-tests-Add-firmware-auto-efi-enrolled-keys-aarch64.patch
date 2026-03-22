@@ -1,0 +1,181 @@
+From eaa18be2c7fa1a9ddd59c6888663a47ae6697881 Mon Sep 17 00:00:00 2001
+Message-ID: <eaa18be2c7fa1a9ddd59c6888663a47ae6697881.1772815313.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Wed, 10 Dec 2025 00:02:52 +0100
+Subject: [PATCH] tests: Add firmware-auto-efi-enrolled-keys-aarch64
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This test case demonstrates how to automatically configure an
+aarch64 guest so that Secure Boot support is available and only
+signed operating systems are allowed to boot.
+
+It currently fails because there is no firmware descriptor that
+describes a suitable firmware build yet. That will change in a
+future commit.
+
+In addition to the latest version, the test case is also executed
+against QEMU 8.2.0 specifically. This version of the test case is
+intended to fail, because the uefi-vars device that we need to
+support Secure Boot on aarch64 was not yet available in that
+version of QEMU. The exact error message will change down the
+line.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+Reviewed-by: Daniel P. Berrangé <berrange@redhat.com>
+(cherry picked from commit 38c4c3f654473c6779b7afd00eb802b5550efb15)
+
+Conflicts:
+
+  * tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-latest.xml
+
+    - GIC version mismatch caused by capabilities files
+      being outdated or missing downstream
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ ...fi-enrolled-keys-aarch64.aarch64-8.2.0.err |  1 +
+ ...fi-enrolled-keys-aarch64.aarch64-8.2.0.xml | 30 +++++++++++++++++++
+ ...i-enrolled-keys-aarch64.aarch64-latest.err |  1 +
+ ...i-enrolled-keys-aarch64.aarch64-latest.xml | 30 +++++++++++++++++++
+ ...irmware-auto-efi-enrolled-keys-aarch64.xml | 20 +++++++++++++
+ tests/qemuxmlconftest.c                       |  2 ++
+ 6 files changed, 84 insertions(+)
+ create mode 100644 tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-8.2.0.err
+ create mode 100644 tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-8.2.0.xml
+ create mode 100644 tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-latest.err
+ create mode 100644 tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-latest.xml
+ create mode 100644 tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.xml
+
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-8.2.0.err b/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-8.2.0.err
+new file mode 100644
+index 0000000000..3edb2b3451
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-8.2.0.err
+@@ -0,0 +1 @@
++operation failed: Unable to find 'efi' firmware that is compatible with the current configuration
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-8.2.0.xml b/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-8.2.0.xml
+new file mode 100644
+index 0000000000..5213a41b90
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-8.2.0.xml
+@@ -0,0 +1,30 @@
++<domain type='kvm'>
++  <name>guest</name>
++  <uuid>63840878-0deb-4095-97e6-fc444d9bc9fa</uuid>
++  <memory unit='KiB'>1048576</memory>
++  <currentMemory unit='KiB'>1048576</currentMemory>
++  <vcpu placement='static'>1</vcpu>
++  <os firmware='efi'>
++    <type arch='aarch64' machine='virt-8.2'>hvm</type>
++    <firmware>
++      <feature enabled='yes' name='enrolled-keys'/>
++    </firmware>
++    <loader format='raw'/>
++    <boot dev='hd'/>
++  </os>
++  <features>
++    <acpi/>
++    <gic version='3'/>
++  </features>
++  <clock offset='utc'/>
++  <on_poweroff>destroy</on_poweroff>
++  <on_reboot>restart</on_reboot>
++  <on_crash>destroy</on_crash>
++  <devices>
++    <emulator>/usr/bin/qemu-system-aarch64</emulator>
++    <controller type='usb' index='0' model='none'/>
++    <controller type='pci' index='0' model='pcie-root'/>
++    <audio id='1' type='none'/>
++    <memballoon model='none'/>
++  </devices>
++</domain>
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-latest.err b/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-latest.err
+new file mode 100644
+index 0000000000..3edb2b3451
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-latest.err
+@@ -0,0 +1 @@
++operation failed: Unable to find 'efi' firmware that is compatible with the current configuration
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-latest.xml b/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-latest.xml
+new file mode 100644
+index 0000000000..5213a41b90
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-latest.xml
+@@ -0,0 +1,30 @@
++<domain type='kvm'>
++  <name>guest</name>
++  <uuid>63840878-0deb-4095-97e6-fc444d9bc9fa</uuid>
++  <memory unit='KiB'>1048576</memory>
++  <currentMemory unit='KiB'>1048576</currentMemory>
++  <vcpu placement='static'>1</vcpu>
++  <os firmware='efi'>
++    <type arch='aarch64' machine='virt-8.2'>hvm</type>
++    <firmware>
++      <feature enabled='yes' name='enrolled-keys'/>
++    </firmware>
++    <loader format='raw'/>
++    <boot dev='hd'/>
++  </os>
++  <features>
++    <acpi/>
++    <gic version='3'/>
++  </features>
++  <clock offset='utc'/>
++  <on_poweroff>destroy</on_poweroff>
++  <on_reboot>restart</on_reboot>
++  <on_crash>destroy</on_crash>
++  <devices>
++    <emulator>/usr/bin/qemu-system-aarch64</emulator>
++    <controller type='usb' index='0' model='none'/>
++    <controller type='pci' index='0' model='pcie-root'/>
++    <audio id='1' type='none'/>
++    <memballoon model='none'/>
++  </devices>
++</domain>
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.xml b/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.xml
+new file mode 100644
+index 0000000000..6cd382d0fa
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.xml
+@@ -0,0 +1,20 @@
++<domain type='kvm'>
++  <name>guest</name>
++  <uuid>63840878-0deb-4095-97e6-fc444d9bc9fa</uuid>
++  <memory unit='KiB'>1048576</memory>
++  <vcpu placement='static'>1</vcpu>
++  <os firmware='efi'>
++    <type arch='aarch64' machine='virt-8.2'>hvm</type>
++    <firmware>
++      <feature enabled='yes' name='enrolled-keys'/>
++    </firmware>
++  </os>
++  <features>
++    <acpi/>
++  </features>
++  <devices>
++    <emulator>/usr/bin/qemu-system-aarch64</emulator>
++    <controller type='usb' model='none'/>
++    <memballoon model='none'/>
++  </devices>
++</domain>
+diff --git a/tests/qemuxmlconftest.c b/tests/qemuxmlconftest.c
+index 77a5a18384..48c2649aa5 100644
+--- a/tests/qemuxmlconftest.c
++++ b/tests/qemuxmlconftest.c
+@@ -1651,6 +1651,8 @@ mymain(void)
+     DO_TEST_CAPS_LATEST("firmware-auto-efi-secboot");
+     DO_TEST_CAPS_LATEST("firmware-auto-efi-no-secboot");
+     DO_TEST_CAPS_LATEST("firmware-auto-efi-enrolled-keys");
++    DO_TEST_CAPS_ARCH_LATEST_FAILURE("firmware-auto-efi-enrolled-keys-aarch64", "aarch64");
++    DO_TEST_CAPS_ARCH_VER_FAILURE("firmware-auto-efi-enrolled-keys-aarch64", "aarch64", "8.2.0");
+     DO_TEST_CAPS_LATEST("firmware-auto-efi-no-enrolled-keys");
+     DO_TEST_CAPS_LATEST_PARSE_ERROR("firmware-auto-efi-enrolled-keys-no-secboot");
+     DO_TEST_CAPS_LATEST("firmware-auto-efi-smm-off");
+-- 
+2.53.0

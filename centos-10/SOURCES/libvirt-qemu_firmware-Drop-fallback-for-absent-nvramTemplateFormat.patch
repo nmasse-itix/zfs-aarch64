@@ -1,0 +1,44 @@
+From 3273ec0979f661b5a00ce91e77c03427b5725df2 Mon Sep 17 00:00:00 2001
+Message-ID: <3273ec0979f661b5a00ce91e77c03427b5725df2.1772815312.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Mon, 24 Nov 2025 17:57:25 +0100
+Subject: [PATCH] qemu_firmware: Drop fallback for absent nvramTemplateFormat
+
+If this information is missing, the parsing code will consider
+the firmware descriptor to be invalid and matching against it will
+not even be attempted. So we can safely drop this redundant
+fallback.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 876a5d34d45afd71f509c971e37bdb45ceb8cc28)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/qemu/qemu_firmware.c | 8 +-------
+ 1 file changed, 1 insertion(+), 7 deletions(-)
+
+diff --git a/src/qemu/qemu_firmware.c b/src/qemu/qemu_firmware.c
+index 47a3987b64..9dff3828a2 100644
+--- a/src/qemu/qemu_firmware.c
++++ b/src/qemu/qemu_firmware.c
+@@ -1421,14 +1421,8 @@ qemuFirmwareEnableFeaturesModern(virDomainDef *def,
+             loader->nvramTemplateFormat = VIR_STORAGE_FILE_NONE;
+ 
+             if (!loader->nvram || virStorageSourceIsLocalStorage(loader->nvram)) {
+-                /* validation when parsing the JSON files ensures that we get
+-                 * only 'raw' and 'qcow2' here. Fall back to sharing format with loader */
+-                if (flash->nvram_template.format)
+-                    loader->nvramTemplateFormat = virStorageFileFormatTypeFromString(flash->nvram_template.format);
+-                else
+-                    loader->nvramTemplateFormat = loader->format;
+-
+                 loader->nvramTemplate = g_strdup(flash->nvram_template.filename);
++                loader->nvramTemplateFormat = virStorageFileFormatTypeFromString(flash->nvram_template.format);
+             }
+         }
+ 
+-- 
+2.53.0

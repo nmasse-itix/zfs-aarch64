@@ -1,0 +1,129 @@
+From 24b8d8f936dcff1a78dda3253876f9242b3ec98b Mon Sep 17 00:00:00 2001
+Message-ID: <24b8d8f936dcff1a78dda3253876f9242b3ec98b.1771423832.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Sun, 15 Feb 2026 19:28:16 +0100
+Subject: [PATCH] qemu: Convert vfioDeviceFd to qemuFDPassDirect
+
+This cleans up creating QEMU command line and makes it easier when
+adding hotplug support.
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 4611f227c7882c8b9237da5e2fab21932ef6bd51)
+
+Resolves: https://issues.redhat.com/browse/RHEL-150353
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/qemu/qemu_command.c | 15 +++++----------
+ src/qemu/qemu_domain.c  |  4 ++--
+ src/qemu/qemu_domain.h  |  2 +-
+ src/qemu/qemu_process.c |  6 +++++-
+ tests/qemuxmlconftest.c |  4 +++-
+ 5 files changed, 16 insertions(+), 15 deletions(-)
+
+diff --git a/src/qemu/qemu_command.c b/src/qemu/qemu_command.c
+index 0057934cc6..8038aa3115 100644
+--- a/src/qemu/qemu_command.c
++++ b/src/qemu/qemu_command.c
+@@ -4811,12 +4811,10 @@ qemuBuildPCIHostdevDevProps(const virDomainDef *def,
+         pcisrc->driver.iommufd == VIR_TRISTATE_BOOL_YES) {
+         qemuDomainHostdevPrivate *hostdevPriv = QEMU_DOMAIN_HOSTDEV_PRIVATE(dev);
+ 
+-        if (hostdevPriv->vfioDeviceFd != -1) {
+-            g_autofree char *fdstr = g_strdup_printf("%d", hostdevPriv->vfioDeviceFd);
+-            if (virJSONValueObjectAdd(&props, "S:fd", fdstr, NULL) < 0)
+-                return NULL;
+-            hostdevPriv->vfioDeviceFd = -1;
+-        }
++        if (virJSONValueObjectAdd(&props,
++                                  "S:fd", qemuFDPassDirectGetPath(hostdevPriv->vfioDeviceFd),
++                                  NULL) < 0)
++            return NULL;
+     }
+ 
+     if (qemuBuildDeviceAddressProps(props, def, dev->info) < 0)
+@@ -5266,10 +5264,7 @@ qemuBuildHostdevCommandLine(virCommand *cmd,
+             if (subsys->u.pci.driver.iommufd == VIR_TRISTATE_BOOL_YES) {
+                 qemuDomainHostdevPrivate *hostdevPriv = QEMU_DOMAIN_HOSTDEV_PRIVATE(hostdev);
+ 
+-                if (hostdevPriv->vfioDeviceFd != -1) {
+-                    virCommandPassFD(cmd, hostdevPriv->vfioDeviceFd,
+-                                     VIR_COMMAND_PASS_FD_CLOSE_PARENT);
+-                }
++                qemuFDPassDirectTransferCommand(hostdevPriv->vfioDeviceFd, cmd);
+             }
+ 
+             if (!(devprops = qemuBuildPCIHostdevDevProps(def, hostdev)))
+diff --git a/src/qemu/qemu_domain.c b/src/qemu/qemu_domain.c
+index d9cd9324e0..ada9d3431c 100644
+--- a/src/qemu/qemu_domain.c
++++ b/src/qemu/qemu_domain.c
+@@ -1245,7 +1245,7 @@ qemuDomainHostdevPrivateDispose(void *obj)
+ {
+     qemuDomainHostdevPrivate *priv = obj;
+ 
+-    VIR_FORCE_CLOSE(priv->vfioDeviceFd);
++    g_clear_pointer(&priv->vfioDeviceFd, qemuFDPassDirectFree);
+ }
+ 
+ 
+@@ -1271,7 +1271,7 @@ qemuDomainHostdevPrivateNew(void)
+     if (!(priv = virObjectNew(qemuDomainHostdevPrivateClass)))
+         return NULL;
+ 
+-    priv->vfioDeviceFd = -1;
++    priv->vfioDeviceFd = NULL;
+ 
+     return (virObject *) priv;
+ }
+diff --git a/src/qemu/qemu_domain.h b/src/qemu/qemu_domain.h
+index a5403ecc93..8aa94fc25b 100644
+--- a/src/qemu/qemu_domain.h
++++ b/src/qemu/qemu_domain.h
+@@ -471,7 +471,7 @@ struct _qemuDomainHostdevPrivate {
+     virObject parent;
+ 
+     /* VFIO device file descriptor for iommufd passthrough */
+-    int vfioDeviceFd;
++    qemuFDPassDirect *vfioDeviceFd;
+ };
+ 
+ 
+diff --git a/src/qemu/qemu_process.c b/src/qemu/qemu_process.c
+index 91167d73bc..59fff1aa19 100644
+--- a/src/qemu/qemu_process.c
++++ b/src/qemu/qemu_process.c
+@@ -7710,10 +7710,14 @@ qemuProcessOpenVfioDeviceFd(virDomainHostdevDef *hostdev)
+ {
+     qemuDomainHostdevPrivate *hostdevPriv = QEMU_DOMAIN_HOSTDEV_PRIVATE(hostdev);
+     virDomainHostdevSubsysPCI *pci = &hostdev->source.subsys.u.pci;
++    g_autofree char *name = g_strdup_printf("hostdev-%s-fd", hostdev->info->alias);
++    int vfioDeviceFd;
+ 
+-    if ((hostdevPriv->vfioDeviceFd = virPCIDeviceOpenVfioFd(&pci->addr)) < 0)
++    if ((vfioDeviceFd = virPCIDeviceOpenVfioFd(&pci->addr)) < 0)
+         return -1;
+ 
++    hostdevPriv->vfioDeviceFd = qemuFDPassDirectNew(name, &vfioDeviceFd);
++
+     return 0;
+ }
+ 
+diff --git a/tests/qemuxmlconftest.c b/tests/qemuxmlconftest.c
+index eeb9298b2e..aa877bf16a 100644
+--- a/tests/qemuxmlconftest.c
++++ b/tests/qemuxmlconftest.c
+@@ -357,8 +357,10 @@ testQemuPrepareHostdevPCI(virDomainHostdevDef *hostdev)
+     qemuDomainHostdevPrivate *hostdevPriv = QEMU_DOMAIN_HOSTDEV_PRIVATE(hostdev);
+ 
+     if (virHostdevIsPCIDeviceWithIOMMUFD(hostdev)) {
++        g_autofree char *name = g_strdup_printf("hostdev-%s-fd", hostdev->info->alias);
+         /* Use a placeholder FD value for tests */
+-        hostdevPriv->vfioDeviceFd = 0;
++        int vfioDeviceFD = 0;
++        hostdevPriv->vfioDeviceFd = qemuFDPassDirectNew(name, &vfioDeviceFD);
+     }
+ }
+ 
+-- 
+2.53.0

@@ -1,0 +1,99 @@
+From 560b1e9ff0dd80b473894993371614df3c71a118 Mon Sep 17 00:00:00 2001
+Message-ID: <560b1e9ff0dd80b473894993371614df3c71a118.1772815313.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Mon, 19 Jan 2026 17:34:23 +0100
+Subject: [PATCH] qemu_firmware: Support extended syntax for ROM firmware
+ descriptors
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The existing syntax can only describe stateless firmware builds,
+while the extended one can additionally describe builds intended
+for use with the uefi-vars device. This involves including the
+path to the corresponding varstore template.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+Reviewed-by: Daniel P. Berrangé <berrange@redhat.com>
+(cherry picked from commit cab5b6532d5f102b33af642a0a67b29477b44b0a)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/qemu/qemu_firmware.c | 29 +++++++++++++++++++++++++++++
+ 1 file changed, 29 insertions(+)
+
+diff --git a/src/qemu/qemu_firmware.c b/src/qemu/qemu_firmware.c
+index f9cb9058ac..7af3f32b85 100644
+--- a/src/qemu/qemu_firmware.c
++++ b/src/qemu/qemu_firmware.c
+@@ -95,6 +95,7 @@ struct _qemuFirmwareMappingFlash {
+ typedef struct _qemuFirmwareMappingMemory qemuFirmwareMappingMemory;
+ struct _qemuFirmwareMappingMemory {
+     char *filename;
++    char *template;
+ };
+ 
+ 
+@@ -219,6 +220,7 @@ static void
+ qemuFirmwareMappingMemoryFreeContent(qemuFirmwareMappingMemory *memory)
+ {
+     g_free(memory->filename);
++    g_free(memory->template);
+ }
+ 
+ 
+@@ -406,7 +408,11 @@ qemuFirmwareMappingMemoryParse(const char *path,
+                                virJSONValue *doc,
+                                qemuFirmwareMappingMemory *memory)
+ {
++    virJSONValue *uefi_vars;
+     const char *filename;
++    const char *template;
++
++    uefi_vars = virJSONValueObjectGet(doc, "uefi-vars");
+ 
+     if (!(filename = virJSONValueObjectGetString(doc, "filename"))) {
+         VIR_DEBUG("missing 'filename' in '%s'", path);
+@@ -415,6 +421,15 @@ qemuFirmwareMappingMemoryParse(const char *path,
+ 
+     memory->filename = g_strdup(filename);
+ 
++    if (uefi_vars) {
++        if (!(template = virJSONValueObjectGetString(uefi_vars, "template"))) {
++            VIR_DEBUG("missing 'template' for 'uefi-vars' in '%s'", path);
++            return -1;
++        }
++
++        memory->template = g_strdup(template);
++    }
++
+     return 0;
+ }
+ 
+@@ -702,6 +717,20 @@ qemuFirmwareMappingMemoryFormat(virJSONValue *mapping,
+                                        memory->filename) < 0)
+         return -1;
+ 
++    if (memory->template) {
++        g_autoptr(virJSONValue) uefi_vars = virJSONValueNewObject();
++
++        if (virJSONValueObjectAppendString(uefi_vars,
++                                           "template",
++                                           memory->template) < 0)
++            return -1;
++
++        if (virJSONValueObjectAppend(mapping,
++                                     "uefi-vars",
++                                     &uefi_vars) < 0)
++            return -1;
++    }
++
+     return 0;
+ }
+ 
+-- 
+2.53.0

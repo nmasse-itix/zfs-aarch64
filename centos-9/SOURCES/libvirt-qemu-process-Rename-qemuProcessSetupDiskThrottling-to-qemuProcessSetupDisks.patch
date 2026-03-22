@@ -1,0 +1,62 @@
+From 14bee26669c6847e946c694d07e55dfec3ede74e Mon Sep 17 00:00:00 2001
+Message-ID: <14bee26669c6847e946c694d07e55dfec3ede74e.1771336751.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Thu, 29 Jan 2026 11:21:38 +0100
+Subject: [PATCH] qemu: process: Rename 'qemuProcessSetupDiskThrottling' to
+ 'qemuProcessSetupDisks'
+
+Rename the runtime disk option setup function to be universal.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 42a39d703d98e4e48f0f9c8779884b6ac107de26)
+
+https://issues.redhat.com/browse/RHEL-147866 [rhel-9.8]
+https://issues.redhat.com/browse/RHEL-131335 [rhel-10.2]
+---
+ src/qemu/qemu_process.c | 16 +++++++---------
+ 1 file changed, 7 insertions(+), 9 deletions(-)
+
+diff --git a/src/qemu/qemu_process.c b/src/qemu/qemu_process.c
+index c99bb36c93..aadfaa92b0 100644
+--- a/src/qemu/qemu_process.c
++++ b/src/qemu/qemu_process.c
+@@ -7964,21 +7964,19 @@ qemuProcessSetupDiskPropsRuntime(qemuMonitor *mon,
+ 
+ 
+ /**
+- * qemuProcessSetupDiskThrottling:
++ * qemuProcessSetupDisks:
+  *
+- * Sets up disk trottling for -blockdev via block_set_io_throttle monitor
+- * command. This hack should be replaced by proper use of the 'throttle'
+- * blockdev driver in qemu once it will support changing of the throttle group.
+- * Same hack is done in qemuDomainAttachDiskGeneric.
++ * Sets up disk settings available only at runtime:
++ *  - trottling for -blockdev via block_set_io_throttle QMP command
+  */
+ static int
+-qemuProcessSetupDiskThrottling(virDomainObj *vm,
+-                               virDomainAsyncJob asyncJob)
++qemuProcessSetupDisks(virDomainObj *vm,
++                      virDomainAsyncJob asyncJob)
+ {
+     size_t i;
+     int ret = -1;
+ 
+-    VIR_DEBUG("Setting up disk throttling for -blockdev via block_set_io_throttle");
++    VIR_DEBUG("Setting up disk config via runtime commands");
+ 
+     if (qemuDomainObjEnterMonitorAsync(vm, asyncJob) < 0)
+         return -1;
+@@ -8575,7 +8573,7 @@ qemuProcessLaunch(virConnectPtr conn,
+     if (qemuProcessSetupBalloon(vm, asyncJob) < 0)
+         goto cleanup;
+ 
+-    if (qemuProcessSetupDiskThrottling(vm, asyncJob) < 0)
++    if (qemuProcessSetupDisks(vm, asyncJob) < 0)
+         goto cleanup;
+ 
+     /* Since CPUs were not started yet, the balloon could not return the memory
+-- 
+2.53.0

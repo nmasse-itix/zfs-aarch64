@@ -1,0 +1,154 @@
+From 71ed9b3cb411e469d78fd5203799f3086127b9c3 Mon Sep 17 00:00:00 2001
+Message-ID: <71ed9b3cb411e469d78fd5203799f3086127b9c3.1772815314.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Tue, 11 Nov 2025 15:33:41 +0100
+Subject: [PATCH] qemu_command: Use uefi-vars device where appropriate
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This makes guests actually functional.
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+Reviewed-by: Daniel P. Berrangé <berrange@redhat.com>
+(cherry picked from commit bcda5b2efdf7c3472fd15dc758aad6842c214481)
+
+Conflicts:
+
+  * tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-latest.args
+    tests/qemuxmlconfdata/firmware-auto-efi-varstore-aarch64.aarch64-latest.args
+    tests/qemuxmlconfdata/firmware-manual-efi-varstore-aarch64.aarch64-latest.args
+
+    - GIC version mismatch caused by capabilities files
+      being outdated or missing downstream
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/qemu/qemu_command.c                       | 34 +++++++++++++++++++
+ ...-enrolled-keys-aarch64.aarch64-latest.args |  1 +
+ ...o-efi-varstore-aarch64.aarch64-latest.args |  1 +
+ ...e-auto-efi-varstore-q35.x86_64-latest.args |  1 +
+ ...l-efi-varstore-aarch64.aarch64-latest.args |  1 +
+ ...manual-efi-varstore-q35.x86_64-latest.args |  1 +
+ 6 files changed, 39 insertions(+)
+
+diff --git a/src/qemu/qemu_command.c b/src/qemu/qemu_command.c
+index 521aefbc10..7b1b470398 100644
+--- a/src/qemu/qemu_command.c
++++ b/src/qemu/qemu_command.c
+@@ -9788,6 +9788,37 @@ qemuBuildDomainLoaderCommandLine(virCommand *cmd,
+ }
+ 
+ 
++static int
++qemuBuildUefiVarsCommandLine(virCommand *cmd,
++                             const virDomainDef *def,
++                             virQEMUCaps *qemuCaps)
++{
++    virDomainLoaderDef *loader = def->os.loader;
++    virDomainVarstoreDef *varstore = def->os.varstore;
++    g_autoptr(virJSONValue) props = NULL;
++    const char *model = NULL;
++
++    if (!loader || !varstore || !varstore->path)
++        return 0;
++
++    if (ARCH_IS_X86(def->os.arch))
++        model = "uefi-vars-x64";
++    else
++        model = "uefi-vars-sysbus";
++
++    if (virJSONValueObjectAdd(&props,
++                              "s:driver", model,
++                              "s:jsonfile", varstore->path,
++                              NULL) < 0)
++        return -1;
++
++    if (qemuBuildDeviceCommandlineFromJSON(cmd, props, def, qemuCaps) < 0)
++        return -1;
++
++    return 0;
++}
++
++
+ static int
+ qemuBuildTPMDevCmd(virCommand *cmd,
+                    const virDomainDef *def,
+@@ -10862,6 +10893,9 @@ qemuBuildCommandLine(virDomainObj *vm,
+ 
+     qemuBuildDomainLoaderCommandLine(cmd, def);
+ 
++    if (qemuBuildUefiVarsCommandLine(cmd, def, qemuCaps) < 0)
++        return NULL;
++
+     if (qemuBuildMemCommandLine(cmd, def, qemuCaps, priv) < 0)
+         return NULL;
+ 
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-latest.args b/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-latest.args
+index 1cd04c87b1..caf1933091 100644
+--- a/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-latest.args
++++ b/tests/qemuxmlconfdata/firmware-auto-efi-enrolled-keys-aarch64.aarch64-latest.args
+@@ -13,6 +13,7 @@ XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-guest/.config \
+ -machine virt-8.2,usb=off,gic-version=3,dump-guest-core=off,memory-backend=mach-virt.ram,acpi=on \
+ -accel kvm \
+ -bios /usr/share/edk2/aarch64/QEMU_EFI.qemuvars.fd \
++-device '{"driver":"uefi-vars-sysbus","jsonfile":"/var/lib/libvirt/qemu/varstore/guest.json"}' \
+ -m size=1048576k \
+ -object '{"qom-type":"memory-backend-ram","id":"mach-virt.ram","size":1073741824}' \
+ -overcommit mem-lock=off \
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-varstore-aarch64.aarch64-latest.args b/tests/qemuxmlconfdata/firmware-auto-efi-varstore-aarch64.aarch64-latest.args
+index 1cd04c87b1..caf1933091 100644
+--- a/tests/qemuxmlconfdata/firmware-auto-efi-varstore-aarch64.aarch64-latest.args
++++ b/tests/qemuxmlconfdata/firmware-auto-efi-varstore-aarch64.aarch64-latest.args
+@@ -13,6 +13,7 @@ XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-guest/.config \
+ -machine virt-8.2,usb=off,gic-version=3,dump-guest-core=off,memory-backend=mach-virt.ram,acpi=on \
+ -accel kvm \
+ -bios /usr/share/edk2/aarch64/QEMU_EFI.qemuvars.fd \
++-device '{"driver":"uefi-vars-sysbus","jsonfile":"/var/lib/libvirt/qemu/varstore/guest.json"}' \
+ -m size=1048576k \
+ -object '{"qom-type":"memory-backend-ram","id":"mach-virt.ram","size":1073741824}' \
+ -overcommit mem-lock=off \
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-varstore-q35.x86_64-latest.args b/tests/qemuxmlconfdata/firmware-auto-efi-varstore-q35.x86_64-latest.args
+index 9a899c2a65..392ea77c28 100644
+--- a/tests/qemuxmlconfdata/firmware-auto-efi-varstore-q35.x86_64-latest.args
++++ b/tests/qemuxmlconfdata/firmware-auto-efi-varstore-q35.x86_64-latest.args
+@@ -14,6 +14,7 @@ XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-guest/.config \
+ -accel kvm \
+ -cpu qemu64 \
+ -bios /usr/share/edk2/ovmf/OVMF.qemuvars.fd \
++-device '{"driver":"uefi-vars-x64","jsonfile":"/var/lib/libvirt/qemu/varstore/guest.json"}' \
+ -m size=1048576k \
+ -object '{"qom-type":"memory-backend-ram","id":"pc.ram","size":1073741824}' \
+ -overcommit mem-lock=off \
+diff --git a/tests/qemuxmlconfdata/firmware-manual-efi-varstore-aarch64.aarch64-latest.args b/tests/qemuxmlconfdata/firmware-manual-efi-varstore-aarch64.aarch64-latest.args
+index 1cd04c87b1..1989405e07 100644
+--- a/tests/qemuxmlconfdata/firmware-manual-efi-varstore-aarch64.aarch64-latest.args
++++ b/tests/qemuxmlconfdata/firmware-manual-efi-varstore-aarch64.aarch64-latest.args
+@@ -13,6 +13,7 @@ XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-guest/.config \
+ -machine virt-8.2,usb=off,gic-version=3,dump-guest-core=off,memory-backend=mach-virt.ram,acpi=on \
+ -accel kvm \
+ -bios /usr/share/edk2/aarch64/QEMU_EFI.qemuvars.fd \
++-device '{"driver":"uefi-vars-sysbus","jsonfile":"/path/to/guest.json"}' \
+ -m size=1048576k \
+ -object '{"qom-type":"memory-backend-ram","id":"mach-virt.ram","size":1073741824}' \
+ -overcommit mem-lock=off \
+diff --git a/tests/qemuxmlconfdata/firmware-manual-efi-varstore-q35.x86_64-latest.args b/tests/qemuxmlconfdata/firmware-manual-efi-varstore-q35.x86_64-latest.args
+index 9a899c2a65..6c04c8c39f 100644
+--- a/tests/qemuxmlconfdata/firmware-manual-efi-varstore-q35.x86_64-latest.args
++++ b/tests/qemuxmlconfdata/firmware-manual-efi-varstore-q35.x86_64-latest.args
+@@ -14,6 +14,7 @@ XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-guest/.config \
+ -accel kvm \
+ -cpu qemu64 \
+ -bios /usr/share/edk2/ovmf/OVMF.qemuvars.fd \
++-device '{"driver":"uefi-vars-x64","jsonfile":"/path/to/guest.json"}' \
+ -m size=1048576k \
+ -object '{"qom-type":"memory-backend-ram","id":"pc.ram","size":1073741824}' \
+ -overcommit mem-lock=off \
+-- 
+2.53.0

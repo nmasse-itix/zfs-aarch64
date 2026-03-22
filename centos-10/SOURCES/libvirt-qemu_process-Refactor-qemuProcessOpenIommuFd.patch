@@ -1,0 +1,72 @@
+From da301bafb4eb4658a0b4aae8d8b633bc9a1ef2f9 Mon Sep 17 00:00:00 2001
+Message-ID: <da301bafb4eb4658a0b4aae8d8b633bc9a1ef2f9.1771423658.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Sun, 15 Feb 2026 19:01:35 +0100
+Subject: [PATCH] qemu_process: Refactor qemuProcessOpenIommuFd
+
+This will allow us reusing same code for hotplug.
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit ff2848827f42578115ef54a389a41798a96fd338)
+
+Resolves: https://issues.redhat.com/browse/RHEL-150351
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/qemu/qemu_process.c | 15 ++++++---------
+ 1 file changed, 6 insertions(+), 9 deletions(-)
+
+diff --git a/src/qemu/qemu_process.c b/src/qemu/qemu_process.c
+index dd165512f3..71770d2099 100644
+--- a/src/qemu/qemu_process.c
++++ b/src/qemu/qemu_process.c
+@@ -7676,24 +7676,23 @@ qemuProcessPrepareHostBackendChardevHotplug(virDomainObj *vm,
+ /**
+  * qemuProcessOpenIommuFd:
+  * @vm: domain object
+- * @iommuFd: returned file descriptor
+  *
+  * Opens /dev/iommu file descriptor for the VM.
+  *
+- * Returns: FD on success, -1 on failure
++ * Returns: 0 on success, -1 on failure
+  */
+ static int
+ qemuProcessOpenIommuFd(virDomainObj *vm)
+ {
+-    int fd = -1;
++    qemuDomainObjPrivate *priv = vm->privateData;
+ 
+     VIR_DEBUG("Opening IOMMU FD for domain %s", vm->def->name);
+ 
+-    if ((fd = virIOMMUFDOpenDevice()) < 0)
++    if ((priv->iommufd = virIOMMUFDOpenDevice()) < 0)
+         return -1;
+ 
+-    VIR_DEBUG("Opened IOMMU FD %d for domain %s", fd, vm->def->name);
+-    return fd;
++    VIR_DEBUG("Opened IOMMU FD %d for domain %s", priv->iommufd, vm->def->name);
++    return 0;
+ }
+ 
+ /**
+@@ -7750,7 +7749,6 @@ qemuProcessOpenVfioDeviceFd(virDomainHostdevDef *hostdev)
+ static int
+ qemuProcessOpenVfioFds(virDomainObj *vm)
+ {
+-    qemuDomainObjPrivate *priv = vm->privateData;
+     size_t i;
+ 
+     /* Check if we have any hostdevs that need VFIO FDs */
+@@ -7768,8 +7766,7 @@ qemuProcessOpenVfioFds(virDomainObj *vm)
+                  return -1;
+ 
+             /* Open IOMMU FD */
+-            priv->iommufd = qemuProcessOpenIommuFd(vm);
+-            if (priv->iommufd == -1)
++            if (qemuProcessOpenIommuFd(vm) < 0)
+                 return -1;
+         }
+     }
+-- 
+2.53.0

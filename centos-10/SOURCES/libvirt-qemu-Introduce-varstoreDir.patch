@@ -1,0 +1,135 @@
+From b59cc7646f454eb6626e976f20649d2bce3f21e6 Mon Sep 17 00:00:00 2001
+Message-ID: <b59cc7646f454eb6626e976f20649d2bce3f21e6.1772815313.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Wed, 4 Feb 2026 17:43:36 +0100
+Subject: [PATCH] qemu: Introduce varstoreDir
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This is the same as the existing nvramDir, except it will be
+used to store the files used with the uefi-vars QEMU device.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+Reviewed-by: Daniel P. Berrangé <berrange@redhat.com>
+(cherry picked from commit df3121d21ef257c601c0f15deb78deadcc6bffad)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ libvirt.spec.in        |  1 +
+ src/qemu/meson.build   |  1 +
+ src/qemu/qemu_conf.c   |  4 ++++
+ src/qemu/qemu_conf.h   |  1 +
+ src/qemu/qemu_driver.c | 12 ++++++++++++
+ tests/testutilsqemu.c  |  2 ++
+ 6 files changed, 21 insertions(+)
+
+diff --git a/src/qemu/meson.build b/src/qemu/meson.build
+index ff9a904277..b4fb62f14f 100644
+--- a/src/qemu/meson.build
++++ b/src/qemu/meson.build
+@@ -223,6 +223,7 @@ if conf.has('WITH_QEMU')
+     localstatedir / 'lib' / 'libvirt' / 'qemu' / 'ram',
+     localstatedir / 'lib' / 'libvirt' / 'qemu' / 'save',
+     localstatedir / 'lib' / 'libvirt' / 'qemu' / 'snapshot',
++    localstatedir / 'lib' / 'libvirt' / 'qemu' / 'varstore',
+     localstatedir / 'lib' / 'libvirt' / 'swtpm',
+     localstatedir / 'log' / 'libvirt' / 'qemu',
+     localstatedir / 'log' / 'swtpm' / 'libvirt' / 'qemu',
+diff --git a/src/qemu/qemu_conf.c b/src/qemu/qemu_conf.c
+index 242955200a..0a2eae3d76 100644
+--- a/src/qemu/qemu_conf.c
++++ b/src/qemu/qemu_conf.c
+@@ -167,6 +167,7 @@ virQEMUDriverConfig *virQEMUDriverConfigNew(bool privileged,
+         cfg->checkpointDir = g_strdup_printf("%s/checkpoint", cfg->libDir);
+         cfg->autoDumpPath = g_strdup_printf("%s/dump", cfg->libDir);
+         cfg->nvramDir = g_strdup_printf("%s/nvram", cfg->libDir);
++        cfg->varstoreDir = g_strdup_printf("%s/varstore", cfg->libDir);
+         cfg->memoryBackingDir = g_strdup_printf("%s/ram", cfg->libDir);
+     } else if (privileged) {
+         cfg->logDir = g_strdup_printf("%s/log/libvirt/qemu", LOCALSTATEDIR);
+@@ -188,6 +189,7 @@ virQEMUDriverConfig *virQEMUDriverConfigNew(bool privileged,
+         cfg->checkpointDir = g_strdup_printf("%s/checkpoint", cfg->libDir);
+         cfg->autoDumpPath = g_strdup_printf("%s/dump", cfg->libDir);
+         cfg->nvramDir = g_strdup_printf("%s/nvram", cfg->libDir);
++        cfg->varstoreDir = g_strdup_printf("%s/varstore", cfg->libDir);
+         cfg->memoryBackingDir = g_strdup_printf("%s/ram", cfg->libDir);
+         cfg->swtpmStorageDir = g_strdup_printf("%s/lib/libvirt/swtpm",
+                                                LOCALSTATEDIR);
+@@ -215,6 +217,7 @@ virQEMUDriverConfig *virQEMUDriverConfigNew(bool privileged,
+                                              cfg->configBaseDir);
+         cfg->autoDumpPath = g_strdup_printf("%s/qemu/dump", cfg->configBaseDir);
+         cfg->nvramDir = g_strdup_printf("%s/qemu/nvram", cfg->configBaseDir);
++        cfg->varstoreDir = g_strdup_printf("%s/qemu/varstore", cfg->configBaseDir);
+         cfg->memoryBackingDir = g_strdup_printf("%s/qemu/ram", cfg->configBaseDir);
+         cfg->swtpmStorageDir = g_strdup_printf("%s/qemu/swtpm",
+                                                cfg->configBaseDir);
+@@ -367,6 +370,7 @@ static void virQEMUDriverConfigDispose(void *obj)
+     g_free(cfg->checkpointDir);
+     g_free(cfg->channelTargetDir);
+     g_free(cfg->nvramDir);
++    g_free(cfg->varstoreDir);
+ 
+     g_free(cfg->defaultTLSx509certdir);
+     g_free(cfg->defaultTLSx509secretUUID);
+diff --git a/src/qemu/qemu_conf.h b/src/qemu/qemu_conf.h
+index edb65c99f4..3b97d24622 100644
+--- a/src/qemu/qemu_conf.h
++++ b/src/qemu/qemu_conf.h
+@@ -120,6 +120,7 @@ struct _virQEMUDriverConfig {
+     char *checkpointDir;
+     char *channelTargetDir;
+     char *nvramDir;
++    char *varstoreDir;
+     char *swtpmStorageDir;
+ 
+     char *defaultTLSx509certdir;
+diff --git a/src/qemu/qemu_driver.c b/src/qemu/qemu_driver.c
+index f3e7410f9e..d314aa94ce 100644
+--- a/src/qemu/qemu_driver.c
++++ b/src/qemu/qemu_driver.c
+@@ -626,6 +626,11 @@ qemuStateInitialize(bool privileged,
+                              cfg->nvramDir);
+         goto error;
+     }
++    if (g_mkdir_with_parents(cfg->varstoreDir, 0777) < 0) {
++        virReportSystemError(errno, _("Failed to create varstore dir %1$s"),
++                             cfg->varstoreDir);
++        goto error;
++    }
+     if (g_mkdir_with_parents(cfg->memoryBackingDir, 0777) < 0) {
+         virReportSystemError(errno, _("Failed to create memory backing dir %1$s"),
+                              cfg->memoryBackingDir);
+@@ -784,6 +789,13 @@ qemuStateInitialize(bool privileged,
+                                  (int)cfg->group);
+             goto error;
+         }
++        if (chown(cfg->varstoreDir, cfg->user, cfg->group) < 0) {
++            virReportSystemError(errno,
++                                 _("unable to set ownership of '%1$s' to %2$d:%3$d"),
++                                 cfg->varstoreDir, (int)cfg->user,
++                                 (int)cfg->group);
++            goto error;
++        }
+         if (chown(cfg->memoryBackingDir, cfg->user, cfg->group) < 0) {
+             virReportSystemError(errno,
+                                  _("unable to set ownership of '%1$s' to %2$d:%3$d"),
+diff --git a/tests/testutilsqemu.c b/tests/testutilsqemu.c
+index 78ec521266..21dfd3141d 100644
+--- a/tests/testutilsqemu.c
++++ b/tests/testutilsqemu.c
+@@ -336,6 +336,8 @@ int qemuTestDriverInit(virQEMUDriver *driver)
+     cfg->memoryBackingDir = g_strdup("/var/lib/libvirt/qemu/ram");
+     VIR_FREE(cfg->nvramDir);
+     cfg->nvramDir = g_strdup("/var/lib/libvirt/qemu/nvram");
++    VIR_FREE(cfg->varstoreDir);
++    cfg->varstoreDir = g_strdup("/var/lib/libvirt/qemu/varstore");
+     VIR_FREE(cfg->passtStateDir);
+     cfg->passtStateDir = g_strdup("/var/run/libvirt/qemu/passt");
+     VIR_FREE(cfg->dbusStateDir);
+-- 
+2.53.0

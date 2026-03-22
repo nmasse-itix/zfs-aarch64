@@ -1,0 +1,635 @@
+From 4f2048ad6600d3357d83f4868a29b08f9a181104 Mon Sep 17 00:00:00 2001
+Message-ID: <4f2048ad6600d3357d83f4868a29b08f9a181104.1770383182.git.jdenemar@redhat.com>
+From: Nathan Chen <nathanc@nvidia.com>
+Date: Fri, 30 Jan 2026 10:59:18 -0800
+Subject: [PATCH] tests: qemuxmlconfdata: provide iommufd sample XML and CLI
+ args
+
+Provide sample XML and CLI args for the iommufd XML schema
+for pc, q35, and virt machine types.
+
+Signed-off-by: Nathan Chen <nathanc@nvidia.com>
+Reviewed-by: Pavel Hrdina <phrdina@redhat.com>
+(cherry picked from commit 74fc02d792f7ee55d2e0a7b9ad4e6d751c36ceb8)
+
+Resolves: https://issues.redhat.com/browse/RHEL-74202
+Resolves: https://issues.redhat.com/browse/RHEL-126346
+
+Conflicts:
+    - missing upstream commit 5b080bc5801ea2b15296d3f89be75a0882b317c2
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ .../iommufd-q35.x86_64-latest.args            | 41 +++++++++++++
+ .../iommufd-q35.x86_64-latest.xml             | 60 +++++++++++++++++++
+ tests/qemuxmlconfdata/iommufd-q35.xml         | 38 ++++++++++++
+ ...fd-virt-pci-bus-single.aarch64-latest.args | 33 ++++++++++
+ ...ufd-virt-pci-bus-single.aarch64-latest.xml | 34 +++++++++++
+ .../iommufd-virt-pci-bus-single.xml           | 22 +++++++
+ .../iommufd-virt.aarch64-latest.args          | 37 ++++++++++++
+ .../iommufd-virt.aarch64-latest.xml           | 56 +++++++++++++++++
+ tests/qemuxmlconfdata/iommufd-virt.xml        | 29 +++++++++
+ .../iommufd.x86_64-latest.args                | 35 +++++++++++
+ .../qemuxmlconfdata/iommufd.x86_64-latest.xml | 38 ++++++++++++
+ tests/qemuxmlconfdata/iommufd.xml             | 30 ++++++++++
+ tests/qemuxmlconftest.c                       | 34 +++++++++++
+ 13 files changed, 487 insertions(+)
+ create mode 100644 tests/qemuxmlconfdata/iommufd-q35.x86_64-latest.args
+ create mode 100644 tests/qemuxmlconfdata/iommufd-q35.x86_64-latest.xml
+ create mode 100644 tests/qemuxmlconfdata/iommufd-q35.xml
+ create mode 100644 tests/qemuxmlconfdata/iommufd-virt-pci-bus-single.aarch64-latest.args
+ create mode 100644 tests/qemuxmlconfdata/iommufd-virt-pci-bus-single.aarch64-latest.xml
+ create mode 100644 tests/qemuxmlconfdata/iommufd-virt-pci-bus-single.xml
+ create mode 100644 tests/qemuxmlconfdata/iommufd-virt.aarch64-latest.args
+ create mode 100644 tests/qemuxmlconfdata/iommufd-virt.aarch64-latest.xml
+ create mode 100644 tests/qemuxmlconfdata/iommufd-virt.xml
+ create mode 100644 tests/qemuxmlconfdata/iommufd.x86_64-latest.args
+ create mode 100644 tests/qemuxmlconfdata/iommufd.x86_64-latest.xml
+ create mode 100644 tests/qemuxmlconfdata/iommufd.xml
+
+diff --git a/tests/qemuxmlconfdata/iommufd-q35.x86_64-latest.args b/tests/qemuxmlconfdata/iommufd-q35.x86_64-latest.args
+new file mode 100644
+index 0000000000..7d819e141b
+--- /dev/null
++++ b/tests/qemuxmlconfdata/iommufd-q35.x86_64-latest.args
+@@ -0,0 +1,41 @@
++LC_ALL=C \
++PATH=/bin \
++HOME=/var/lib/libvirt/qemu/domain--1-q35-test \
++USER=test \
++LOGNAME=test \
++XDG_DATA_HOME=/var/lib/libvirt/qemu/domain--1-q35-test/.local/share \
++XDG_CACHE_HOME=/var/lib/libvirt/qemu/domain--1-q35-test/.cache \
++XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-q35-test/.config \
++/usr/bin/qemu-system-x86_64 \
++-name guest=q35-test,debug-threads=on \
++-S \
++-object '{"qom-type":"secret","id":"masterKey0","format":"raw","file":"/var/lib/libvirt/qemu/domain--1-q35-test/master-key.aes"}' \
++-machine q35,usb=off,dump-guest-core=off,memory-backend=pc.ram,acpi=off \
++-accel tcg \
++-cpu qemu64 \
++-m size=2097152k \
++-object '{"qom-type":"memory-backend-ram","id":"pc.ram","size":2147483648}' \
++-overcommit mem-lock=off \
++-smp 2,sockets=2,cores=1,threads=1 \
++-uuid 11dbdcdd-4c3b-482b-8903-9bdb8c0a2774 \
++-display none \
++-no-user-config \
++-nodefaults \
++-chardev socket,id=charmonitor,fd=1729,server=on,wait=off \
++-mon chardev=charmonitor,id=monitor,mode=control \
++-rtc base=utc \
++-no-shutdown \
++-boot strict=on \
++-device '{"driver":"pcie-root-port","port":16,"chassis":1,"id":"pci.1","bus":"pcie.0","multifunction":true,"addr":"0x2"}' \
++-device '{"driver":"pcie-root-port","port":17,"chassis":2,"id":"pci.2","bus":"pcie.0","addr":"0x2.0x1"}' \
++-device '{"driver":"qemu-xhci","id":"usb","bus":"pci.1","addr":"0x0"}' \
++-blockdev '{"driver":"host_device","filename":"/dev/HostVG/QEMUGuest1","node-name":"libvirt-1-storage","read-only":false}' \
++-device '{"driver":"ide-hd","bus":"ide.0","drive":"libvirt-1-storage","id":"sata0-0-0","bootindex":1}' \
++-audiodev '{"id":"audio1","driver":"none"}' \
++-device '{"driver":"qxl-vga","id":"video0","max_outputs":1,"ram_size":67108864,"vram_size":33554432,"vram64_size_mb":0,"vgamem_mb":8,"bus":"pcie.0","addr":"0x1"}' \
++-global ICH9-LPC.noreboot=off \
++-watchdog-action reset \
++-object '{"qom-type":"iommufd","id":"iommufd0","fd":"-1"}' \
++-device '{"driver":"vfio-pci","host":"0000:06:12.5","id":"hostdev0","iommufd":"iommufd0","fd":"0","bus":"pcie.0","addr":"0x3"}' \
++-sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
++-msg timestamp=on
+diff --git a/tests/qemuxmlconfdata/iommufd-q35.x86_64-latest.xml b/tests/qemuxmlconfdata/iommufd-q35.x86_64-latest.xml
+new file mode 100644
+index 0000000000..bb76252b61
+--- /dev/null
++++ b/tests/qemuxmlconfdata/iommufd-q35.x86_64-latest.xml
+@@ -0,0 +1,60 @@
++<domain type='qemu'>
++  <name>q35-test</name>
++  <uuid>11dbdcdd-4c3b-482b-8903-9bdb8c0a2774</uuid>
++  <memory unit='KiB'>2097152</memory>
++  <currentMemory unit='KiB'>2097152</currentMemory>
++  <vcpu placement='static' cpuset='0-1'>2</vcpu>
++  <os>
++    <type arch='x86_64' machine='q35'>hvm</type>
++    <boot dev='hd'/>
++  </os>
++  <cpu mode='custom' match='exact' check='none'>
++    <model fallback='forbid'>qemu64</model>
++  </cpu>
++  <clock offset='utc'/>
++  <on_poweroff>destroy</on_poweroff>
++  <on_reboot>restart</on_reboot>
++  <on_crash>destroy</on_crash>
++  <devices>
++    <emulator>/usr/bin/qemu-system-x86_64</emulator>
++    <disk type='block' device='disk'>
++      <driver name='qemu' type='raw'/>
++      <source dev='/dev/HostVG/QEMUGuest1'/>
++      <target dev='sda' bus='sata'/>
++      <address type='drive' controller='0' bus='0' target='0' unit='0'/>
++    </disk>
++    <controller type='pci' index='0' model='pcie-root'/>
++    <controller type='pci' index='1' model='pcie-root-port'>
++      <model name='pcie-root-port'/>
++      <target chassis='1' port='0x10'/>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0' multifunction='on'/>
++    </controller>
++    <controller type='pci' index='2' model='pcie-root-port'>
++      <model name='pcie-root-port'/>
++      <target chassis='2' port='0x11'/>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x1'/>
++    </controller>
++    <controller type='sata' index='0'>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x1f' function='0x2'/>
++    </controller>
++    <controller type='usb' index='0' model='qemu-xhci'>
++      <address type='pci' domain='0x0000' bus='0x01' slot='0x00' function='0x0'/>
++    </controller>
++    <input type='mouse' bus='ps2'/>
++    <input type='keyboard' bus='ps2'/>
++    <audio id='1' type='none'/>
++    <video>
++      <model type='qxl' ram='65536' vram='32768' vgamem='8192' heads='1' primary='yes'/>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x0'/>
++    </video>
++    <hostdev mode='subsystem' type='pci' managed='yes'>
++      <driver iommufd='yes'/>
++      <source>
++        <address domain='0x0000' bus='0x06' slot='0x12' function='0x5'/>
++      </source>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
++    </hostdev>
++    <watchdog model='itco' action='reset'/>
++    <memballoon model='none'/>
++  </devices>
++</domain>
+diff --git a/tests/qemuxmlconfdata/iommufd-q35.xml b/tests/qemuxmlconfdata/iommufd-q35.xml
+new file mode 100644
+index 0000000000..f3c2269fb1
+--- /dev/null
++++ b/tests/qemuxmlconfdata/iommufd-q35.xml
+@@ -0,0 +1,38 @@
++<domain type='qemu'>
++  <name>q35-test</name>
++  <uuid>11dbdcdd-4c3b-482b-8903-9bdb8c0a2774</uuid>
++  <memory unit='KiB'>2097152</memory>
++  <currentMemory unit='KiB'>2097152</currentMemory>
++  <vcpu placement='static' cpuset='0-1'>2</vcpu>
++  <os>
++    <type arch='x86_64' machine='q35'>hvm</type>
++    <boot dev='hd'/>
++  </os>
++  <clock offset='utc'/>
++  <on_poweroff>destroy</on_poweroff>
++  <on_reboot>restart</on_reboot>
++  <on_crash>destroy</on_crash>
++  <devices>
++    <emulator>/usr/bin/qemu-system-x86_64</emulator>
++    <disk type='block' device='disk'>
++      <source dev='/dev/HostVG/QEMUGuest1'/>
++      <target dev='sda' bus='sata'/>
++      <address type='drive' controller='0' bus='0' target='0' unit='0'/>
++    </disk>
++    <controller type='pci' index='0' model='pcie-root'/>
++    <hostdev mode='subsystem' type='pci' managed='yes'>
++      <driver iommufd='yes'/>
++      <source>
++        <address domain='0x0000' bus='0x06' slot='0x12' function='0x5'/>
++      </source>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
++    </hostdev>
++    <controller type='sata' index='0'/>
++    <input type='mouse' bus='ps2'/>
++    <input type='keyboard' bus='ps2'/>
++    <video>
++      <model type='qxl' ram='65536' vram='32768' vgamem='8192' heads='1'/>
++    </video>
++    <memballoon model='none'/>
++  </devices>
++</domain>
+diff --git a/tests/qemuxmlconfdata/iommufd-virt-pci-bus-single.aarch64-latest.args b/tests/qemuxmlconfdata/iommufd-virt-pci-bus-single.aarch64-latest.args
+new file mode 100644
+index 0000000000..dbfd395168
+--- /dev/null
++++ b/tests/qemuxmlconfdata/iommufd-virt-pci-bus-single.aarch64-latest.args
+@@ -0,0 +1,33 @@
++LC_ALL=C \
++PATH=/bin \
++HOME=/var/lib/libvirt/qemu/domain--1-foo \
++USER=test \
++LOGNAME=test \
++XDG_DATA_HOME=/var/lib/libvirt/qemu/domain--1-foo/.local/share \
++XDG_CACHE_HOME=/var/lib/libvirt/qemu/domain--1-foo/.cache \
++XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-foo/.config \
++/usr/bin/qemu-system-aarch64 \
++-name guest=foo,debug-threads=on \
++-S \
++-object '{"qom-type":"secret","id":"masterKey0","format":"raw","file":"/var/lib/libvirt/qemu/domain--1-foo/master-key.aes"}' \
++-machine virt,usb=off,gic-version=2,dump-guest-core=off,memory-backend=mach-virt.ram,acpi=off \
++-accel tcg \
++-cpu cortex-a15 \
++-m size=1048576k \
++-object '{"qom-type":"memory-backend-ram","id":"mach-virt.ram","size":1073741824}' \
++-overcommit mem-lock=off \
++-smp 1,sockets=1,cores=1,threads=1 \
++-uuid 6ba7b810-9dad-11d1-80b4-00c04fd430c8 \
++-display none \
++-no-user-config \
++-nodefaults \
++-chardev socket,id=charmonitor,fd=1729,server=on,wait=off \
++-mon chardev=charmonitor,id=monitor,mode=control \
++-rtc base=utc \
++-no-shutdown \
++-boot strict=on \
++-audiodev '{"id":"audio1","driver":"none"}' \
++-object '{"qom-type":"iommufd","id":"iommufd0","fd":"-1"}' \
++-device '{"driver":"vfio-pci","host":"0000:06:12.5","id":"hostdev0","iommufd":"iommufd0","fd":"0","bus":"pcie.0","addr":"0x1"}' \
++-sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
++-msg timestamp=on
+diff --git a/tests/qemuxmlconfdata/iommufd-virt-pci-bus-single.aarch64-latest.xml b/tests/qemuxmlconfdata/iommufd-virt-pci-bus-single.aarch64-latest.xml
+new file mode 100644
+index 0000000000..97b6e1e1c7
+--- /dev/null
++++ b/tests/qemuxmlconfdata/iommufd-virt-pci-bus-single.aarch64-latest.xml
+@@ -0,0 +1,34 @@
++<domain type='qemu'>
++  <name>foo</name>
++  <uuid>6ba7b810-9dad-11d1-80b4-00c04fd430c8</uuid>
++  <memory unit='KiB'>1048576</memory>
++  <currentMemory unit='KiB'>1048576</currentMemory>
++  <vcpu placement='static'>1</vcpu>
++  <os>
++    <type arch='aarch64' machine='virt'>hvm</type>
++    <boot dev='hd'/>
++  </os>
++  <features>
++    <gic version='2'/>
++  </features>
++  <cpu mode='custom' match='exact' check='none'>
++    <model fallback='forbid'>cortex-a15</model>
++  </cpu>
++  <clock offset='utc'/>
++  <on_poweroff>destroy</on_poweroff>
++  <on_reboot>restart</on_reboot>
++  <on_crash>destroy</on_crash>
++  <devices>
++    <emulator>/usr/bin/qemu-system-aarch64</emulator>
++    <controller type='pci' index='0' model='pcie-root'/>
++    <audio id='1' type='none'/>
++    <hostdev mode='subsystem' type='pci' managed='yes'>
++      <driver iommufd='yes'/>
++      <source>
++        <address domain='0x0000' bus='0x06' slot='0x12' function='0x5'/>
++      </source>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x0'/>
++    </hostdev>
++    <memballoon model='none'/>
++  </devices>
++</domain>
+diff --git a/tests/qemuxmlconfdata/iommufd-virt-pci-bus-single.xml b/tests/qemuxmlconfdata/iommufd-virt-pci-bus-single.xml
+new file mode 100644
+index 0000000000..c0b9d643b4
+--- /dev/null
++++ b/tests/qemuxmlconfdata/iommufd-virt-pci-bus-single.xml
+@@ -0,0 +1,22 @@
++<domain type='qemu'>
++  <name>foo</name>
++  <uuid>6ba7b810-9dad-11d1-80b4-00c04fd430c8</uuid>
++  <memory unit='KiB'>1048576</memory>
++  <currentMemory unit='KiB'>1048576</currentMemory>
++  <vcpu placement='static'>1</vcpu>
++  <os>
++    <type arch='aarch64' machine='virt'>hvm</type>
++  </os>
++  <devices>
++    <emulator>/usr/bin/qemu-system-aarch64</emulator>
++    <controller type='pci' index='0' model='pcie-root'/>
++    <hostdev mode='subsystem' type='pci' managed='yes'>
++      <driver iommufd='yes'/>
++      <source>
++        <address domain='0x0000' bus='0x06' slot='0x12' function='0x5'/>
++      </source>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x0'/>
++    </hostdev>
++    <memballoon model='none'/>
++  </devices>
++</domain>
+diff --git a/tests/qemuxmlconfdata/iommufd-virt.aarch64-latest.args b/tests/qemuxmlconfdata/iommufd-virt.aarch64-latest.args
+new file mode 100644
+index 0000000000..d5713ff826
+--- /dev/null
++++ b/tests/qemuxmlconfdata/iommufd-virt.aarch64-latest.args
+@@ -0,0 +1,37 @@
++LC_ALL=C \
++PATH=/bin \
++HOME=/var/lib/libvirt/qemu/domain--1-foo \
++USER=test \
++LOGNAME=test \
++XDG_DATA_HOME=/var/lib/libvirt/qemu/domain--1-foo/.local/share \
++XDG_CACHE_HOME=/var/lib/libvirt/qemu/domain--1-foo/.cache \
++XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-foo/.config \
++/usr/bin/qemu-system-aarch64 \
++-name guest=foo,debug-threads=on \
++-S \
++-object '{"qom-type":"secret","id":"masterKey0","format":"raw","file":"/var/lib/libvirt/qemu/domain--1-foo/master-key.aes"}' \
++-machine virt,usb=off,gic-version=2,dump-guest-core=off,memory-backend=mach-virt.ram,acpi=off \
++-accel tcg \
++-cpu cortex-a15 \
++-m size=1048576k \
++-object '{"qom-type":"memory-backend-ram","id":"mach-virt.ram","size":1073741824}' \
++-overcommit mem-lock=off \
++-smp 1,sockets=1,cores=1,threads=1 \
++-uuid 6ba7b810-9dad-11d1-80b4-00c04fd430c8 \
++-display none \
++-no-user-config \
++-nodefaults \
++-chardev socket,id=charmonitor,fd=1729,server=on,wait=off \
++-mon chardev=charmonitor,id=monitor,mode=control \
++-rtc base=utc \
++-no-shutdown \
++-boot strict=on \
++-device '{"driver":"pcie-root-port","port":8,"chassis":1,"id":"pci.1","bus":"pcie.0","multifunction":true,"addr":"0x1"}' \
++-device '{"driver":"pcie-root-port","port":9,"chassis":2,"id":"pci.2","bus":"pcie.0","addr":"0x1.0x1"}' \
++-device '{"driver":"pcie-root-port","port":10,"chassis":3,"id":"pci.3","bus":"pcie.0","addr":"0x1.0x2"}' \
++-audiodev '{"id":"audio1","driver":"none"}' \
++-object '{"qom-type":"iommufd","id":"iommufd0","fd":"-1"}' \
++-device '{"driver":"vfio-pci","host":"0000:06:12.5","id":"hostdev0","iommufd":"iommufd0","fd":"0","bus":"pci.1","addr":"0x0"}' \
++-device '{"driver":"vfio-pci","host":"0000:07:12.5","id":"hostdev1","iommufd":"iommufd0","fd":"0","bus":"pci.2","addr":"0x0"}' \
++-sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
++-msg timestamp=on
+diff --git a/tests/qemuxmlconfdata/iommufd-virt.aarch64-latest.xml b/tests/qemuxmlconfdata/iommufd-virt.aarch64-latest.xml
+new file mode 100644
+index 0000000000..6b9fe543b3
+--- /dev/null
++++ b/tests/qemuxmlconfdata/iommufd-virt.aarch64-latest.xml
+@@ -0,0 +1,56 @@
++<domain type='qemu'>
++  <name>foo</name>
++  <uuid>6ba7b810-9dad-11d1-80b4-00c04fd430c8</uuid>
++  <memory unit='KiB'>1048576</memory>
++  <currentMemory unit='KiB'>1048576</currentMemory>
++  <vcpu placement='static'>1</vcpu>
++  <os>
++    <type arch='aarch64' machine='virt'>hvm</type>
++    <boot dev='hd'/>
++  </os>
++  <features>
++    <gic version='2'/>
++  </features>
++  <cpu mode='custom' match='exact' check='none'>
++    <model fallback='forbid'>cortex-a15</model>
++  </cpu>
++  <clock offset='utc'/>
++  <on_poweroff>destroy</on_poweroff>
++  <on_reboot>restart</on_reboot>
++  <on_crash>destroy</on_crash>
++  <devices>
++    <emulator>/usr/bin/qemu-system-aarch64</emulator>
++    <controller type='pci' index='0' model='pcie-root'/>
++    <controller type='pci' index='1' model='pcie-root-port'>
++      <model name='pcie-root-port'/>
++      <target chassis='1' port='0x8'/>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x0' multifunction='on'/>
++    </controller>
++    <controller type='pci' index='2' model='pcie-root-port'>
++      <model name='pcie-root-port'/>
++      <target chassis='2' port='0x9'/>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x1'/>
++    </controller>
++    <controller type='pci' index='3' model='pcie-root-port'>
++      <model name='pcie-root-port'/>
++      <target chassis='3' port='0xa'/>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x2'/>
++    </controller>
++    <audio id='1' type='none'/>
++    <hostdev mode='subsystem' type='pci' managed='yes'>
++      <driver iommufd='yes'/>
++      <source>
++        <address domain='0x0000' bus='0x06' slot='0x12' function='0x5'/>
++      </source>
++      <address type='pci' domain='0x0000' bus='0x01' slot='0x00' function='0x0'/>
++    </hostdev>
++    <hostdev mode='subsystem' type='pci' managed='yes'>
++      <driver iommufd='yes'/>
++      <source>
++        <address domain='0x0000' bus='0x07' slot='0x12' function='0x5'/>
++      </source>
++      <address type='pci' domain='0x0000' bus='0x02' slot='0x00' function='0x0'/>
++    </hostdev>
++    <memballoon model='none'/>
++  </devices>
++</domain>
+diff --git a/tests/qemuxmlconfdata/iommufd-virt.xml b/tests/qemuxmlconfdata/iommufd-virt.xml
+new file mode 100644
+index 0000000000..a75c1cc13b
+--- /dev/null
++++ b/tests/qemuxmlconfdata/iommufd-virt.xml
+@@ -0,0 +1,29 @@
++<domain type='qemu'>
++  <name>foo</name>
++  <uuid>6ba7b810-9dad-11d1-80b4-00c04fd430c8</uuid>
++  <memory unit='KiB'>1048576</memory>
++  <currentMemory unit='KiB'>1048576</currentMemory>
++  <vcpu placement='static'>1</vcpu>
++  <os>
++    <type arch='aarch64' machine='virt'>hvm</type>
++  </os>
++  <devices>
++    <emulator>/usr/bin/qemu-system-aarch64</emulator>
++    <controller type='pci' index='0' model='pcie-root'/>
++    <hostdev mode='subsystem' type='pci' managed='yes'>
++      <driver iommufd='yes'/>
++      <source>
++        <address domain='0x0000' bus='0x06' slot='0x12' function='0x5'/>
++      </source>
++      <address type='pci' domain='0x0000' bus='0x01' slot='0x00' function='0x0'/>
++    </hostdev>
++    <hostdev mode='subsystem' type='pci' managed='yes'>
++      <driver iommufd='yes'/>
++      <source>
++        <address domain='0x0000' bus='0x07' slot='0x12' function='0x5'/>
++      </source>
++      <address type='pci' domain='0x0000' bus='0x02' slot='0x00' function='0x0'/>
++    </hostdev>
++    <memballoon model='none'/>
++  </devices>
++</domain>
+diff --git a/tests/qemuxmlconfdata/iommufd.x86_64-latest.args b/tests/qemuxmlconfdata/iommufd.x86_64-latest.args
+new file mode 100644
+index 0000000000..3130ba2e3a
+--- /dev/null
++++ b/tests/qemuxmlconfdata/iommufd.x86_64-latest.args
+@@ -0,0 +1,35 @@
++LC_ALL=C \
++PATH=/bin \
++HOME=/var/lib/libvirt/qemu/domain--1-foo \
++USER=test \
++LOGNAME=test \
++XDG_DATA_HOME=/var/lib/libvirt/qemu/domain--1-foo/.local/share \
++XDG_CACHE_HOME=/var/lib/libvirt/qemu/domain--1-foo/.cache \
++XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-foo/.config \
++/usr/bin/qemu-system-x86_64 \
++-name guest=foo,debug-threads=on \
++-S \
++-object '{"qom-type":"secret","id":"masterKey0","format":"raw","file":"/var/lib/libvirt/qemu/domain--1-foo/master-key.aes"}' \
++-machine pc,usb=off,dump-guest-core=off,memory-backend=pc.ram,acpi=off \
++-accel tcg \
++-cpu qemu64 \
++-m size=2097152k \
++-object '{"qom-type":"memory-backend-ram","id":"pc.ram","size":2147483648}' \
++-overcommit mem-lock=off \
++-smp 2,sockets=2,cores=1,threads=1 \
++-uuid 3c7c30b5-7866-4b05-8a29-efebccba52a0 \
++-display none \
++-no-user-config \
++-nodefaults \
++-chardev socket,id=charmonitor,fd=1729,server=on,wait=off \
++-mon chardev=charmonitor,id=monitor,mode=control \
++-rtc base=utc \
++-no-shutdown \
++-boot strict=on \
++-device '{"driver":"piix3-usb-uhci","id":"usb","bus":"pci.0","addr":"0x1.0x2"}' \
++-audiodev '{"id":"audio1","driver":"none"}' \
++-object '{"qom-type":"iommufd","id":"iommufd0","fd":"-1"}' \
++-device '{"driver":"vfio-pci","host":"0000:06:12.5","id":"hostdev0","iommufd":"iommufd0","fd":"0","bus":"pci.0","addr":"0x3"}' \
++-device '{"driver":"virtio-balloon-pci","id":"balloon0","bus":"pci.0","addr":"0x2"}' \
++-sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
++-msg timestamp=on
+diff --git a/tests/qemuxmlconfdata/iommufd.x86_64-latest.xml b/tests/qemuxmlconfdata/iommufd.x86_64-latest.xml
+new file mode 100644
+index 0000000000..2e8951aaf6
+--- /dev/null
++++ b/tests/qemuxmlconfdata/iommufd.x86_64-latest.xml
+@@ -0,0 +1,38 @@
++<domain type='qemu'>
++  <name>foo</name>
++  <uuid>3c7c30b5-7866-4b05-8a29-efebccba52a0</uuid>
++  <memory unit='KiB'>2097152</memory>
++  <currentMemory unit='KiB'>2097152</currentMemory>
++  <vcpu placement='static' cpuset='0-1'>2</vcpu>
++  <os>
++    <type arch='x86_64' machine='pc'>hvm</type>
++    <boot dev='hd'/>
++  </os>
++  <cpu mode='custom' match='exact' check='none'>
++    <model fallback='forbid'>qemu64</model>
++  </cpu>
++  <clock offset='utc'/>
++  <on_poweroff>destroy</on_poweroff>
++  <on_reboot>restart</on_reboot>
++  <on_crash>destroy</on_crash>
++  <devices>
++    <emulator>/usr/bin/qemu-system-x86_64</emulator>
++    <controller type='pci' index='0' model='pci-root'/>
++    <controller type='usb' index='0' model='piix3-uhci'>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x2'/>
++    </controller>
++    <input type='mouse' bus='ps2'/>
++    <input type='keyboard' bus='ps2'/>
++    <audio id='1' type='none'/>
++    <hostdev mode='subsystem' type='pci' managed='yes'>
++      <driver iommufd='yes'/>
++      <source>
++        <address domain='0x0000' bus='0x06' slot='0x12' function='0x5'/>
++      </source>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
++    </hostdev>
++    <memballoon model='virtio'>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
++    </memballoon>
++  </devices>
++</domain>
+diff --git a/tests/qemuxmlconfdata/iommufd.xml b/tests/qemuxmlconfdata/iommufd.xml
+new file mode 100644
+index 0000000000..eb278414d2
+--- /dev/null
++++ b/tests/qemuxmlconfdata/iommufd.xml
+@@ -0,0 +1,30 @@
++<domain type='qemu'>
++  <name>foo</name>
++  <uuid>3c7c30b5-7866-4b05-8a29-efebccba52a0</uuid>
++  <memory unit='KiB'>2097152</memory>
++  <currentMemory unit='KiB'>2097152</currentMemory>
++  <vcpu placement='static' cpuset='0-1'>2</vcpu>
++  <os>
++    <type arch='x86_64' machine='pc'>hvm</type>
++    <boot dev='hd'/>
++  </os>
++  <clock offset='utc'/>
++  <on_poweroff>destroy</on_poweroff>
++  <on_reboot>restart</on_reboot>
++  <on_crash>destroy</on_crash>
++  <devices>
++    <emulator>/usr/bin/qemu-system-x86_64</emulator>
++    <controller type='pci' index='0' model='pci-root'/>
++    <hostdev mode='subsystem' type='pci' managed='yes'>
++      <driver iommufd='yes'/>
++      <source>
++        <address domain='0x0000' bus='0x06' slot='0x12' function='0x5'/>
++      </source>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
++    </hostdev>
++    <controller type='usb' index='0'/>
++    <input type='mouse' bus='ps2'/>
++    <input type='keyboard' bus='ps2'/>
++    <memballoon model='virtio'/>
++  </devices>
++</domain>
+diff --git a/tests/qemuxmlconftest.c b/tests/qemuxmlconftest.c
+index 9a3257ea55..757f0a9fc0 100644
+--- a/tests/qemuxmlconftest.c
++++ b/tests/qemuxmlconftest.c
+@@ -351,6 +351,33 @@ fakeNetworkPortGetXMLDesc(virNetworkPortPtr port,
+ }
+ 
+ 
++static void
++testSetupHostdevPrivateData(virDomainDef *def)
++{
++    size_t i;
++
++    for (i = 0; i < def->nhostdevs; i++) {
++        virDomainHostdevDef *hostdev = def->hostdevs[i];
++
++        if (hostdev->mode == VIR_DOMAIN_HOSTDEV_MODE_SUBSYS &&
++            hostdev->source.subsys.type == VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_PCI &&
++            hostdev->source.subsys.u.pci.driver.name == VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_VFIO &&
++            hostdev->source.subsys.u.pci.driver.iommufd == VIR_TRISTATE_BOOL_YES) {
++
++            qemuDomainHostdevPrivate *priv;
++
++            if (!hostdev->privateData) {
++                hostdev->privateData = qemuDomainHostdevPrivateNew();
++            }
++
++            priv = QEMU_DOMAIN_HOSTDEV_PRIVATE(hostdev);
++            /* Use a placeholder FD value for tests */
++            priv->vfioDeviceFd = 0;
++        }
++    }
++}
++
++
+ static virNetworkDriver fakeNetworkDriver = {
+     .networkLookupByName = fakeNetworkLookupByName,
+     .networkGetXMLDesc = fakeNetworkGetXMLDesc,
+@@ -404,6 +431,8 @@ testCompareXMLToArgvCreateArgs(virQEMUDriver *drv,
+     if (testQemuPrepareHostBackendChardevOne(NULL, priv->monConfig, vm) < 0)
+         return NULL;
+ 
++    testSetupHostdevPrivateData(vm->def);
++
+     for (i = 0; i < vm->def->ndisks; i++) {
+         virDomainDiskDef *disk = vm->def->disks[i];
+         virStorageSource *src;
+@@ -3049,6 +3078,11 @@ mymain(void)
+     DO_TEST_CAPS_LATEST_PARSE_ERROR("virtio-iommu-dma-translation");
+     DO_TEST_CAPS_LATEST("acpi-generic-initiator");
+ 
++    DO_TEST_CAPS_LATEST("iommufd");
++    DO_TEST_CAPS_LATEST("iommufd-q35");
++    DO_TEST_CAPS_ARCH_LATEST("iommufd-virt", "aarch64");
++    DO_TEST_CAPS_ARCH_LATEST("iommufd-virt-pci-bus-single", "aarch64");
++
+     DO_TEST_CAPS_LATEST("cpu-hotplug-startup");
+     DO_TEST_CAPS_ARCH_LATEST_PARSE_ERROR("cpu-hotplug-granularity", "ppc64");
+ 
+-- 
+2.52.0

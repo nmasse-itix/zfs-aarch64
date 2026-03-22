@@ -1,0 +1,46 @@
+From 1312b576ca64ad07aaee6fae9024bbdfa621c609 Mon Sep 17 00:00:00 2001
+Message-ID: <1312b576ca64ad07aaee6fae9024bbdfa621c609.1772815314.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Thu, 26 Feb 2026 10:54:18 +0100
+Subject: [PATCH] qemu_hotplug: enter monitor in order to rollback passed FD
+
+Reported-by: Peter Krempa <pkrempa@redhat.com>
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Jiri Denemark <jdenemar@redhat.com>
+(cherry picked from commit 4374dbbbf0d87f0052dd96be96baad6c20963713)
+
+https://issues.redhat.com/browse/RHEL-151916
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/qemu/qemu_hotplug.c | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/src/qemu/qemu_hotplug.c b/src/qemu/qemu_hotplug.c
+index a455c2cd53..bb88815e27 100644
+--- a/src/qemu/qemu_hotplug.c
++++ b/src/qemu/qemu_hotplug.c
+@@ -1682,15 +1682,16 @@ qemuDomainAttachHostPCIDevice(virQEMUDriver *driver,
+     if (teardownmemlock && qemuDomainAdjustMaxMemLock(vm) < 0)
+         VIR_WARN("Unable to reset maximum locked memory on hotplug fail");
+ 
+-    if (removeiommufd) {
+-        qemuDomainObjEnterMonitor(vm);
++    qemuDomainObjEnterMonitor(vm);
++
++    if (removeiommufd)
+         ignore_value(qemuMonitorDelObject(priv->mon, "iommufd0", false));
+-        qemuDomainObjExitMonitor(vm);
+-    }
+ 
+     qemuFDPassDirectTransferMonitorRollback(hostdevPriv->vfioDeviceFd, priv->mon);
+     qemuFDPassDirectTransferMonitorRollback(priv->iommufd, priv->mon);
+ 
++    qemuDomainObjExitMonitor(vm);
++
+     if (releaseaddr)
+         qemuDomainReleaseDeviceAddress(vm, info);
+ 
+-- 
+2.53.0
