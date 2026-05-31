@@ -91,7 +91,7 @@
 
 Name:           zfs
 Version:        2.2.9
-Release:        2%{?dist}
+Release:        3%{?dist}
 Summary:        Commands to control the kernel modules and libraries
 
 Group:          System Environment/Kernel
