@@ -2,6 +2,8 @@
 
 set -Eeuo pipefail
 
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+
 if [ ! -f "$HOME/.config/copr" ] && [ -n "$COPR_CONFIG" ]; then
   echo "Copr configuration file not found. Injecting from environment variable..."
   mkdir -p "$HOME/.config"
@@ -13,7 +15,12 @@ GIT_REPOSITORY="https://github.com/nmasse-itix/zfs-aarch64.git"
 COPR_PROJECT="zfs-aarch64"
 COPR_USERNAME="$(copr-cli whoami)"
 
-for dist in centos-{9,10} fedora-{42,43}; do
+dists=(centos-9 centos-10)
+for v in $(get_fedora_versions); do
+  dists+=("fedora-$v")
+done
+
+for dist in "${dists[@]}"; do
   copr_release="${dist//centos/epel}"
   echo "Building packages for $copr_release..."
   for spec in $dist/SPECS/*.spec; do
