@@ -6,14 +6,20 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 find . -name '*.src.rpm' -delete
 
-echo "Computing a list of currently maintained versions of Fedora and CentOS Stream..."
-dists=( $(get_all_remote_dists) )
+if [ $# -gt 0 ]; then
+  dists=( "$@" )
+else
+  echo "Computing a list of currently maintained versions of Fedora and CentOS Stream..."
+  dists=( $(get_all_remote_dists) )
+fi
 
 for dist in "${dists[@]}"; do
   mkdir -p "$dist/SRPMS"
   find "$dist/SRPMS" -name '*.src.rpm' -delete
   rm -rf "$dist/SOURCES"
-  if [[ "$dist" == fedora-* ]]; then
+  if [[ "$dist" == "fedora-rawhide" ]]; then
+    download_sources_fedora_rawhide "$dist"
+  elif [[ "$dist" == fedora-* ]]; then
     download_sources_fedora "$dist"
   elif [[ "$dist" == centos-* ]]; then
     download_sources_centos_stream "$dist"

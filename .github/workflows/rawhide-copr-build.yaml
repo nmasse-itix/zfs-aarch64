@@ -1,20 +1,17 @@
-name: Trigger COPR Build
+name: Trigger COPR Build for Fedora Rawhide
 
 on:
-  # Trigger on push, but only for SPECS and SOURCES changes
+  # Trigger on push, but only for fedora-rawhide SPECS and SOURCES changes
   push:
     paths:
-    - fedora-*/SPECS/*.spec
-    - fedora-*/SOURCES/**
-    - centos-*/SPECS/*.spec
-    - centos-*/SOURCES/**
-    - '!fedora-rawhide/**'
+    - fedora-rawhide/SPECS/*.spec
+    - fedora-rawhide/SOURCES/**
 
   # Enables manual triggering of the workflow
   workflow_dispatch:
 
 jobs:
-  build-copr:
+  build-copr-rawhide:
     runs-on: ubuntu-latest
 
     # Defines the Fedora container for this job
@@ -22,7 +19,7 @@ jobs:
       image: fedora:latest
 
     steps:
-      # 1. Install pre-requisites
+      # 1. Install copr-cli
       - name: Install copr-cli
         run: dnf install -y copr-cli git git-lfs
 
@@ -33,9 +30,12 @@ jobs:
           ref: ${{ github.head_ref }}
           lfs: true
 
-      # 3. Run the build script
-      - name: Run COPR build script
-        run: ./build.sh
+      # 3. Run the build script for Fedora Rawhide only.
+      # Rawhide moves fast and can break at any time, so this step is best-effort:
+      # a failure here must not fail the whole workflow.
+      - name: Run COPR build script for Fedora Rawhide (best effort)
+        continue-on-error: true
+        run: ./build.sh fedora-rawhide
         # Inject secrets into the container as environment variables
         env:
           COPR_CONFIG: ${{ secrets.COPR_CONFIG }}

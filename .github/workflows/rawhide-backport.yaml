@@ -1,0 +1,48 @@
+name: Backport Packages for Fedora Rawhide (Daily)
+
+# Every day at 02:00 UTC
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  # Enables manual triggering of the workflow
+  workflow_dispatch:
+
+jobs:
+  update-packages-rawhide:
+    runs-on: ubuntu-latest
+
+    # Defines the Fedora container for this job
+    container:
+      image: fedora:latest
+
+    steps:
+      # 1. Install pre-requisites
+      - name: Install pre-requisites
+        run: dnf install -y patch git git-lfs
+
+      # 2. Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          lfs: true
+          # We cannot use the default GITHUB_TOKEN as it is restricted and cannot
+          # trigger another workflow run, which is needed here to trigger the COPR build
+          token: ${{ secrets.COMMIT_TOKEN }}
+
+      # 2.5. Configure Git safe directory
+      - name: Configure Git safe directory
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      # 3. Run the update script for Fedora Rawhide only.
+      # Rawhide moves fast and can break at any time, so this step is best-effort:
+      # a failure here must not fail the whole workflow.
+      - name: Run update script for Fedora Rawhide (best effort)
+        continue-on-error: true
+        run: ./update.sh fedora-rawhide
+
+      # 4. Push changes (if any)
+      - uses: stefanzweifel/git-auto-commit-action@v7
+        with:
+          commit_message: Backport packages from Fedora Rawhide
+          commit_author: Nicolas Massé <nicolas.masse@itix.fr>

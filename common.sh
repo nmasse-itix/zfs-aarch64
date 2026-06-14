@@ -67,3 +67,25 @@ function download_sources_centos_stream () {
     echo "ZFS source RPM not found for CentOS Stream $v, skipping..."
   fi
 }
+
+# Prints the latest Fedora version for which zfs source RPMs are published on
+# download.zfsonlinux.org. This is not necessarily the latest Fedora version.
+function get_latest_zfs_fedora_version () {
+  curl -fsSL "http://download.zfsonlinux.org/fedora/" \
+    | grep -oP '(?<=href=")[0-9]+(?=/")' | sort -n | tail -1
+}
+
+# Downloads the libvirt source RPM from Fedora Rawhide and the zfs source RPMs
+# from the latest Fedora version published on download.zfsonlinux.org (which
+# may lag behind Rawhide).
+function download_sources_fedora_rawhide () {
+  local dist=$1
+  echo "Downloading libvirt source for Fedora Rawhide..."
+  dnf download --repofrompath=$dist,https://dl.fedoraproject.org/pub/fedora/linux/development/rawhide/Everything/source/tree/ --repo="$dist" --source libvirt --destdir $dist/SRPMS/
+  local zfs_version
+  zfs_version="$(get_latest_zfs_fedora_version)"
+  echo "Downloading zfs source from Fedora $zfs_version (latest available on download.zfsonlinux.org)..."
+  if ! dnf download --repofrompath=zfs-$dist,http://download.zfsonlinux.org/fedora/$zfs_version/SRPMS/ --repo=zfs-$dist --source zfs zfs-dkms --destdir $dist/SRPMS/; then
+    echo "ZFS source RPM not found for Fedora $zfs_version, skipping..."
+  fi
+}

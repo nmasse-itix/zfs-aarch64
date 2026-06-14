@@ -15,8 +15,12 @@ GIT_REPOSITORY="https://github.com/nmasse-itix/zfs-aarch64.git"
 COPR_PROJECT="zfs-aarch64"
 COPR_USERNAME="$(copr-cli whoami)"
 
-echo "Computing a list of currently maintained versions of Fedora and CentOS Stream..."
-dists=( $(get_all_remote_dists) )
+if [ $# -gt 0 ]; then
+  dists=( "$@" )
+else
+  echo "Computing a list of currently maintained versions of Fedora and CentOS Stream..."
+  dists=( $(get_all_remote_dists) )
+fi
 
 for dist in "${dists[@]}"; do
   copr_release="${dist//centos/epel}"
@@ -32,7 +36,7 @@ for dist in "${dists[@]}"; do
     # Since the ZFS driver of libvirt is disabled since Fedora 43, we also build it for x86_64.
     # And CentOS never shipped the Libvirt ZFS driver, so we build it for x86_64 as well.
     if [[ "$package_name" == "libvirt" ]]; then
-      if  [[ "$dist_name" == "fedora" && "$dist_version" -ge "43" || "$dist_name" == "centos" ]]; then
+      if  [[ "$dist_name" == "fedora" && ( "$dist_version" == "rawhide" || "$dist_version" -ge "43" ) || "$dist_name" == "centos" ]]; then
         copr_args+=( --chroot "$copr_release-x86_64" )
       fi
     fi
