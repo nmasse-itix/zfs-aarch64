@@ -21,7 +21,7 @@ jobs:
     steps:
       # 1. Install copr-cli
       - name: Install copr-cli
-        run: dnf install -y copr-cli git git-lfs
+        run: dnf install -y copr-cli git git-lfs jq
 
       # 2. Checkout the repository
       - name: Checkout repository
@@ -31,10 +31,7 @@ jobs:
           lfs: true
 
       # 3. Run the build script for Fedora Rawhide only.
-      # Rawhide moves fast and can break at any time, so this step is best-effort:
-      # a failure here must not fail the whole workflow.
       - name: Run COPR build script for Fedora Rawhide (best effort)
-        continue-on-error: true
         run: ./build.sh fedora-rawhide
         # Inject secrets into the container as environment variables
         env:

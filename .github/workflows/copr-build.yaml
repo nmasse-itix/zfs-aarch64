@@ -24,7 +24,7 @@ jobs:
     steps:
       # 1. Install pre-requisites
       - name: Install copr-cli
-        run: dnf install -y copr-cli git git-lfs
+        run: dnf install -y copr-cli git git-lfs jq
 
       # 2. Checkout the repository
       - name: Checkout repository
