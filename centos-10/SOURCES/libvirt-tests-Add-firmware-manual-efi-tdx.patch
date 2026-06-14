@@ -1,0 +1,164 @@
+From 196013b3a99e84453a4b9b5c7b364f42d7da0e8b Mon Sep 17 00:00:00 2001
+Message-ID: <196013b3a99e84453a4b9b5c7b364f42d7da0e8b.1772815313.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Mon, 17 Nov 2025 19:48:43 +0100
+Subject: [PATCH] tests: Add firmware-manual-efi-tdx
+
+This test case demonstrates that firmware selection does not run
+for domains manually configured to use the Intel TDX build of
+edk2, and as a result some expected information is missing; in
+particular, the fact that the firmware type is EFI is not
+reflected in the domain XML.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 8d1bfa69b2cd84ffb677b771a33b5692446a0837)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ ...manual-efi-tdx.x86_64-latest+inteltdx.args | 34 +++++++++++++++
+ ...-manual-efi-tdx.x86_64-latest+inteltdx.xml | 42 +++++++++++++++++++
+ .../firmware-manual-efi-tdx.xml               | 25 +++++++++++
+ tests/qemuxmlconftest.c                       |  3 ++
+ 4 files changed, 104 insertions(+)
+ create mode 100644 tests/qemuxmlconfdata/firmware-manual-efi-tdx.x86_64-latest+inteltdx.args
+ create mode 100644 tests/qemuxmlconfdata/firmware-manual-efi-tdx.x86_64-latest+inteltdx.xml
+ create mode 100644 tests/qemuxmlconfdata/firmware-manual-efi-tdx.xml
+
+diff --git a/tests/qemuxmlconfdata/firmware-manual-efi-tdx.x86_64-latest+inteltdx.args b/tests/qemuxmlconfdata/firmware-manual-efi-tdx.x86_64-latest+inteltdx.args
+new file mode 100644
+index 0000000000..33a73bfc10
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-manual-efi-tdx.x86_64-latest+inteltdx.args
+@@ -0,0 +1,34 @@
++LC_ALL=C \
++PATH=/bin \
++HOME=/var/lib/libvirt/qemu/domain--1-guest \
++USER=test \
++LOGNAME=test \
++XDG_DATA_HOME=/var/lib/libvirt/qemu/domain--1-guest/.local/share \
++XDG_CACHE_HOME=/var/lib/libvirt/qemu/domain--1-guest/.cache \
++XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-guest/.config \
++/usr/bin/qemu-system-x86_64 \
++-name guest=guest,debug-threads=on \
++-S \
++-object '{"qom-type":"secret","id":"masterKey0","format":"raw","file":"/var/lib/libvirt/qemu/domain--1-guest/master-key.aes"}' \
++-machine pc-q35-10.0,usb=off,dump-guest-core=off,memory-backend=pc.ram,confidential-guest-support=lsec0,acpi=on \
++-accel kvm \
++-cpu qemu64 \
++-bios /usr/share/edk2/ovmf/OVMF.inteltdx.secboot.fd \
++-m size=1048576k \
++-object '{"qom-type":"memory-backend-ram","id":"pc.ram","size":1073741824}' \
++-overcommit mem-lock=off \
++-smp 1,sockets=1,cores=1,threads=1 \
++-uuid 63840878-0deb-4095-97e6-fc444d9bc9fa \
++-display none \
++-no-user-config \
++-nodefaults \
++-chardev socket,id=charmonitor,fd=1729,server=on,wait=off \
++-mon chardev=charmonitor,id=monitor,mode=control \
++-rtc base=utc \
++-no-shutdown \
++-boot strict=on \
++-audiodev '{"id":"audio1","driver":"none"}' \
++-global ICH9-LPC.noreboot=off \
++-watchdog-action reset \
++-object '{"qom-type":"tdx-guest","id":"lsec0","mrconfigid":"ASNFZ4mrze8BI0VniavN7wEjRWeJq83vASNFZ4mrze8BI0VniavN7wEjRWeJq83v","mrowner":"ASNFZ4mrze8BI0VniavN7wEjRWeJq83vASNFZ4mrze8BI0VniavN7wEjRWeJq83v","mrownerconfig":"ASNFZ4mrze8BI0VniavN7wEjRWeJq83vASNFZ4mrze8BI0VniavN7wEjRWeJq83v","quote-generation-socket":{"type":"unix","path":"/var/run/tdx-qgs/qgs.socket"},"attributes":268435456}' \
++-msg timestamp=on
+diff --git a/tests/qemuxmlconfdata/firmware-manual-efi-tdx.x86_64-latest+inteltdx.xml b/tests/qemuxmlconfdata/firmware-manual-efi-tdx.x86_64-latest+inteltdx.xml
+new file mode 100644
+index 0000000000..7428a3dfef
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-manual-efi-tdx.x86_64-latest+inteltdx.xml
+@@ -0,0 +1,42 @@
++<domain type='kvm'>
++  <name>guest</name>
++  <uuid>63840878-0deb-4095-97e6-fc444d9bc9fa</uuid>
++  <memory unit='KiB'>1048576</memory>
++  <currentMemory unit='KiB'>1048576</currentMemory>
++  <vcpu placement='static'>1</vcpu>
++  <os>
++    <type arch='x86_64' machine='pc-q35-10.0'>hvm</type>
++    <loader readonly='yes' type='rom'>/usr/share/edk2/ovmf/OVMF.inteltdx.secboot.fd</loader>
++    <boot dev='hd'/>
++  </os>
++  <features>
++    <acpi/>
++  </features>
++  <cpu mode='custom' match='exact' check='none'>
++    <model fallback='forbid'>qemu64</model>
++  </cpu>
++  <clock offset='utc'/>
++  <on_poweroff>destroy</on_poweroff>
++  <on_reboot>restart</on_reboot>
++  <on_crash>destroy</on_crash>
++  <devices>
++    <emulator>/usr/bin/qemu-system-x86_64</emulator>
++    <controller type='usb' index='0' model='none'/>
++    <controller type='sata' index='0'>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x1f' function='0x2'/>
++    </controller>
++    <controller type='pci' index='0' model='pcie-root'/>
++    <input type='mouse' bus='ps2'/>
++    <input type='keyboard' bus='ps2'/>
++    <audio id='1' type='none'/>
++    <watchdog model='itco' action='reset'/>
++    <memballoon model='none'/>
++  </devices>
++  <launchSecurity type='tdx'>
++    <policy>0x10000000</policy>
++    <mrConfigId>ASNFZ4mrze8BI0VniavN7wEjRWeJq83vASNFZ4mrze8BI0VniavN7wEjRWeJq83v</mrConfigId>
++    <mrOwner>ASNFZ4mrze8BI0VniavN7wEjRWeJq83vASNFZ4mrze8BI0VniavN7wEjRWeJq83v</mrOwner>
++    <mrOwnerConfig>ASNFZ4mrze8BI0VniavN7wEjRWeJq83vASNFZ4mrze8BI0VniavN7wEjRWeJq83v</mrOwnerConfig>
++    <quoteGenerationService path='/var/run/tdx-qgs/qgs.socket'/>
++  </launchSecurity>
++</domain>
+diff --git a/tests/qemuxmlconfdata/firmware-manual-efi-tdx.xml b/tests/qemuxmlconfdata/firmware-manual-efi-tdx.xml
+new file mode 100644
+index 0000000000..ee9d63c5fe
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-manual-efi-tdx.xml
+@@ -0,0 +1,25 @@
++<domain type='kvm'>
++  <name>guest</name>
++  <uuid>63840878-0deb-4095-97e6-fc444d9bc9fa</uuid>
++  <memory unit='KiB'>1048576</memory>
++  <vcpu placement='static'>1</vcpu>
++  <os>
++    <type arch='x86_64' machine='pc-q35-10.0'>hvm</type>
++    <loader readonly='yes' type='rom'>/usr/share/edk2/ovmf/OVMF.inteltdx.secboot.fd</loader>
++  </os>
++  <features>
++    <acpi/>
++  </features>
++  <devices>
++    <emulator>/usr/bin/qemu-system-x86_64</emulator>
++    <controller type='usb' index='0' model='none'/>
++    <memballoon model='none'/>
++  </devices>
++  <launchSecurity type='tdx'>
++    <policy>0x10000000</policy>
++    <mrConfigId>ASNFZ4mrze8BI0VniavN7wEjRWeJq83vASNFZ4mrze8BI0VniavN7wEjRWeJq83v</mrConfigId>
++    <mrOwner>ASNFZ4mrze8BI0VniavN7wEjRWeJq83vASNFZ4mrze8BI0VniavN7wEjRWeJq83v</mrOwner>
++    <mrOwnerConfig>ASNFZ4mrze8BI0VniavN7wEjRWeJq83vASNFZ4mrze8BI0VniavN7wEjRWeJq83v</mrOwnerConfig>
++    <quoteGenerationService path='/var/run/tdx-qgs/qgs.socket'/>
++  </launchSecurity>
++</domain>
+diff --git a/tests/qemuxmlconftest.c b/tests/qemuxmlconftest.c
+index a1d26cdfa5..822e29b888 100644
+--- a/tests/qemuxmlconftest.c
++++ b/tests/qemuxmlconftest.c
+@@ -1605,6 +1605,9 @@ mymain(void)
+     DO_TEST_CAPS_ARCH_LATEST_FULL("firmware-manual-efi-sev-snp", "x86_64",
+                                   ARG_CAPS_VARIANT, "+amdsev",
+                                   ARG_END);
++    DO_TEST_CAPS_ARCH_LATEST_FULL("firmware-manual-efi-tdx", "x86_64",
++                                  ARG_CAPS_VARIANT, "+inteltdx",
++                                  ARG_END);
+ 
+     /* Make sure all combinations of ACPI and UEFI behave as expected */
+     DO_TEST_CAPS_ARCH_LATEST("firmware-manual-efi-acpi-aarch64", "aarch64");
+-- 
+2.53.0

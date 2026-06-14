@@ -1,0 +1,66 @@
+From 5bf3d3a12744a55ab362d0d9aff41e9d0d217bf8 Mon Sep 17 00:00:00 2001
+Message-ID: <5bf3d3a12744a55ab362d0d9aff41e9d0d217bf8.1772815313.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Fri, 28 Nov 2025 15:18:35 +0100
+Subject: [PATCH] qemu_firmware: Take NVRAM format into account when matching
+
+Commit d3016e47be5f removed a hunk very similar to the one we're
+adding with the rationale that there is no actual requirement for
+the NVRAM file and the NVRAM template to have the same format,
+which is completely correct: while libvirt will not perform the
+format conversion itself, the user can do that on their own and
+everything (except RESET_NVRAM) will work just fine.
+
+That said, we also need <nvram format='foo'/> specified on its
+own with no <loader> element to result in a firmware build with a
+foo-formatted NVRAM template to be picked. Right now this works
+thanks to the hack at the top of qemuFirmwareFillDomain() which
+copies nvram.format to loader.format, but we want to get rid of
+that because it has additional side effects that can lead to
+confusing outcomes in certain specific scenarios.
+
+So reintroduce this check, but make it extremely narrow: if any
+other information that can influence firmware selection is
+present in the domain XML, ignore the NVRAM format entirely; if
+however the NVRAM format is the only information that was
+provided, consider it when looking for a match.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 798528d2b64db88368c61e7e904e0b7d46de9bd4)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/qemu/qemu_firmware.c | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/src/qemu/qemu_firmware.c b/src/qemu/qemu_firmware.c
+index e13cce0887..8714538ba3 100644
+--- a/src/qemu/qemu_firmware.c
++++ b/src/qemu/qemu_firmware.c
+@@ -1304,6 +1304,21 @@ qemuFirmwareMatchDomain(const virDomainDef *def,
+                           virStorageFileFormatTypeToString(loader->nvramTemplateFormat));
+                 return false;
+             }
++            /* If nvram.format was specified and no other information
++             * that can influence firmware selection was, then treat it
++             * the same as if nvram.templateFormat had been specified.
++             * This ensures that <nvram format='foo'/> continues to work
++             * as a shorthand while not getting in the way otherwise */
++            if (loader && loader->nvram && loader->nvram->format &&
++                !loader->readonly && !loader->type && !loader->secure &&
++                !loader->stateless && !loader->format && !loader->path &&
++                !loader->nvramTemplateFormat && !loader->nvramTemplate &&
++                STRNEQ(flash->nvram_template.format, virStorageFileFormatTypeToString(loader->nvram->format))) {
++                VIR_DEBUG("Discarding loader with mismatching nvram template format '%s' != '%s'",
++                          flash->nvram_template.format,
++                          virStorageFileFormatTypeToString(loader->nvram->format));
++                return false;
++            }
+         } else {
+             if (loader && loader->nvram &&
+                 (loader->nvram->path || loader->nvram->format)) {
+-- 
+2.53.0

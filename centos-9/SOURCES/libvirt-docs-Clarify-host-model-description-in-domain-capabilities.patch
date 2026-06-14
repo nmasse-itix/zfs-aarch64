@@ -1,0 +1,34 @@
+From 4c6ab1e34ea5e57dc0f9880f178354538adf55f7 Mon Sep 17 00:00:00 2001
+Message-ID: <4c6ab1e34ea5e57dc0f9880f178354538adf55f7.1780571166.git.jdenemar@redhat.com>
+From: Jiri Denemark <jdenemar@redhat.com>
+Date: Wed, 11 Mar 2026 12:13:45 +0100
+Subject: [PATCH] docs: Clarify host-model description in domain capabilities
+
+Signed-off-by: Jiri Denemark <jdenemar@redhat.com>
+Reviewed-by: Peter Krempa <pkrempa@redhat.com>
+(cherry picked from commit 0b54c9d535b9b7c832ff8422dca28c84eb75ed2e)
+
+https://issues.redhat.com/browse/RHEL-153653
+
+Signed-off-by: Jiri Denemark <jdenemar@redhat.com>
+---
+ docs/formatdomaincaps.rst | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/docs/formatdomaincaps.rst b/docs/formatdomaincaps.rst
+index 6ba7f84f96..add550a4a5 100644
+--- a/docs/formatdomaincaps.rst
++++ b/docs/formatdomaincaps.rst
+@@ -244,6 +244,10 @@ more details about it:
+    reports physical address size of the host CPU if this value is available and
+    applicable for the requested domain type. This is useful for computing
+    baseline CPU definition which should be compatible with several hosts.
++   Consistently with all other CPU definitions used by libvirt, features
++   implicitly enabled by the selected CPU model (in ``model`` sub element) are
++   not listed. Use ``--expand-cpu-features`` virsh option or the equivalent API
++   flag to request all supported features to be listed in the CPU definition.
+ ``custom``
+    The ``mode`` element contains a list of supported CPU models, each described
+    by a dedicated ``model`` element. The ``usable`` attribute specifies whether
+-- 
+2.54.0

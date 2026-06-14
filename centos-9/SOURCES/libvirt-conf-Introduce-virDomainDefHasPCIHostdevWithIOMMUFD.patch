@@ -1,0 +1,132 @@
+From 748c9648eb88b69e3ed0847126d59d6c7a11eda8 Mon Sep 17 00:00:00 2001
+Message-ID: <748c9648eb88b69e3ed0847126d59d6c7a11eda8.1771423832.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Sun, 15 Feb 2026 18:19:56 +0100
+Subject: [PATCH] conf: Introduce virDomainDefHasPCIHostdevWithIOMMUFD
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 4b176cfc3877cca882d63ab4ed446794d7a05722)
+
+Resolves: https://issues.redhat.com/browse/RHEL-150353
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/conf/domain_conf.c   | 14 ++++++++++++++
+ src/conf/domain_conf.h   |  3 +++
+ src/libvirt_private.syms |  1 +
+ src/qemu/qemu_command.c  | 42 ++++++++++++----------------------------
+ 4 files changed, 30 insertions(+), 30 deletions(-)
+
+diff --git a/src/conf/domain_conf.c b/src/conf/domain_conf.c
+index 9ae48e9abc..cb047e5a3e 100644
+--- a/src/conf/domain_conf.c
++++ b/src/conf/domain_conf.c
+@@ -32482,6 +32482,20 @@ virDomainDefHasPCIHostdev(const virDomainDef *def)
+ }
+ 
+ 
++bool
++virDomainDefHasPCIHostdevWithIOMMUFD(const virDomainDef *def)
++{
++    size_t i;
++
++    for (i = 0; i < def->nhostdevs; i++) {
++        if (virHostdevIsPCIDeviceWithIOMMUFD(def->hostdevs[i]))
++            return true;
++    }
++
++    return false;
++}
++
++
+ bool
+ virDomainDefHasMdevHostdev(const virDomainDef *def)
+ {
+diff --git a/src/conf/domain_conf.h b/src/conf/domain_conf.h
+index d958ed04f9..69a8e79c6d 100644
+--- a/src/conf/domain_conf.h
++++ b/src/conf/domain_conf.h
+@@ -4655,6 +4655,9 @@ virDomainDefHasNVMeDisk(const virDomainDef *def);
+ bool
+ virDomainDefHasPCIHostdev(const virDomainDef *def);
+ 
++bool
++virDomainDefHasPCIHostdevWithIOMMUFD(const virDomainDef *def);
++
+ bool
+ virDomainDefHasMdevHostdev(const virDomainDef *def);
+ 
+diff --git a/src/libvirt_private.syms b/src/libvirt_private.syms
+index 863e50ec4f..effe44fe57 100644
+--- a/src/libvirt_private.syms
++++ b/src/libvirt_private.syms
+@@ -348,6 +348,7 @@ virDomainDefHasNVMeDisk;
+ virDomainDefHasOldStyleROUEFI;
+ virDomainDefHasOldStyleUEFI;
+ virDomainDefHasPCIHostdev;
++virDomainDefHasPCIHostdevWithIOMMUFD;
+ virDomainDefHasTimer;
+ virDomainDefHasUSB;
+ virDomainDefHasVcpusOffline;
+diff --git a/src/qemu/qemu_command.c b/src/qemu/qemu_command.c
+index 1718097b63..482f8d8ca2 100644
+--- a/src/qemu/qemu_command.c
++++ b/src/qemu/qemu_command.c
+@@ -5349,43 +5349,25 @@ qemuBuildIOMMUFDCommandLine(virCommand *cmd,
+                             const virDomainDef *def,
+                             virDomainObj *vm)
+ {
+-    size_t i;
+     qemuDomainObjPrivate *priv = vm->privateData;
+     g_autofree char *fdstr = g_strdup_printf("%d", priv->iommufd);
++    g_autoptr(virJSONValue) props = NULL;
+ 
++    if (!virDomainDefHasPCIHostdevWithIOMMUFD(def))
++        return 0;
+ 
+-    for (i = 0; i < def->nhostdevs; i++) {
+-        virDomainHostdevDef *hostdev = def->hostdevs[i];
+-        virDomainHostdevSubsys *subsys = &hostdev->source.subsys;
+-        g_autoptr(virJSONValue) props = NULL;
++    virCommandPassFD(cmd, priv->iommufd, VIR_COMMAND_PASS_FD_CLOSE_PARENT);
+ 
+-        if (hostdev->mode != VIR_DOMAIN_HOSTDEV_MODE_SUBSYS)
+-            continue;
++    priv->iommufd = -1;
+ 
+-        if (subsys->type != VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_PCI)
+-            continue;
++    if (qemuMonitorCreateObjectProps(&props, "iommufd",
++                                     "iommufd0",
++                                     "S:fd", fdstr,
++                                     NULL) < 0)
++        return -1;
+ 
+-        if (hostdev->info->type == VIR_DOMAIN_DEVICE_ADDRESS_TYPE_UNASSIGNED)
+-            continue;
+-
+-        if (subsys->u.pci.driver.iommufd != VIR_TRISTATE_BOOL_YES)
+-            continue;
+-
+-        virCommandPassFD(cmd, priv->iommufd, VIR_COMMAND_PASS_FD_CLOSE_PARENT);
+-
+-        priv->iommufd = -1;
+-
+-        if (qemuMonitorCreateObjectProps(&props, "iommufd",
+-                                         "iommufd0",
+-                                         "S:fd", fdstr,
+-                                         NULL) < 0)
+-            return -1;
+-
+-        if (qemuBuildObjectCommandlineFromJSON(cmd, props) < 0)
+-            return -1;
+-
+-        break;
+-    }
++    if (qemuBuildObjectCommandlineFromJSON(cmd, props) < 0)
++        return -1;
+ 
+     return 0;
+ }
+-- 
+2.53.0

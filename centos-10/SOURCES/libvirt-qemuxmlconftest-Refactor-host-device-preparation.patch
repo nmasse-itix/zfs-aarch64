@@ -1,0 +1,101 @@
+From d851b46d3794d4ad2d0f9b74c0e0cf1a10d06682 Mon Sep 17 00:00:00 2001
+Message-ID: <d851b46d3794d4ad2d0f9b74c0e0cf1a10d06682.1771423659.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Sat, 14 Feb 2026 11:39:19 +0100
+Subject: [PATCH] qemuxmlconftest: Refactor host device preparation
+
+Create a single place for host device preparation code.
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit cb23831c020a5fab33be417426b2746a73ecdd10)
+
+Conflicts:
+  - missing upstream commit b97afe28f54dae1d122baa33d1a371b68775b7b2
+    tests/qemuxmlconftest.c
+
+Resolves: https://issues.redhat.com/browse/RHEL-150351
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ tests/qemuxmlconftest.c | 59 ++++++++++++++++++++++++++++++-----------
+ 1 file changed, 43 insertions(+), 16 deletions(-)
+
+diff --git a/tests/qemuxmlconftest.c b/tests/qemuxmlconftest.c
+index 757f0a9fc0..0c146601ed 100644
+--- a/tests/qemuxmlconftest.c
++++ b/tests/qemuxmlconftest.c
+@@ -378,6 +378,48 @@ testSetupHostdevPrivateData(virDomainDef *def)
+ }
+ 
+ 
++static void
++testQemuPrepareHostdevUSB(virDomainHostdevDef *hostdev)
++{
++    virDomainHostdevSubsysUSB *usb = &hostdev->source.subsys.u.usb;
++
++    if (!usb->device && !usb->bus) {
++        if (usb->vendor == 0x1234 && usb->product == 0x4321) {
++            usb->bus = 42;
++            usb->device = 0x1234;
++        } else {
++            g_assert_not_reached();
++        }
++    }
++}
++
++
++static void
++testQemuPrepareHostdev(virDomainObj *vm)
++{
++    size_t i;
++
++    for (i = 0; i < vm->def->nhostdevs; i++) {
++        virDomainHostdevDef *hostdev = vm->def->hostdevs[i];
++
++        if (hostdev->mode != VIR_DOMAIN_HOSTDEV_MODE_SUBSYS)
++            continue;
++
++        switch (hostdev->source.subsys.type) {
++        case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_USB:
++            testQemuPrepareHostdevUSB(hostdev);
++            break;
++        case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_PCI:
++        case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_SCSI:
++        case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_SCSI_HOST:
++        case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_MDEV:
++        case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_LAST:
++            break;
++        }
++    }
++}
++
++
+ static virNetworkDriver fakeNetworkDriver = {
+     .networkLookupByName = fakeNetworkLookupByName,
+     .networkGetXMLDesc = fakeNetworkGetXMLDesc,
+@@ -524,22 +566,7 @@ testCompareXMLToArgvCreateArgs(virQEMUDriver *drv,
+         }
+     }
+ 
+-    for (i = 0; i < vm->def->nhostdevs; i++) {
+-        virDomainHostdevDef *hostdev = vm->def->hostdevs[i];
+-
+-        if (hostdev->mode == VIR_DOMAIN_HOSTDEV_MODE_SUBSYS &&
+-            hostdev->source.subsys.type == VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_USB) {
+-            virDomainHostdevSubsysUSB *usb = &hostdev->source.subsys.u.usb;
+-            if (!usb->device && !usb->bus) {
+-                if (usb->vendor == 0x1234 && usb->product == 0x4321) {
+-                    usb->bus = 42;
+-                    usb->device = 0x1234;
+-                } else {
+-                    g_assert_not_reached();
+-                }
+-            }
+-        }
+-    }
++    testQemuPrepareHostdev(vm);
+ 
+     if (flags & FLAG_SLIRP_HELPER) {
+         for (i = 0; i < vm->def->nnets; i++) {
+-- 
+2.53.0

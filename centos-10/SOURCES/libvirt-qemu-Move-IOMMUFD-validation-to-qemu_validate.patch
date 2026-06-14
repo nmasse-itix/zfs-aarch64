@@ -1,0 +1,111 @@
+From cd9099d42dfaa10d7863f1615a35c48db9924191 Mon Sep 17 00:00:00 2001
+Message-ID: <cd9099d42dfaa10d7863f1615a35c48db9924191.1771423658.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Mon, 16 Feb 2026 09:12:02 +0100
+Subject: [PATCH] qemu: Move IOMMUFD validation to qemu_validate
+
+Fail early if kernel doesn't support IOMMUFD.
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 0c1af67be554d4daa2facfb647ce6e9914da2f06)
+
+Resolves: https://issues.redhat.com/browse/RHEL-150351
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/libvirt_private.syms |  1 +
+ src/qemu/qemu_process.c  |  8 +-------
+ src/qemu/qemu_validate.c |  7 +++++++
+ src/util/viriommufd.c    | 13 +++++++++++++
+ src/util/viriommufd.h    |  2 ++
+ 5 files changed, 24 insertions(+), 7 deletions(-)
+
+diff --git a/src/libvirt_private.syms b/src/libvirt_private.syms
+index e2a7a16347..0904265459 100644
+--- a/src/libvirt_private.syms
++++ b/src/libvirt_private.syms
+@@ -2654,6 +2654,7 @@ virInitctlSetRunLevel;
+ 
+ # util/viriommufd.h
+ virIOMMUFDSetRLimitMode;
++virIOMMUFDSupported;
+ 
+ # util/viriscsi.h
+ virISCSIConnectionLogin;
+diff --git a/src/qemu/qemu_process.c b/src/qemu/qemu_process.c
+index 37e688018c..479437fb34 100644
+--- a/src/qemu/qemu_process.c
++++ b/src/qemu/qemu_process.c
+@@ -7690,13 +7690,7 @@ qemuProcessOpenIommuFd(virDomainObj *vm)
+     VIR_DEBUG("Opening IOMMU FD for domain %s", vm->def->name);
+ 
+     if ((fd = open(VIR_IOMMU_DEV_PATH, O_RDWR | O_CLOEXEC)) < 0) {
+-        if (errno == ENOENT) {
+-            virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
+-                           _("IOMMU FD support requires /dev/iommu device"));
+-        } else {
+-            virReportSystemError(errno, "%s",
+-                                 _("cannot open /dev/iommu"));
+-        }
++        virReportSystemError(errno, "%s", _("cannot open /dev/iommu"));
+         return -1;
+     }
+ 
+diff --git a/src/qemu/qemu_validate.c b/src/qemu/qemu_validate.c
+index 18f148f48c..aa441188cb 100644
+--- a/src/qemu/qemu_validate.c
++++ b/src/qemu/qemu_validate.c
+@@ -27,6 +27,7 @@
+ #include "qemu_process.h"
+ #include "domain_conf.h"
+ #include "virbitmap.h"
++#include "viriommufd.h"
+ #include "virlog.h"
+ #include "virutil.h"
+ 
+@@ -2730,6 +2731,12 @@ qemuValidateDomainDeviceDefHostdev(const virDomainHostdevDef *hostdev,
+                                        _("IOMMUFD is not supported by this version of qemu"));
+                         return -1;
+                     }
++
++                    if (!virIOMMUFDSupported()) {
++                        virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
++                                       _("IOMMUFD is not supported by host kernel"));
++                        return -1;
++                    }
+                 }
+             }
+ 
+diff --git a/src/util/viriommufd.c b/src/util/viriommufd.c
+index 5af097683d..44b30029a5 100644
+--- a/src/util/viriommufd.c
++++ b/src/util/viriommufd.c
+@@ -88,3 +88,16 @@ int virIOMMUFDSetRLimitMode(int fd G_GNUC_UNUSED,
+ }
+ 
+ #endif
++
++/**
++ * virIOMMUFDSupported:
++ *
++ * Check the presence of IOMMU device.
++ *
++ * Retruns: true if it exists, false otherwise
++ */
++bool
++virIOMMUFDSupported(void)
++{
++    return virFileExists(VIR_IOMMU_DEV_PATH);
++}
+diff --git a/src/util/viriommufd.h b/src/util/viriommufd.h
+index ebecfe3633..ec6be9fa66 100644
+--- a/src/util/viriommufd.h
++++ b/src/util/viriommufd.h
+@@ -23,3 +23,5 @@
+ #define VIR_IOMMU_DEV_PATH "/dev/iommu"
+ 
+ int virIOMMUFDSetRLimitMode(int fd, bool processAccounting);
++
++bool virIOMMUFDSupported(void);
+-- 
+2.53.0

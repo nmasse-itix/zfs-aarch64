@@ -1,0 +1,155 @@
+From dd70f22383e665b1cad5a6c4c1173f432e5f8662 Mon Sep 17 00:00:00 2001
+Message-ID: <dd70f22383e665b1cad5a6c4c1173f432e5f8662.1772815312.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Fri, 5 Dec 2025 15:31:46 +0100
+Subject: [PATCH] tests: Add
+ firmware-manual-efi-nvram-template-nonstandard-legacy-paths
+
+This test cases demonstrates that it's possible to use a custom
+NVRAM template together with a standard firmware binary even when
+referring to the latter by its legacy path rather than its
+modern, canonical one.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 13ce34e6465cbd46ce1c733dff8f2d5b6a84d24d)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ ...onstandard-legacy-paths.x86_64-latest.args | 37 +++++++++++++++++++
+ ...nonstandard-legacy-paths.x86_64-latest.xml | 37 +++++++++++++++++++
+ ...vram-template-nonstandard-legacy-paths.xml | 20 ++++++++++
+ tests/qemuxmlconftest.c                       |  1 +
+ 4 files changed, 95 insertions(+)
+ create mode 100644 tests/qemuxmlconfdata/firmware-manual-efi-nvram-template-nonstandard-legacy-paths.x86_64-latest.args
+ create mode 100644 tests/qemuxmlconfdata/firmware-manual-efi-nvram-template-nonstandard-legacy-paths.x86_64-latest.xml
+ create mode 100644 tests/qemuxmlconfdata/firmware-manual-efi-nvram-template-nonstandard-legacy-paths.xml
+
+diff --git a/tests/qemuxmlconfdata/firmware-manual-efi-nvram-template-nonstandard-legacy-paths.x86_64-latest.args b/tests/qemuxmlconfdata/firmware-manual-efi-nvram-template-nonstandard-legacy-paths.x86_64-latest.args
+new file mode 100644
+index 0000000000..18ca736065
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-manual-efi-nvram-template-nonstandard-legacy-paths.x86_64-latest.args
+@@ -0,0 +1,37 @@
++LC_ALL=C \
++PATH=/bin \
++HOME=/var/lib/libvirt/qemu/domain--1-guest \
++USER=test \
++LOGNAME=test \
++XDG_DATA_HOME=/var/lib/libvirt/qemu/domain--1-guest/.local/share \
++XDG_CACHE_HOME=/var/lib/libvirt/qemu/domain--1-guest/.cache \
++XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-guest/.config \
++/usr/bin/qemu-system-x86_64 \
++-name guest=guest,debug-threads=on \
++-S \
++-object '{"qom-type":"secret","id":"masterKey0","format":"raw","file":"/var/lib/libvirt/qemu/domain--1-guest/master-key.aes"}' \
++-blockdev '{"driver":"file","filename":"/usr/share/OVMF/OVMF_CODE.fd","node-name":"libvirt-pflash0-storage","auto-read-only":true,"discard":"unmap"}' \
++-blockdev '{"node-name":"libvirt-pflash0-format","read-only":true,"driver":"raw","file":"libvirt-pflash0-storage"}' \
++-blockdev '{"driver":"file","filename":"/var/lib/libvirt/qemu/nvram/guest_VARS.fd","node-name":"libvirt-pflash1-storage","read-only":false}' \
++-machine pc-q35-10.0,usb=off,smm=on,dump-guest-core=off,memory-backend=pc.ram,pflash0=libvirt-pflash0-format,pflash1=libvirt-pflash1-storage,acpi=on \
++-accel tcg \
++-cpu qemu64 \
++-global driver=cfi.pflash01,property=secure,value=on \
++-m size=1048576k \
++-object '{"qom-type":"memory-backend-ram","id":"pc.ram","size":1073741824}' \
++-overcommit mem-lock=off \
++-smp 1,sockets=1,cores=1,threads=1 \
++-uuid 63840878-0deb-4095-97e6-fc444d9bc9fa \
++-display none \
++-no-user-config \
++-nodefaults \
++-chardev socket,id=charmonitor,fd=1729,server=on,wait=off \
++-mon chardev=charmonitor,id=monitor,mode=control \
++-rtc base=utc \
++-no-shutdown \
++-boot strict=on \
++-audiodev '{"id":"audio1","driver":"none"}' \
++-global ICH9-LPC.noreboot=off \
++-watchdog-action reset \
++-sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
++-msg timestamp=on
+diff --git a/tests/qemuxmlconfdata/firmware-manual-efi-nvram-template-nonstandard-legacy-paths.x86_64-latest.xml b/tests/qemuxmlconfdata/firmware-manual-efi-nvram-template-nonstandard-legacy-paths.x86_64-latest.xml
+new file mode 100644
+index 0000000000..8073a042f9
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-manual-efi-nvram-template-nonstandard-legacy-paths.x86_64-latest.xml
+@@ -0,0 +1,37 @@
++<domain type='qemu'>
++  <name>guest</name>
++  <uuid>63840878-0deb-4095-97e6-fc444d9bc9fa</uuid>
++  <memory unit='KiB'>1048576</memory>
++  <currentMemory unit='KiB'>1048576</currentMemory>
++  <vcpu placement='static'>1</vcpu>
++  <os>
++    <type arch='x86_64' machine='pc-q35-10.0'>hvm</type>
++    <loader readonly='yes' secure='yes' type='pflash' format='raw'>/usr/share/OVMF/OVMF_CODE.fd</loader>
++    <nvram template='/path/to/OVMF_VARS.fd' templateFormat='raw' format='raw'>/var/lib/libvirt/qemu/nvram/guest_VARS.fd</nvram>
++    <boot dev='hd'/>
++  </os>
++  <features>
++    <acpi/>
++    <smm state='on'/>
++  </features>
++  <cpu mode='custom' match='exact' check='none'>
++    <model fallback='forbid'>qemu64</model>
++  </cpu>
++  <clock offset='utc'/>
++  <on_poweroff>destroy</on_poweroff>
++  <on_reboot>restart</on_reboot>
++  <on_crash>destroy</on_crash>
++  <devices>
++    <emulator>/usr/bin/qemu-system-x86_64</emulator>
++    <controller type='usb' index='0' model='none'/>
++    <controller type='sata' index='0'>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x1f' function='0x2'/>
++    </controller>
++    <controller type='pci' index='0' model='pcie-root'/>
++    <input type='mouse' bus='ps2'/>
++    <input type='keyboard' bus='ps2'/>
++    <audio id='1' type='none'/>
++    <watchdog model='itco' action='reset'/>
++    <memballoon model='none'/>
++  </devices>
++</domain>
+diff --git a/tests/qemuxmlconfdata/firmware-manual-efi-nvram-template-nonstandard-legacy-paths.xml b/tests/qemuxmlconfdata/firmware-manual-efi-nvram-template-nonstandard-legacy-paths.xml
+new file mode 100644
+index 0000000000..f32d29c6f5
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-manual-efi-nvram-template-nonstandard-legacy-paths.xml
+@@ -0,0 +1,20 @@
++<domain type='qemu'>
++  <name>guest</name>
++  <uuid>63840878-0deb-4095-97e6-fc444d9bc9fa</uuid>
++  <memory unit='KiB'>1048576</memory>
++  <vcpu placement='static'>1</vcpu>
++  <os>
++    <type arch='x86_64' machine='pc-q35-10.0'>hvm</type>
++    <loader readonly='yes' secure='yes' type='pflash'>/usr/share/OVMF/OVMF_CODE.fd</loader>
++    <nvram template='/path/to/OVMF_VARS.fd'/>
++  </os>
++  <features>
++    <acpi/>
++    <smm state='on'/>
++  </features>
++  <devices>
++    <emulator>/usr/bin/qemu-system-x86_64</emulator>
++    <controller type='usb' model='none'/>
++    <memballoon model='none'/>
++  </devices>
++</domain>
+diff --git a/tests/qemuxmlconftest.c b/tests/qemuxmlconftest.c
+index 5c3d494065..d7c732772e 100644
+--- a/tests/qemuxmlconftest.c
++++ b/tests/qemuxmlconftest.c
+@@ -1595,6 +1595,7 @@ mymain(void)
+     DO_TEST_CAPS_LATEST("firmware-manual-efi-nvram-template");
+     DO_TEST_CAPS_LATEST("firmware-manual-efi-nvram-template-nonstandard");
+     DO_TEST_CAPS_LATEST("firmware-manual-efi-nvram-template-nonstandard-format");
++    DO_TEST_CAPS_LATEST("firmware-manual-efi-nvram-template-nonstandard-legacy-paths");
+     DO_TEST_CAPS_LATEST_PARSE_ERROR("firmware-manual-efi-nvram-template-stateless");
+     DO_TEST_CAPS_LATEST("firmware-manual-efi-nvram-network-iscsi");
+     DO_TEST_CAPS_LATEST("firmware-manual-efi-nvram-network-nbd");
+-- 
+2.53.0

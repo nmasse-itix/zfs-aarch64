@@ -1,0 +1,45 @@
+From f875d6f1e560dd9d73e373d576f2c784f6f8cb4c Mon Sep 17 00:00:00 2001
+Message-ID: <f875d6f1e560dd9d73e373d576f2c784f6f8cb4c.1780571166.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Mon, 23 Mar 2026 22:39:58 +0100
+Subject: [PATCH] qemuMigrationSrcBeginXML: Don't call
+ 'qemuMigrationSrcBeginPhaseBlockDirtyBitmaps' with offline VM
+
+Commit a4f610ff3fe190058f1 made the call to
+'qemuMigrationSrcBeginPhaseBlockDirtyBitmaps' inside
+'qemuMigrationSrcBeginXML' unconditional. This unfortunately means that
+it was called also with 'VIR_MIGRATE_OFFLINE'.
+
+Attempting to enter the monitor in such case results in an error:
+
+ error: operation failed: domain is no longer running
+
+Restrict the call only to non-offline migration.
+
+Fixes: a4f610ff3fe190058f18baea18b095d0bc69441b
+Resolves: https://redhat.atlassian.net/browse/RHEL-156800
+Closes: https://gitlab.com/libvirt/libvirt/-/work_items/865
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Jiri Denemark <jdenemar@redhat.com>
+(cherry picked from commit 59fde80f39567101010e7ba4dece4fd68b50090d)
+https://redhat.atlassian.net/browse/RHEL-173433
+---
+ src/qemu/qemu_migration.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/qemu/qemu_migration.c b/src/qemu/qemu_migration.c
+index 2a4df1191d..1fd9b1dd55 100644
+--- a/src/qemu/qemu_migration.c
++++ b/src/qemu/qemu_migration.c
+@@ -2689,7 +2689,8 @@ qemuMigrationSrcBeginXML(virDomainObj *vm,
+     if (!(mig = qemuMigrationCookieNew(vm->def, priv->origname)))
+         return NULL;
+ 
+-    if (qemuMigrationSrcBeginPhaseBlockDirtyBitmaps(mig, vm) < 0)
++    if (!(flags & VIR_MIGRATE_OFFLINE) &&
++        qemuMigrationSrcBeginPhaseBlockDirtyBitmaps(mig, vm) < 0)
+         return NULL;
+ 
+     if (qemuMigrationCookieFormat(mig, driver, vm,
+-- 
+2.54.0

@@ -1,0 +1,69 @@
+From 18aa061f3b4f2b2c2ed6f07120a990935f56d93e Mon Sep 17 00:00:00 2001
+Message-ID: <18aa061f3b4f2b2c2ed6f07120a990935f56d93e.1771423832.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Sat, 14 Feb 2026 06:14:20 +0100
+Subject: [PATCH] conf: Introduce iommufd enum for domaincaps
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 855f8fe9e2454555ba84696750e0e1501dd5ba80)
+
+Resolves: https://issues.redhat.com/browse/RHEL-138544
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ docs/formatdomaincaps.rst      | 7 +++++++
+ src/conf/domain_capabilities.c | 1 +
+ src/conf/domain_capabilities.h | 1 +
+ 3 files changed, 9 insertions(+)
+
+diff --git a/docs/formatdomaincaps.rst b/docs/formatdomaincaps.rst
+index 8b4f0ecff3..6ba7f84f96 100644
+--- a/docs/formatdomaincaps.rst
++++ b/docs/formatdomaincaps.rst
+@@ -461,6 +461,10 @@ Well, only if the following is enabled:
+            <value>vfio</value>
+            <value>xen</value>
+          </enum>
++         <enum name='iommufd'>
++           <value>yes</value>
++           <value>no</value>
++         </enum>
+        </hostdev>
+      </devices>
+    </domainCapabilities>
+@@ -477,6 +481,9 @@ Well, only if the following is enabled:
+    ``mode="capabilities"``.
+ ``pciBackend``
+    Options for the ``name`` attribute of the <driver/> element.
++``iommufd``
++   Options for the ``iommufd`` attribute of the <driver/> element.
++   :since:`Since 12.1.0`
+ 
+ RNG device
+ ^^^^^^^^^^
+diff --git a/src/conf/domain_capabilities.c b/src/conf/domain_capabilities.c
+index f843124695..49179b97ab 100644
+--- a/src/conf/domain_capabilities.c
++++ b/src/conf/domain_capabilities.c
+@@ -620,6 +620,7 @@ virDomainCapsDeviceHostdevFormat(virBuffer *buf,
+     ENUM_PROCESS(hostdev, subsysType, virDomainHostdevSubsysTypeToString);
+     ENUM_PROCESS(hostdev, capsType, virDomainHostdevCapsTypeToString);
+     ENUM_PROCESS(hostdev, pciBackend, virDeviceHostdevPCIDriverNameTypeToString);
++    ENUM_PROCESS(hostdev, iommufd, virTristateBoolTypeToString);
+ 
+     FORMAT_EPILOGUE(hostdev);
+ }
+diff --git a/src/conf/domain_capabilities.h b/src/conf/domain_capabilities.h
+index 437981c711..b10370db8f 100644
+--- a/src/conf/domain_capabilities.h
++++ b/src/conf/domain_capabilities.h
+@@ -108,6 +108,7 @@ struct _virDomainCapsDeviceHostdev {
+     virDomainCapsEnum subsysType;       /* Info about virDomainHostdevSubsysType */
+     virDomainCapsEnum capsType;         /* Info about virDomainHostdevCapsType */
+     virDomainCapsEnum pciBackend;       /* Info about virDomainHostdevSubsysPCIBackendType */
++    virDomainCapsEnum iommufd;          /* Info about iommufd:virTristateBool */
+     /* add new fields here */
+ };
+ 
+-- 
+2.53.0

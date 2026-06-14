@@ -1,0 +1,61 @@
+From 5dd010d79cb3625e01e9721cb770a7bf235b561e Mon Sep 17 00:00:00 2001
+Message-ID: <5dd010d79cb3625e01e9721cb770a7bf235b561e.1772815313.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Wed, 21 Jan 2026 19:42:40 +0100
+Subject: [PATCH] qemu_firmware: Fill in varstore information
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+If the matching firmware requires the use of varstore, we
+have to bubble up information about it, namely the path to
+the template. If the struct member doesn't exist yet, we need
+to allocate it.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+Reviewed-by: Daniel P. Berrangé <berrange@redhat.com>
+(cherry picked from commit da7eb72148ce787e719faf2ceeaa7ff3c458a50a)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/qemu/qemu_firmware.c | 14 ++++++++++++--
+ 1 file changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/src/qemu/qemu_firmware.c b/src/qemu/qemu_firmware.c
+index 60635b559f..5a07e3181f 100644
+--- a/src/qemu/qemu_firmware.c
++++ b/src/qemu/qemu_firmware.c
+@@ -1492,6 +1492,7 @@ qemuFirmwareEnableFeaturesModern(virDomainDef *def,
+     const qemuFirmwareMappingFlash *flash = &fw->mapping.data.flash;
+     const qemuFirmwareMappingMemory *memory = &fw->mapping.data.memory;
+     virDomainLoaderDef *loader = NULL;
++    virDomainVarstoreDef *varstore = NULL;
+     virStorageFileFormat format;
+     bool hasSecureBoot = false;
+     bool hasEnrolledKeys = false;
+@@ -1552,8 +1553,17 @@ qemuFirmwareEnableFeaturesModern(virDomainDef *def,
+         VIR_FREE(loader->path);
+         loader->path = g_strdup(memory->filename);
+ 
+-        VIR_DEBUG("decided on loader '%s'",
+-                  loader->path);
++        if (memory->template) {
++            if (!def->os.varstore)
++                def->os.varstore = virDomainVarstoreDefNew();
++            varstore = def->os.varstore;
++
++            VIR_FREE(varstore->template);
++            varstore->template = g_strdup(memory->template);
++        }
++
++        VIR_DEBUG("decided on loader '%s' template '%s'",
++                  loader->path, NULLSTR(varstore ? varstore->template : NULL));
+         break;
+ 
+     case QEMU_FIRMWARE_DEVICE_NONE:
+-- 
+2.53.0

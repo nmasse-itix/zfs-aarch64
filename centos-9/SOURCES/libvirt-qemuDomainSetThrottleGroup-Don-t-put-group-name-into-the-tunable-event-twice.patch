@@ -1,0 +1,43 @@
+From 537bc39e12472a9cd9bdaa149e680caa4eb7d5f2 Mon Sep 17 00:00:00 2001
+Message-ID: <537bc39e12472a9cd9bdaa149e680caa4eb7d5f2.1769699807.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Fri, 16 Jan 2026 16:39:49 +0100
+Subject: [PATCH] qemuDomainSetThrottleGroup: Don't put group name into the
+ 'tunable' event twice
+
+'qemuDomainSetBlockIoTuneFields' already populates the contents of the
+VIR_DOMAIN_EVENT_ID_TUNABLE params with the group name so there's no
+need to do it explicitly. We'd report the group name twice:
+
+ event 'tunable' for domain 'cd':
+	blkdeviotune.group_name: asdf
+	blkdeviotune.total_bytes_sec: 1234
+	blkdeviotune.group_name: asdf
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit adcc14e1538433ec1b2f4b103cdf641917e63242)
+
+https://issues.redhat.com/browse/RHEL-141820 [rhel-10.2]
+https://issues.redhat.com/browse/RHEL-144010 [rhel-9.8]
+---
+ src/qemu/qemu_driver.c | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/src/qemu/qemu_driver.c b/src/qemu/qemu_driver.c
+index a6d5dd6e05..08a547c546 100644
+--- a/src/qemu/qemu_driver.c
++++ b/src/qemu/qemu_driver.c
+@@ -20378,10 +20378,6 @@ qemuDomainSetThrottleGroup(virDomainPtr dom,
+     if (virDomainObjGetDefs(vm, flags, &def, &persistentDef) < 0)
+         goto endjob;
+ 
+-    if (virTypedParamsAddString(&eventParams, &eventNparams, &eventMaxparams,
+-                                VIR_DOMAIN_TUNABLE_BLKDEV_GROUP_NAME, groupname) < 0)
+-        goto endjob;
+-
+     if (qemuDomainSetBlockIoTuneFields(&info,
+                                        params,
+                                        nparams,
+-- 
+2.52.0

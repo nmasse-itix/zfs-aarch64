@@ -1,0 +1,80 @@
+From 7af5a1f92b63d250922e04b56cae67bfb65fa4f4 Mon Sep 17 00:00:00 2001
+Message-ID: <7af5a1f92b63d250922e04b56cae67bfb65fa4f4.1780571166.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Wed, 18 Mar 2026 11:47:21 +0100
+Subject: [PATCH] conf: Refactor virHostdevIsPCIDevice
+
+Future patches will need to check if the host device uses IOMMUFD or not
+but we also need to keep a function that will check only if it is PCI device.
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Peter Krempa <pkrempa@redhat.com>
+(cherry picked from commit d0afa0a842ce8a6dcb3f881d7dccdf5198f78fa7)
+
+Resolves: https://redhat.atlassian.net/browse/RHEL-156803
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/conf/domain_conf.c | 34 +++++++++++++++++++++++++++++-----
+ 1 file changed, 29 insertions(+), 5 deletions(-)
+
+diff --git a/src/conf/domain_conf.c b/src/conf/domain_conf.c
+index 35de8bab6b..59df028192 100644
+--- a/src/conf/domain_conf.c
++++ b/src/conf/domain_conf.c
+@@ -32782,6 +32782,33 @@ virHostdevIsMdevDevice(const virDomainHostdevDef *hostdev)
+ }
+ 
+ 
++static bool
++virHostdevPCIDevHasIOMMUFD(const virDomainHostdevDef *hostdev)
++{
++    return hostdev->source.subsys.u.pci.driver.name == VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_VFIO &&
++        hostdev->source.subsys.u.pci.driver.iommufd == VIR_TRISTATE_BOOL_YES;
++}
++
++
++static bool
++virHostdevIsPCIDeviceImpl(const virDomainHostdevDef *hostdev,
++                          virTristateBool iommufd)
++{
++    if (hostdev->mode != VIR_DOMAIN_HOSTDEV_MODE_SUBSYS)
++        return false;
++
++    if (hostdev->source.subsys.type != VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_PCI)
++        return false;
++
++    if (iommufd != VIR_TRISTATE_BOOL_ABSENT) {
++        bool hasIOMMUFD = iommufd == VIR_TRISTATE_BOOL_YES;
++        return hasIOMMUFD == virHostdevPCIDevHasIOMMUFD(hostdev);
++    }
++
++    return true;
++}
++
++
+ /**
+  * virHostdevIsPCIDevice:
+  * @hostdev: host device to check
+@@ -32791,8 +32818,7 @@ virHostdevIsMdevDevice(const virDomainHostdevDef *hostdev)
+ bool
+ virHostdevIsPCIDevice(const virDomainHostdevDef *hostdev)
+ {
+-    return hostdev->mode == VIR_DOMAIN_HOSTDEV_MODE_SUBSYS &&
+-        hostdev->source.subsys.type == VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_PCI;
++    return virHostdevIsPCIDeviceImpl(hostdev, VIR_TRISTATE_BOOL_ABSENT);
+ }
+ 
+ 
+@@ -32805,9 +32831,7 @@ virHostdevIsPCIDevice(const virDomainHostdevDef *hostdev)
+ bool
+ virHostdevIsPCIDeviceWithIOMMUFD(const virDomainHostdevDef *hostdev)
+ {
+-    return virHostdevIsPCIDevice(hostdev) &&
+-        hostdev->source.subsys.u.pci.driver.name == VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_VFIO &&
+-        hostdev->source.subsys.u.pci.driver.iommufd == VIR_TRISTATE_BOOL_YES;
++    return virHostdevIsPCIDeviceImpl(hostdev, VIR_TRISTATE_BOOL_YES);
+ }
+ 
+ 
+-- 
+2.54.0

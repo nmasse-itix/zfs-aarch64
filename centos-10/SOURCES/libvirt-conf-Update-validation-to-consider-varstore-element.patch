@@ -1,0 +1,378 @@
+From f47031d4e6439d1daf5711d4117c0fa647196944 Mon Sep 17 00:00:00 2001
+Message-ID: <f47031d4e6439d1daf5711d4117c0fa647196944.1772815313.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Thu, 22 Jan 2026 19:27:03 +0100
+Subject: [PATCH] conf: Update validation to consider varstore element
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The code is reworked quite significantly, but most of the
+existing checks are preserved. Those that aren't, notably the
+one that allowed pflash as the only acceptable non-stateless
+firmware type, are intentionally removed because they will no
+longer reflect reality once support for the uefi-vars QEMU
+device is introduced.
+
+As a side effect, reworking the function in this fashion
+resolves a subtle bug: due to the early exits that were being
+performed when the loader element was missing, the checks at
+the bottom of the function (related to the shim and kernel
+elements) were effectively never performed. This is no longer
+the case.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+Reviewed-by: Daniel P. Berrangé <berrange@redhat.com>
+(cherry picked from commit 1c2dbdf3ac5bed84caeacf585d5143dcf32df75e)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/conf/domain_validate.c                    | 100 +++++++-----------
+ ...-auto-bios-not-stateless.x86_64-latest.err |   2 +-
+ ...-auto-bios-not-stateless.x86_64-latest.xml |  35 ++++++
+ ...firmware-auto-bios-nvram.x86_64-latest.err |   2 +-
+ ...nual-bios-not-stateless.x86_64-latest.args |  32 ++++++
+ ...anual-bios-not-stateless.x86_64-latest.err |   1 -
+ ...anual-bios-not-stateless.x86_64-latest.xml |  28 +++++
+ ...nual-efi-nvram-stateless.x86_64-latest.err |   2 +-
+ ...nvram-template-stateless.x86_64-latest.err |   2 +-
+ ...ware-manual-efi-rw-nvram.x86_64-latest.err |   2 +-
+ tests/qemuxmlconftest.c                       |   7 +-
+ 11 files changed, 144 insertions(+), 69 deletions(-)
+ create mode 100644 tests/qemuxmlconfdata/firmware-auto-bios-not-stateless.x86_64-latest.xml
+ create mode 100644 tests/qemuxmlconfdata/firmware-manual-bios-not-stateless.x86_64-latest.args
+ delete mode 100644 tests/qemuxmlconfdata/firmware-manual-bios-not-stateless.x86_64-latest.err
+ create mode 100644 tests/qemuxmlconfdata/firmware-manual-bios-not-stateless.x86_64-latest.xml
+
+diff --git a/src/conf/domain_validate.c b/src/conf/domain_validate.c
+index 7346a61731..163095d55c 100644
+--- a/src/conf/domain_validate.c
++++ b/src/conf/domain_validate.c
+@@ -1723,95 +1723,46 @@ virDomainDefOSValidate(const virDomainDef *def,
+                        virDomainXMLOption *xmlopt)
+ {
+     virDomainLoaderDef *loader = def->os.loader;
++    virDomainVarstoreDef *varstore = def->os.varstore;
++    virDomainOsDefFirmware firmware = def->os.firmware;
++    int *firmwareFeatures = def->os.firmwareFeatures;
++    bool usesNvram = loader && (loader->nvram || loader->nvramTemplate || loader->nvramTemplateFormat);
+ 
+-    if (def->os.firmware) {
++    if (firmware) {
+         if (xmlopt && !(xmlopt->config.features & VIR_DOMAIN_DEF_FEATURE_FW_AUTOSELECT)) {
+             virReportError(VIR_ERR_XML_DETAIL, "%s",
+                            _("firmware auto selection not implemented for this driver"));
+             return -1;
+         }
+ 
+-        if (def->os.firmwareFeatures &&
+-            def->os.firmwareFeatures[VIR_DOMAIN_OS_DEF_FIRMWARE_FEATURE_ENROLLED_KEYS] == VIR_TRISTATE_BOOL_YES &&
+-            def->os.firmwareFeatures[VIR_DOMAIN_OS_DEF_FIRMWARE_FEATURE_SECURE_BOOT] == VIR_TRISTATE_BOOL_NO) {
++        if (firmwareFeatures &&
++            firmwareFeatures[VIR_DOMAIN_OS_DEF_FIRMWARE_FEATURE_ENROLLED_KEYS] == VIR_TRISTATE_BOOL_YES &&
++            firmwareFeatures[VIR_DOMAIN_OS_DEF_FIRMWARE_FEATURE_SECURE_BOOT] == VIR_TRISTATE_BOOL_NO) {
+             virReportError(VIR_ERR_XML_DETAIL, "%s",
+                            _("firmware feature 'enrolled-keys' cannot be enabled when firmware feature 'secure-boot' is disabled"));
+             return -1;
+         }
+-
+-        if (!loader)
+-            return 0;
+-
+-        if (loader->nvram && def->os.firmware != VIR_DOMAIN_OS_DEF_FIRMWARE_EFI) {
+-            virReportError(VIR_ERR_XML_DETAIL,
+-                           _("firmware type '%1$s' does not support nvram"),
+-                           virDomainOsDefFirmwareTypeToString(def->os.firmware));
+-            return -1;
+-        }
+     } else {
+-        if (def->os.firmwareFeatures) {
++        if (firmwareFeatures) {
+             virReportError(VIR_ERR_XML_DETAIL, "%s",
+                            _("cannot use feature-based firmware autoselection when firmware autoselection is disabled"));
+             return -1;
+         }
+ 
+-        if (!loader)
+-            return 0;
+-
+-        if (!loader->path) {
++        if (loader && !loader->path) {
+             virReportError(VIR_ERR_XML_DETAIL, "%s",
+                            _("no loader path specified and firmware auto selection disabled"));
+             return -1;
+         }
+     }
+ 
+-    if (loader->readonly == VIR_TRISTATE_BOOL_NO) {
+-        if (loader->type == VIR_DOMAIN_LOADER_TYPE_ROM) {
++    if (loader && loader->type == VIR_DOMAIN_LOADER_TYPE_ROM) {
++        if (loader->readonly == VIR_TRISTATE_BOOL_NO) {
+             virReportError(VIR_ERR_XML_DETAIL, "%s",
+                            _("ROM loader type cannot be used as read/write"));
+             return -1;
+         }
+ 
+-        if (loader->nvramTemplate) {
+-            virReportError(VIR_ERR_XML_DETAIL, "%s",
+-                           _("NVRAM template is not permitted when loader is read/write"));
+-            return -1;
+-        }
+-
+-        if (loader->nvram) {
+-            virReportError(VIR_ERR_XML_DETAIL, "%s",
+-                           _("NVRAM is not permitted when loader is read/write"));
+-            return -1;
+-        }
+-    }
+-
+-    if (loader->stateless == VIR_TRISTATE_BOOL_YES) {
+-        if (loader->nvramTemplate) {
+-            virReportError(VIR_ERR_XML_DETAIL, "%s",
+-                           _("NVRAM template is not permitted when loader is stateless"));
+-            return -1;
+-        }
+-
+-        if (loader->nvram) {
+-            virReportError(VIR_ERR_XML_DETAIL, "%s",
+-                           _("NVRAM is not permitted when loader is stateless"));
+-            return -1;
+-        }
+-    } else if (loader->stateless == VIR_TRISTATE_BOOL_NO) {
+-        if (def->os.firmware == VIR_DOMAIN_OS_DEF_FIRMWARE_NONE) {
+-            if (def->os.loader->type != VIR_DOMAIN_LOADER_TYPE_PFLASH) {
+-                virReportError(VIR_ERR_XML_DETAIL, "%s",
+-                               _("Only pflash loader type permits NVRAM"));
+-                return -1;
+-            }
+-        } else if (def->os.firmware != VIR_DOMAIN_OS_DEF_FIRMWARE_EFI) {
+-            virReportError(VIR_ERR_XML_DETAIL, "%s",
+-                           _("Only EFI firmware permits NVRAM"));
+-            return -1;
+-        }
+-    }
+-
+-    if (loader->type == VIR_DOMAIN_LOADER_TYPE_ROM) {
+         if (loader->format &&
+             loader->format != VIR_STORAGE_FILE_RAW) {
+             virReportError(VIR_ERR_XML_DETAIL,
+@@ -1821,6 +1772,33 @@ virDomainDefOSValidate(const virDomainDef *def,
+         }
+     }
+ 
++    if (usesNvram && varstore) {
++            virReportError(VIR_ERR_XML_DETAIL, "%s",
++                           _("Only one of NVRAM/varstore can be used"));
++            return -1;
++    }
++
++    if (usesNvram || varstore) {
++        if (firmware && firmware != VIR_DOMAIN_OS_DEF_FIRMWARE_EFI) {
++            virReportError(VIR_ERR_XML_DETAIL,
++                           _("Firmware type '%1$s' does not support variable storage (NVRAM/varstore)"),
++                           virDomainOsDefFirmwareTypeToString(firmware));
++            return -1;
++        }
++
++        if (loader && loader->stateless == VIR_TRISTATE_BOOL_YES) {
++            virReportError(VIR_ERR_XML_DETAIL, "%s",
++                           _("Variable storage (NVRAM/varstore) is not permitted when loader is stateless"));
++            return -1;
++        }
++
++        if (loader && loader->readonly == VIR_TRISTATE_BOOL_NO) {
++            virReportError(VIR_ERR_XML_DETAIL, "%s",
++                           _("Variable storage (NVRAM/varstore) is not permitted when loader is read/write"));
++            return -1;
++        }
++    }
++
+     if (def->os.shim && !def->os.kernel) {
+         virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
+                        _("shim only allowed with kernel option"));
+diff --git a/tests/qemuxmlconfdata/firmware-auto-bios-not-stateless.x86_64-latest.err b/tests/qemuxmlconfdata/firmware-auto-bios-not-stateless.x86_64-latest.err
+index b058f970a4..743fe27a97 100644
+--- a/tests/qemuxmlconfdata/firmware-auto-bios-not-stateless.x86_64-latest.err
++++ b/tests/qemuxmlconfdata/firmware-auto-bios-not-stateless.x86_64-latest.err
+@@ -1 +1 @@
+-Only EFI firmware permits NVRAM
++operation failed: Unable to find 'bios' firmware that is compatible with the current configuration
+diff --git a/tests/qemuxmlconfdata/firmware-auto-bios-not-stateless.x86_64-latest.xml b/tests/qemuxmlconfdata/firmware-auto-bios-not-stateless.x86_64-latest.xml
+new file mode 100644
+index 0000000000..062835e351
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-auto-bios-not-stateless.x86_64-latest.xml
+@@ -0,0 +1,35 @@
++<domain type='kvm'>
++  <name>guest</name>
++  <uuid>63840878-0deb-4095-97e6-fc444d9bc9fa</uuid>
++  <memory unit='KiB'>1048576</memory>
++  <currentMemory unit='KiB'>1048576</currentMemory>
++  <vcpu placement='static'>1</vcpu>
++  <os firmware='bios'>
++    <type arch='x86_64' machine='pc-q35-10.0'>hvm</type>
++    <loader stateless='no' format='raw'/>
++    <boot dev='hd'/>
++  </os>
++  <features>
++    <acpi/>
++  </features>
++  <cpu mode='custom' match='exact' check='none'>
++    <model fallback='forbid'>qemu64</model>
++  </cpu>
++  <clock offset='utc'/>
++  <on_poweroff>destroy</on_poweroff>
++  <on_reboot>restart</on_reboot>
++  <on_crash>destroy</on_crash>
++  <devices>
++    <emulator>/usr/bin/qemu-system-x86_64</emulator>
++    <controller type='usb' index='0' model='none'/>
++    <controller type='sata' index='0'>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x1f' function='0x2'/>
++    </controller>
++    <controller type='pci' index='0' model='pcie-root'/>
++    <input type='mouse' bus='ps2'/>
++    <input type='keyboard' bus='ps2'/>
++    <audio id='1' type='none'/>
++    <watchdog model='itco' action='reset'/>
++    <memballoon model='none'/>
++  </devices>
++</domain>
+diff --git a/tests/qemuxmlconfdata/firmware-auto-bios-nvram.x86_64-latest.err b/tests/qemuxmlconfdata/firmware-auto-bios-nvram.x86_64-latest.err
+index 772beb49e2..c4eeb92788 100644
+--- a/tests/qemuxmlconfdata/firmware-auto-bios-nvram.x86_64-latest.err
++++ b/tests/qemuxmlconfdata/firmware-auto-bios-nvram.x86_64-latest.err
+@@ -1 +1 @@
+-firmware type 'bios' does not support nvram
++Firmware type 'bios' does not support variable storage (NVRAM/varstore)
+diff --git a/tests/qemuxmlconfdata/firmware-manual-bios-not-stateless.x86_64-latest.args b/tests/qemuxmlconfdata/firmware-manual-bios-not-stateless.x86_64-latest.args
+new file mode 100644
+index 0000000000..969c7ad68c
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-manual-bios-not-stateless.x86_64-latest.args
+@@ -0,0 +1,32 @@
++LC_ALL=C \
++PATH=/bin \
++HOME=/var/lib/libvirt/qemu/domain--1-guest \
++USER=test \
++LOGNAME=test \
++XDG_DATA_HOME=/var/lib/libvirt/qemu/domain--1-guest/.local/share \
++XDG_CACHE_HOME=/var/lib/libvirt/qemu/domain--1-guest/.cache \
++XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-guest/.config \
++/usr/bin/qemu-system-x86_64 \
++-name guest=guest,debug-threads=on \
++-S \
++-object '{"qom-type":"secret","id":"masterKey0","format":"raw","file":"/var/lib/libvirt/qemu/domain--1-guest/master-key.aes"}' \
++-machine pc-i440fx-10.0,usb=off,dump-guest-core=off,memory-backend=pc.ram,acpi=off \
++-accel tcg \
++-cpu qemu64 \
++-bios /usr/share/seabios/bios.bin \
++-m size=1048576k \
++-object '{"qom-type":"memory-backend-ram","id":"pc.ram","size":1073741824}' \
++-overcommit mem-lock=off \
++-smp 1,sockets=1,cores=1,threads=1 \
++-uuid 63840878-0deb-4095-97e6-fc444d9bc9fa \
++-display none \
++-no-user-config \
++-nodefaults \
++-chardev socket,id=charmonitor,fd=1729,server=on,wait=off \
++-mon chardev=charmonitor,id=monitor,mode=control \
++-rtc base=utc \
++-no-shutdown \
++-boot strict=on \
++-audiodev '{"id":"audio1","driver":"none"}' \
++-sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
++-msg timestamp=on
+diff --git a/tests/qemuxmlconfdata/firmware-manual-bios-not-stateless.x86_64-latest.err b/tests/qemuxmlconfdata/firmware-manual-bios-not-stateless.x86_64-latest.err
+deleted file mode 100644
+index 188a5a4180..0000000000
+--- a/tests/qemuxmlconfdata/firmware-manual-bios-not-stateless.x86_64-latest.err
++++ /dev/null
+@@ -1 +0,0 @@
+-Only pflash loader type permits NVRAM
+diff --git a/tests/qemuxmlconfdata/firmware-manual-bios-not-stateless.x86_64-latest.xml b/tests/qemuxmlconfdata/firmware-manual-bios-not-stateless.x86_64-latest.xml
+new file mode 100644
+index 0000000000..075da36d00
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-manual-bios-not-stateless.x86_64-latest.xml
+@@ -0,0 +1,28 @@
++<domain type='qemu'>
++  <name>guest</name>
++  <uuid>63840878-0deb-4095-97e6-fc444d9bc9fa</uuid>
++  <memory unit='KiB'>1048576</memory>
++  <currentMemory unit='KiB'>1048576</currentMemory>
++  <vcpu placement='static'>1</vcpu>
++  <os>
++    <type arch='x86_64' machine='pc-i440fx-10.0'>hvm</type>
++    <loader type='rom' stateless='no' format='raw'>/usr/share/seabios/bios.bin</loader>
++    <boot dev='hd'/>
++  </os>
++  <cpu mode='custom' match='exact' check='none'>
++    <model fallback='forbid'>qemu64</model>
++  </cpu>
++  <clock offset='utc'/>
++  <on_poweroff>destroy</on_poweroff>
++  <on_reboot>restart</on_reboot>
++  <on_crash>destroy</on_crash>
++  <devices>
++    <emulator>/usr/bin/qemu-system-x86_64</emulator>
++    <controller type='usb' index='0' model='none'/>
++    <controller type='pci' index='0' model='pci-root'/>
++    <input type='mouse' bus='ps2'/>
++    <input type='keyboard' bus='ps2'/>
++    <audio id='1' type='none'/>
++    <memballoon model='none'/>
++  </devices>
++</domain>
+diff --git a/tests/qemuxmlconfdata/firmware-manual-efi-nvram-stateless.x86_64-latest.err b/tests/qemuxmlconfdata/firmware-manual-efi-nvram-stateless.x86_64-latest.err
+index de8db3763d..9bfd4465ab 100644
+--- a/tests/qemuxmlconfdata/firmware-manual-efi-nvram-stateless.x86_64-latest.err
++++ b/tests/qemuxmlconfdata/firmware-manual-efi-nvram-stateless.x86_64-latest.err
+@@ -1 +1 @@
+-NVRAM is not permitted when loader is stateless
++Variable storage (NVRAM/varstore) is not permitted when loader is stateless
+diff --git a/tests/qemuxmlconfdata/firmware-manual-efi-nvram-template-stateless.x86_64-latest.err b/tests/qemuxmlconfdata/firmware-manual-efi-nvram-template-stateless.x86_64-latest.err
+index 95ec794c17..9bfd4465ab 100644
+--- a/tests/qemuxmlconfdata/firmware-manual-efi-nvram-template-stateless.x86_64-latest.err
++++ b/tests/qemuxmlconfdata/firmware-manual-efi-nvram-template-stateless.x86_64-latest.err
+@@ -1 +1 @@
+-NVRAM template is not permitted when loader is stateless
++Variable storage (NVRAM/varstore) is not permitted when loader is stateless
+diff --git a/tests/qemuxmlconfdata/firmware-manual-efi-rw-nvram.x86_64-latest.err b/tests/qemuxmlconfdata/firmware-manual-efi-rw-nvram.x86_64-latest.err
+index d0cf62061a..708b4838d4 100644
+--- a/tests/qemuxmlconfdata/firmware-manual-efi-rw-nvram.x86_64-latest.err
++++ b/tests/qemuxmlconfdata/firmware-manual-efi-rw-nvram.x86_64-latest.err
+@@ -1 +1 @@
+-NVRAM is not permitted when loader is read/write
++Variable storage (NVRAM/varstore) is not permitted when loader is read/write
+diff --git a/tests/qemuxmlconftest.c b/tests/qemuxmlconftest.c
+index 822e29b888..a3d4d2de5c 100644
+--- a/tests/qemuxmlconftest.c
++++ b/tests/qemuxmlconftest.c
+@@ -1575,7 +1575,10 @@ mymain(void)
+ 
+     DO_TEST_CAPS_LATEST("firmware-manual-bios");
+     DO_TEST_CAPS_LATEST("firmware-manual-bios-stateless");
+-    DO_TEST_CAPS_LATEST_PARSE_ERROR("firmware-manual-bios-not-stateless");
++    /* This combination doesn't make sense (BIOS is stateless by definition)
++     * but unfortunately there's no way for libvirt to report an error in this
++     * scenario. The stateless=no attribute will effectively be ignored */
++    DO_TEST_CAPS_LATEST("firmware-manual-bios-not-stateless");
+     DO_TEST_CAPS_LATEST_PARSE_ERROR("firmware-manual-bios-rw");
+     DO_TEST_CAPS_LATEST("firmware-manual-efi");
+     DO_TEST_CAPS_LATEST("firmware-manual-efi-features");
+@@ -1628,7 +1631,7 @@ mymain(void)
+     DO_TEST_CAPS_LATEST("firmware-auto-bios");
+     DO_TEST_CAPS_LATEST("firmware-auto-bios-stateless");
+     DO_TEST_CAPS_LATEST_FAILURE("firmware-auto-bios-rw");
+-    DO_TEST_CAPS_LATEST_PARSE_ERROR("firmware-auto-bios-not-stateless");
++    DO_TEST_CAPS_LATEST_FAILURE("firmware-auto-bios-not-stateless");
+     DO_TEST_CAPS_LATEST_PARSE_ERROR("firmware-auto-bios-nvram");
+     DO_TEST_CAPS_LATEST("firmware-auto-efi");
+     DO_TEST_CAPS_LATEST_ABI_UPDATE("firmware-auto-efi");
+-- 
+2.53.0

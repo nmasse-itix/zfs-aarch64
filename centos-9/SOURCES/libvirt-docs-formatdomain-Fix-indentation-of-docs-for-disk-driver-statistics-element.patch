@@ -1,0 +1,62 @@
+From b2fc2869c2b5fa6b2c05b3d05b63d1b4761788e4 Mon Sep 17 00:00:00 2001
+Message-ID: <b2fc2869c2b5fa6b2c05b3d05b63d1b4761788e4.1771336751.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Fri, 30 Jan 2026 17:47:46 +0100
+Subject: [PATCH] docs: formatdomain: Fix indentation of docs for
+ <disk><driver><statistics> element
+
+All other paragraphs in this section use 2 spaces after hyphen, fix the
+recently added section.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 7da1a83914ca10cc811583d7310bf60e04b70488)
+
+https://issues.redhat.com/browse/RHEL-147866 [rhel-9.8]
+https://issues.redhat.com/browse/RHEL-131335 [rhel-10.2]
+---
+ docs/formatdomain.rst | 26 +++++++++++++-------------
+ 1 file changed, 13 insertions(+), 13 deletions(-)
+
+diff --git a/docs/formatdomain.rst b/docs/formatdomain.rst
+index 9836837441..45f262113b 100644
+--- a/docs/formatdomain.rst
++++ b/docs/formatdomain.rst
+@@ -3605,22 +3605,22 @@ paravirtualized driver is specified via the ``disk`` element.
+           </iothreads>
+         </driver>
+ 
+-   - The optional ``statistics`` sub-element allows configuring statistics
+-     collection in configurable intervals for the given disk. Intervals are
+-     configured by ``<statistic>`` sub-elements with ``interval`` attribute
+-     configuring the collection window duration in seconds. The statistics
+-     are available via the bulk statistics API.
++   -  The optional ``statistics`` sub-element allows configuring statistics
++      collection in configurable intervals for the given disk. Intervals are
++      configured by ``<statistic>`` sub-elements with ``interval`` attribute
++      configuring the collection window duration in seconds. The statistics
++      are available via the bulk statistics API.
+ 
+-     Example::
++      Example::
+ 
+-       <driver name='qemu'>
+-         <statistics>
+-           <statistic interval='1'/>
+-           <statistic interval='10'/>
+-         </statistics>
+-       </driver>
++        <driver name='qemu'>
++          <statistics>
++            <statistic interval='1'/>
++            <statistic interval='10'/>
++          </statistics>
++        </driver>
+ 
+-    :since:`Since 11.9.0 (QEMU 10.2, virtio, ide, scsi disks only)`.
++      :since:`Since 11.9.0 (QEMU 10.2, virtio, ide, scsi disks only)`.
+ 
+    -  The optional ``queues`` attribute specifies the number of virt queues for
+       virtio-blk ( :since:`Since 3.9.0` ) or vhost-user-blk
+-- 
+2.53.0

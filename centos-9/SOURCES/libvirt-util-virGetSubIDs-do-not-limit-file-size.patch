@@ -1,0 +1,43 @@
+From 89d55e7dc4be2177645e6090a21ce0f293feec6a Mon Sep 17 00:00:00 2001
+Message-ID: <89d55e7dc4be2177645e6090a21ce0f293feec6a.1780571166.git.jdenemar@redhat.com>
+From: =?UTF-8?q?J=C3=A1n=20Tomko?= <jtomko@redhat.com>
+Date: Tue, 12 May 2026 13:10:43 +0200
+Subject: [PATCH] util: virGetSubIDs: do not limit file size
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+On systems with many users, this file can be larger than BUFSIZ.
+Since the file should only be editable by root and virFileReadAll
+reallocates the buffer in increments as needed as opposed to
+allocating for 'maxlen' upfront, set the maximum to INT_MAX.
+
+https://gitlab.com/libvirt/libvirt/-/work_items/874
+
+Signed-off-by: Ján Tomko <jtomko@redhat.com>
+Reviewed-by: Peter Krempa <pkrempa@redhat.com>
+(cherry picked from commit b0c104e7aaf9cde62702dd66e2c7e4343495de59)
+
+https://redhat.atlassian.net/browse/RHEL-174491
+Signed-off-by: Ján Tomko <jtomko@redhat.com>
+---
+ src/util/virutil.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/src/util/virutil.c b/src/util/virutil.c
+index fb64237692..94a6958582 100644
+--- a/src/util/virutil.c
++++ b/src/util/virutil.c
+@@ -1202,7 +1202,9 @@ virGetSubIDs(virSubID **retval, const char *file)
+ 
+     *retval = NULL;
+ 
+-    if (virFileReadAll(file, BUFSIZ, &buf) < 0)
++    /* We trust the source of the file so we set the limit absurdly high.
++     * For smaller files, the helper function will not allocate as much space */
++    if (virFileReadAll(file, INT_MAX, &buf) < 0)
+         return -1;
+ 
+     lines = g_strsplit(buf, "\n", 0);
+-- 
+2.54.0

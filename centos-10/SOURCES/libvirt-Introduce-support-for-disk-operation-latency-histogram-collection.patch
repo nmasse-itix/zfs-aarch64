@@ -1,0 +1,422 @@
+From 8fbea435edb1635ec98c9419e9249223e5c3b2b6 Mon Sep 17 00:00:00 2001
+Message-ID: <8fbea435edb1635ec98c9419e9249223e5c3b2b6.1771336682.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Fri, 23 Jan 2026 17:09:27 +0100
+Subject: [PATCH] Introduce support for disk operation latency histogram
+ collection
+
+Add config and docs allowing enabling latency histogram collection for
+block device operations.
+
+This patch sets up the docs, schema and XML infrastructure.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit b874c944bd8c4ffa6c51394557587c8c203f1656)
+
+https://issues.redhat.com/browse/RHEL-147866 [rhel-9.8]
+https://issues.redhat.com/browse/RHEL-131335 [rhel-10.2]
+---
+ docs/formatdomain.rst                         |  41 ++++++
+ src/conf/domain_conf.c                        | 133 +++++++++++++++++-
+ src/conf/domain_conf.h                        |   7 +
+ src/conf/schemas/domaincommon.rng             |  37 ++++-
+ ...isk-statistics-intervals.x86_64-latest.xml |  29 ++++
+ .../disk-statistics-intervals.xml             |  25 ++++
+ 6 files changed, 262 insertions(+), 10 deletions(-)
+
+diff --git a/docs/formatdomain.rst b/docs/formatdomain.rst
+index 70882c6820..31232deb3c 100644
+--- a/docs/formatdomain.rst
++++ b/docs/formatdomain.rst
+@@ -3628,6 +3628,47 @@ paravirtualized driver is specified via the ``disk`` element.
+ 
+       :since:`Since 11.9.0 (QEMU 10.2, virtio, ide, scsi disks only)`.
+ 
++      Block operation latency histogram collection can be configured using
++      ``<latency-histogram>`` sub-element. The histogram is collected for
++      the whole runtime of the VM, but can be re-started or reconfigured using
++      the `virDomainUpdateDeviceFlags <html/libvirt-libvirt-domain.html#virDomainUpdateDeviceFlags>`__
++      API. Using the same config re-starts histogram collection.
++
++      The optional ``type`` attribute configures specific operation to collect
++      the histogram for. Supported types are ``read``, ``write``, ``zone``, and
++      ``flush``. If the ``type`` attribute is omitted the histogram collection
++      bins bins apply to all of the aforementioned types, which can be overriden
++      with specific config.
++
++      The ``<latency-histogram>`` has multiple mandatory ``<bin>`` sub-elements
++      with mandatory ``start`` attribute configuring the starting boundary of
++      the histogram bin configured in nanosecods of the operation duration and
++      the intervals must be properly ordered and non-duplicate.
++
++      Example::
++
++        <driver name='qemu'>
++          <statistics>
++
++            <latency-histogram>
++              <bin start='0'/>
++              <bin start='1000'/>
++              <bin start='100000'/>
++            </latency-histogram>
++
++         [or for specific operation types]
++
++            <latency-histogram type='read'>
++              <bin start='0'/>
++              <bin start='1000'/>
++              <bin start='100000'/>
++            </latency-histogram>
++
++          </statistics>
++        </driver>
++
++      :since:`Since 12.1.0`.
++
+    -  The optional ``queues`` attribute specifies the number of virt queues for
+       virtio-blk ( :since:`Since 3.9.0` ) or vhost-user-blk
+       ( :since:`Since 7.1.0` )
+diff --git a/src/conf/domain_conf.c b/src/conf/domain_conf.c
+index f5c4d135a9..83c58ab5ff 100644
+--- a/src/conf/domain_conf.c
++++ b/src/conf/domain_conf.c
+@@ -2445,6 +2445,11 @@ virDomainDiskDefFree(virDomainDiskDef *def)
+     virObjectUnref(def->privateData);
+     g_slist_free_full(def->iothreads, (GDestroyNotify) virDomainIothreadMappingDefFree);
+     g_free(def->statistics);
++    g_free(def->histogram_boundaries);
++    g_free(def->histogram_boundaries_read);
++    g_free(def->histogram_boundaries_write);
++    g_free(def->histogram_boundaries_zone);
++    g_free(def->histogram_boundaries_flush);
+ 
+     if (def->throttlefilters) {
+         size_t i;
+@@ -8307,6 +8312,91 @@ virDomainIothreadMappingDefParse(xmlNodePtr driverNode,
+ }
+ 
+ 
++static int
++virDomainDiskDefDriverParseXMLHistogramOne(virDomainDiskDef *def,
++                                           xmlNodePtr cur)
++{
++    g_autofree char *histogram_type = NULL;
++    unsigned int **histogram_config = NULL;
++    g_autoptr(GPtrArray) binNodes = virXMLNodeGetSubelementList(cur, "bin");
++    size_t nbins = 0;
++    size_t i;
++
++    if ((histogram_type = virXMLPropString(cur, "type"))) {
++        if (STREQ(histogram_type, "read")) {
++            histogram_config = &def->histogram_boundaries_read;
++        } else if (STREQ(histogram_type, "write")) {
++            histogram_config = &def->histogram_boundaries_write;
++        } else if (STREQ(histogram_type, "zone")) {
++            histogram_config = &def->histogram_boundaries_zone;
++        } else if (STREQ(histogram_type, "flush")) {
++            histogram_config = &def->histogram_boundaries_flush;
++        } else {
++            virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
++                           _("unknown latency_histogram type '%1$s'"),
++                           histogram_type);
++            return -1;
++        }
++    } else {
++        histogram_config = &def->histogram_boundaries;
++    }
++
++    if (*histogram_config) {
++        virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
++                       _("only one latency-histogram of a given type is supported"));
++        return -1;
++    }
++
++    if (binNodes->len == 0) {
++        virReportError(VIR_ERR_XML_ERROR, "%s",
++                       _("missing 'bin' elements for 'latency-histogram'"));
++        return -1;
++    }
++
++    *histogram_config = g_new0(unsigned int, binNodes->len + 1);
++
++    for (i = 0; i < binNodes->len; i++) {
++        unsigned int val;
++
++        if (virXMLPropUInt(g_ptr_array_index(binNodes, i),
++                           "start", 10,
++                           VIR_XML_PROP_REQUIRED,
++                           &val) < 0)
++            return -1;
++
++        if (nbins > 0 &&
++            (val == 0 ||
++             val <= (*histogram_config)[nbins-1])) {
++            virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
++                           _("the values of 'start' attribute of a 'latency-histogram' 'bin' configuration must be sorted and non-overlapping"));
++            return -1;
++        }
++
++        if (val > 0)
++            (*histogram_config)[nbins++] = val;
++    }
++
++    return 0;
++}
++
++
++static int
++virDomainDiskDefDriverParseXMLHistograms(virDomainDiskDef *def,
++                                         xmlNodePtr cur)
++{
++    g_autoptr(GPtrArray) histogramNodes = virXMLNodeGetSubelementList(cur, "latency-histogram");
++    size_t i;
++
++    for (i = 0; i < histogramNodes->len; i++) {
++        if (virDomainDiskDefDriverParseXMLHistogramOne(def,
++                                                       g_ptr_array_index(histogramNodes, i)) < 0)
++            return -1;
++    }
++
++    return 0;
++}
++
++
+ static int
+ virDomainDiskDefDriverParseXML(virDomainDiskDef *def,
+                                xmlNodePtr cur)
+@@ -8380,6 +8470,9 @@ virDomainDiskDefDriverParseXML(virDomainDiskDef *def,
+                     return -1;
+             }
+         }
++
++        if (virDomainDiskDefDriverParseXMLHistograms(def, statisticsNode) < 0)
++            return -1;
+     }
+ 
+     if (virXMLPropEnum(cur, "detect_zeroes",
+@@ -23961,12 +24054,37 @@ virDomainDiskDefFormatThrottleFilters(virBuffer *buf,
+ }
+ 
+ 
++static void
++virDomainDiskDefFormatDriverHistogram(virBuffer *buf,
++                                      const char *type,
++                                      unsigned int *bins)
++{
++    g_auto(virBuffer) histogramAttrBuf = VIR_BUFFER_INITIALIZER;
++    g_auto(virBuffer) histogramChildBuf = VIR_BUFFER_INIT_CHILD(buf);
++
++    if (!bins || bins[0] == 0)
++        return;
++
++    if (type)
++        virBufferAsprintf(&histogramAttrBuf, " type='%s'", type);
++
++    /* we dont store the start boundary of the first bin but it's always there */
++    virBufferAddLit(&histogramChildBuf, "<bin start='0'/>\n");
++
++    for (; *bins > 0; bins++)
++        virBufferAsprintf(&histogramChildBuf, "<bin start='%u'/>\n", *bins);
++
++    virXMLFormatElement(buf, "latency-histogram", &histogramAttrBuf, &histogramChildBuf);
++}
++
++
+ static void
+ virDomainDiskDefFormatDriver(virBuffer *buf,
+                              virDomainDiskDef *disk)
+ {
+     g_auto(virBuffer) attrBuf = VIR_BUFFER_INITIALIZER;
+     g_auto(virBuffer) childBuf = VIR_BUFFER_INIT_CHILD(buf);
++    g_auto(virBuffer) statisticsChildBuf = VIR_BUFFER_INIT_CHILD(&childBuf);
+ 
+     virBufferEscapeString(&attrBuf, " name='%s'", virDomainDiskGetDriver(disk));
+ 
+@@ -24038,16 +24156,25 @@ virDomainDiskDefFormatDriver(virBuffer *buf,
+     virDomainIothreadMappingDefFormat(&childBuf, disk->iothreads);
+ 
+     if (disk->statistics) {
+-        g_auto(virBuffer) statisticsChildBuf = VIR_BUFFER_INIT_CHILD(&childBuf);
+         size_t i;
+ 
+         for (i = 0; disk->statistics[i] > 0; i++)
+             virBufferAsprintf(&statisticsChildBuf, "<statistic interval='%u'/>\n",
+                               disk->statistics[i]);
+-
+-        virXMLFormatElement(&childBuf, "statistics", NULL, &statisticsChildBuf);
+     }
+ 
++    virDomainDiskDefFormatDriverHistogram(&statisticsChildBuf, NULL,
++                                          disk->histogram_boundaries);
++    virDomainDiskDefFormatDriverHistogram(&statisticsChildBuf, "read",
++                                          disk->histogram_boundaries_read);
++    virDomainDiskDefFormatDriverHistogram(&statisticsChildBuf, "write",
++                                          disk->histogram_boundaries_write);
++    virDomainDiskDefFormatDriverHistogram(&statisticsChildBuf, "zone",
++                                          disk->histogram_boundaries_zone);
++    virDomainDiskDefFormatDriverHistogram(&statisticsChildBuf, "flush",
++                                          disk->histogram_boundaries_flush);
++
++    virXMLFormatElement(&childBuf, "statistics", NULL, &statisticsChildBuf);
+ 
+     virXMLFormatElement(buf, "driver", &attrBuf, &childBuf);
+ }
+diff --git a/src/conf/domain_conf.h b/src/conf/domain_conf.h
+index 8f53ed96c0..b120d4a68e 100644
+--- a/src/conf/domain_conf.h
++++ b/src/conf/domain_conf.h
+@@ -596,6 +596,13 @@ struct _virDomainDiskDef {
+     GSList *iothreads; /* List of virDomainIothreadMappingDef */
+     unsigned int *statistics; /* Optional, zero terminated list of intervals to
+                                 collect statistics for */
++    /* optional zero terminated lists of bin boundaries for latency histograms */
++    unsigned int *histogram_boundaries;
++    unsigned int *histogram_boundaries_read;
++    unsigned int *histogram_boundaries_write;
++    unsigned int *histogram_boundaries_zone;
++    unsigned int *histogram_boundaries_flush;
++
+     virDomainDiskDetectZeroes detect_zeroes;
+     virTristateSwitch discard_no_unref;
+     char *domain_name; /* backend domain name */
+diff --git a/src/conf/schemas/domaincommon.rng b/src/conf/schemas/domaincommon.rng
+index 1f9ac102a0..441328a08e 100644
+--- a/src/conf/schemas/domaincommon.rng
++++ b/src/conf/schemas/domaincommon.rng
+@@ -2728,13 +2728,36 @@
+         </optional>
+         <optional>
+           <element name="statistics">
+-            <zeroOrMore>
+-              <element name="statistic">
+-                <attribute name="interval">
+-                  <ref name="unsignedInt"/>
+-                </attribute>
+-              </element>
+-            </zeroOrMore>
++            <interleave>
++              <zeroOrMore>
++                <element name="statistic">
++                  <attribute name="interval">
++                    <ref name="unsignedInt"/>
++                  </attribute>
++                </element>
++              </zeroOrMore>
++              <zeroOrMore>
++                <element name="latency-histogram">
++                  <optional>
++                    <attribute name='type'>
++                      <choice>
++                        <value>read</value>
++                        <value>write</value>
++                        <value>zone</value>
++                        <value>flush</value>
++                      </choice>
++                    </attribute>
++                  </optional>
++                  <oneOrMore>
++                    <element name='bin'>
++                      <attribute name='start'>
++                        <ref name="unsignedInt"/>
++                      </attribute>
++                    </element>
++                  </oneOrMore>
++                </element>
++              </zeroOrMore>
++            </interleave>
+           </element>
+         </optional>
+       </interleave>
+diff --git a/tests/qemuxmlconfdata/disk-statistics-intervals.x86_64-latest.xml b/tests/qemuxmlconfdata/disk-statistics-intervals.x86_64-latest.xml
+index 4c55c50ef5..d02f954073 100644
+--- a/tests/qemuxmlconfdata/disk-statistics-intervals.x86_64-latest.xml
++++ b/tests/qemuxmlconfdata/disk-statistics-intervals.x86_64-latest.xml
+@@ -22,6 +22,11 @@
+         <statistics>
+           <statistic interval='3'/>
+           <statistic interval='10'/>
++          <latency-histogram>
++            <bin start='0'/>
++            <bin start='20'/>
++            <bin start='30'/>
++          </latency-histogram>
+         </statistics>
+       </driver>
+       <source file='/var/lib/libvirt/images/iothrtest1.img'/>
+@@ -33,6 +38,30 @@
+         <statistics>
+           <statistic interval='5'/>
+           <statistic interval='15'/>
++          <latency-histogram type='read'>
++            <bin start='0'/>
++            <bin start='10'/>
++            <bin start='20'/>
++            <bin start='30'/>
++          </latency-histogram>
++          <latency-histogram type='write'>
++            <bin start='0'/>
++            <bin start='10'/>
++            <bin start='20'/>
++            <bin start='30'/>
++          </latency-histogram>
++          <latency-histogram type='zone'>
++            <bin start='0'/>
++            <bin start='10'/>
++            <bin start='20'/>
++            <bin start='30'/>
++          </latency-histogram>
++          <latency-histogram type='flush'>
++            <bin start='0'/>
++            <bin start='10'/>
++            <bin start='20'/>
++            <bin start='30'/>
++          </latency-histogram>
+         </statistics>
+       </driver>
+       <source file='/var/lib/libvirt/images/iothrtest2.img'/>
+diff --git a/tests/qemuxmlconfdata/disk-statistics-intervals.xml b/tests/qemuxmlconfdata/disk-statistics-intervals.xml
+index f5e801f5a8..5f9e9470d7 100644
+--- a/tests/qemuxmlconfdata/disk-statistics-intervals.xml
++++ b/tests/qemuxmlconfdata/disk-statistics-intervals.xml
+@@ -19,6 +19,11 @@
+         <statistics>
+           <statistic interval='3'/>
+           <statistic interval='10'/>
++          <latency-histogram>
++            <bin start='0'/>
++            <bin start='20'/>
++            <bin start='30'/>
++          </latency-histogram>
+         </statistics>
+       </driver>
+       <source file='/var/lib/libvirt/images/iothrtest1.img'/>
+@@ -29,6 +34,26 @@
+         <statistics>
+           <statistic interval='5'/>
+           <statistic interval='15'/>
++          <latency-histogram type='read'>
++            <bin start='10'/>
++            <bin start='20'/>
++            <bin start='30'/>
++          </latency-histogram>
++          <latency-histogram type='write'>
++            <bin start='10'/>
++            <bin start='20'/>
++            <bin start='30'/>
++          </latency-histogram>
++          <latency-histogram type='zone'>
++            <bin start='10'/>
++            <bin start='20'/>
++            <bin start='30'/>
++          </latency-histogram>
++          <latency-histogram type='flush'>
++            <bin start='10'/>
++            <bin start='20'/>
++            <bin start='30'/>
++          </latency-histogram>
+         </statistics>
+       </driver>
+       <source file='/var/lib/libvirt/images/iothrtest2.img'/>
+-- 
+2.53.0

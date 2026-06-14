@@ -1,0 +1,66 @@
+From 7909339d97bca3113e521d07c1f3e876d2f0a9a2 Mon Sep 17 00:00:00 2001
+Message-ID: <7909339d97bca3113e521d07c1f3e876d2f0a9a2.1772815313.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Mon, 24 Nov 2025 14:36:55 +0100
+Subject: [PATCH] qemu_firmware: Split sanity check
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The two checks are semantically different, so it makes sense to
+perform them separately. We will soon extend the first one.
+
+While at it, start printing out the value of isConfidential. We
+could print the value of each firmware feature it's derived from,
+but that would make things unnecessarily verbose; at the same
+time, knowing that libvirt believes that the firmware build is
+targeting the confidential use case can be useful for debugging
+so it's worth including it.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+Reviewed-by: Daniel P. Berrangé <berrange@redhat.com>
+(cherry picked from commit 91337ee06d8f8a1e34d59c21840ceeb6904aed70)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/qemu/qemu_firmware.c | 15 +++++++++++----
+ 1 file changed, 11 insertions(+), 4 deletions(-)
+
+diff --git a/src/qemu/qemu_firmware.c b/src/qemu/qemu_firmware.c
+index 8b9b0d91ff..5c923b5a02 100644
+--- a/src/qemu/qemu_firmware.c
++++ b/src/qemu/qemu_firmware.c
+@@ -1589,16 +1589,23 @@ qemuFirmwareSanityCheck(const qemuFirmware *fw,
+      * VMs also don't support EFI variable storage in NVRAM, instead
+      * the secureboot state is hardcoded to enabled.
+      */
+-    if ((!isConfidential &&
+-         (supportsSecureBoot != requiresSMM)) ||
+-        (hasEnrolledKeys && !supportsSecureBoot)) {
++    if (!isConfidential &&
++        supportsSecureBoot != requiresSMM) {
+         VIR_WARN("Firmware description '%s' has invalid set of features: "
+-                 "%s = %d, %s = %d, %s = %d",
++                 "%s = %d, %s = %d (isConfidential = %d)",
+                  filename,
+                  qemuFirmwareFeatureTypeToString(QEMU_FIRMWARE_FEATURE_REQUIRES_SMM),
+                  requiresSMM,
+                  qemuFirmwareFeatureTypeToString(QEMU_FIRMWARE_FEATURE_SECURE_BOOT),
+                  supportsSecureBoot,
++                 isConfidential);
++    }
++    if (hasEnrolledKeys && !supportsSecureBoot) {
++        VIR_WARN("Firmware description '%s' has invalid set of features: "
++                 "%s = %d, %s = %d",
++                 filename,
++                 qemuFirmwareFeatureTypeToString(QEMU_FIRMWARE_FEATURE_SECURE_BOOT),
++                 supportsSecureBoot,
+                  qemuFirmwareFeatureTypeToString(QEMU_FIRMWARE_FEATURE_ENROLLED_KEYS),
+                  hasEnrolledKeys);
+     }
+-- 
+2.53.0

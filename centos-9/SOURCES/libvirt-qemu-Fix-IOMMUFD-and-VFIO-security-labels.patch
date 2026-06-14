@@ -1,0 +1,245 @@
+From 39dd90e66f661ce816592c1ee7cfd5bba54ea6f5 Mon Sep 17 00:00:00 2001
+Message-ID: <39dd90e66f661ce816592c1ee7cfd5bba54ea6f5.1780571166.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Fri, 27 Feb 2026 17:55:34 +0100
+Subject: [PATCH] qemu: Fix IOMMUFD and VFIO security labels
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+When IOMMUFD support was introduced it incorrectly tried to label
+`/dev/iommu` and `/dev/vfio/devices/vfioX` but they are not added to
+QEMU namespace because libvirt opens FDs and passes these FDs to QEMU.
+
+We need to label these FDs instead.
+
+Fixes: 7d2f91f9cb572ab95d0916bdd1a46dd198874529
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Ján Tomko <jtomko@redhat.com>
+(cherry picked from commit 03f2672ab4eff8ee01410c9acba6288bfb4fa231)
+
+Resolves: https://redhat.atlassian.net/browse/RHEL-159902
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/qemu/qemu_hotplug.c          |  2 +-
+ src/qemu/qemu_process.c          | 16 ++++++++++++----
+ src/qemu/qemu_process.h          |  3 ++-
+ src/security/security_apparmor.c | 12 ------------
+ src/security/security_dac.c      | 27 ---------------------------
+ src/security/security_selinux.c  | 23 -----------------------
+ 6 files changed, 15 insertions(+), 68 deletions(-)
+
+diff --git a/src/qemu/qemu_hotplug.c b/src/qemu/qemu_hotplug.c
+index 845f42bf20..994cc749f6 100644
+--- a/src/qemu/qemu_hotplug.c
++++ b/src/qemu/qemu_hotplug.c
+@@ -1621,7 +1621,7 @@ qemuDomainAttachHostPCIDevice(virQEMUDriver *driver,
+     }
+ 
+     if (virHostdevIsPCIDeviceWithIOMMUFD(hostdev)) {
+-        if (qemuProcessOpenVfioDeviceFd(hostdev) < 0)
++        if (qemuProcessOpenVfioDeviceFd(vm, hostdev) < 0)
+             goto error;
+ 
+         if (!priv->iommufdState) {
+diff --git a/src/qemu/qemu_process.c b/src/qemu/qemu_process.c
+index 29601683a0..0a69063a4b 100644
+--- a/src/qemu/qemu_process.c
++++ b/src/qemu/qemu_process.c
+@@ -7691,13 +7691,16 @@ int
+ qemuProcessOpenIommuFd(virDomainObj *vm)
+ {
+     qemuDomainObjPrivate *priv = vm->privateData;
+-    int iommufd;
++    VIR_AUTOCLOSE iommufd = -1;
+ 
+     VIR_DEBUG("Opening IOMMU FD for domain %s", vm->def->name);
+ 
+     if ((iommufd = virIOMMUFDOpenDevice()) < 0)
+         return -1;
+ 
++    if (qemuSecuritySetImageFDLabel(priv->driver->securityManager, vm->def, iommufd) < 0)
++        return -1;
++
+     priv->iommufd = qemuFDPassDirectNew("iommufd", &iommufd);
+ 
+     return 0;
+@@ -7712,16 +7715,21 @@ qemuProcessOpenIommuFd(virDomainObj *vm)
+  * Returns: 0 on success, -1 on failure
+  */
+ int
+-qemuProcessOpenVfioDeviceFd(virDomainHostdevDef *hostdev)
++qemuProcessOpenVfioDeviceFd(virDomainObj *vm,
++                            virDomainHostdevDef *hostdev)
+ {
++    qemuDomainObjPrivate *priv = vm->privateData;
+     qemuDomainHostdevPrivate *hostdevPriv = QEMU_DOMAIN_HOSTDEV_PRIVATE(hostdev);
+     virDomainHostdevSubsysPCI *pci = &hostdev->source.subsys.u.pci;
+     g_autofree char *name = g_strdup_printf("hostdev-%s-fd", hostdev->info->alias);
+-    int vfioDeviceFd;
++    VIR_AUTOCLOSE vfioDeviceFd = -1;
+ 
+     if ((vfioDeviceFd = virPCIDeviceOpenVfioFd(&pci->addr)) < 0)
+         return -1;
+ 
++    if (qemuSecuritySetImageFDLabel(priv->driver->securityManager, vm->def, vfioDeviceFd) < 0)
++        return -1;
++
+     hostdevPriv->vfioDeviceFd = qemuFDPassDirectNew(name, &vfioDeviceFd);
+ 
+     return 0;
+@@ -7739,7 +7747,7 @@ qemuProcessPrepareHostHostdev(virDomainObj *vm)
+         case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_PCI:
+             if (virHostdevIsPCIDeviceWithIOMMUFD(hostdev)) {
+                 /* Open VFIO device FD */
+-                if (qemuProcessOpenVfioDeviceFd(hostdev) < 0)
++                if (qemuProcessOpenVfioDeviceFd(vm, hostdev) < 0)
+                     return -1;
+             }
+             break;
+diff --git a/src/qemu/qemu_process.h b/src/qemu/qemu_process.h
+index 1023b7cb25..dc16622ed9 100644
+--- a/src/qemu/qemu_process.h
++++ b/src/qemu/qemu_process.h
+@@ -136,7 +136,8 @@ int qemuProcessPrepareHostBackendChardevHotplug(virDomainObj *vm,
+ 
+ int qemuProcessOpenIommuFd(virDomainObj *vm);
+ 
+-int qemuProcessOpenVfioDeviceFd(virDomainHostdevDef *hostdev);
++int qemuProcessOpenVfioDeviceFd(virDomainObj *vm,
++                                virDomainHostdevDef *hostdev);
+ 
+ int qemuProcessPrepareHost(virQEMUDriver *driver,
+                            virDomainObj *vm,
+diff --git a/src/security/security_apparmor.c b/src/security/security_apparmor.c
+index 1c3496893c..40f13ec1a5 100644
+--- a/src/security/security_apparmor.c
++++ b/src/security/security_apparmor.c
+@@ -45,7 +45,6 @@
+ #include "virstring.h"
+ #include "virscsi.h"
+ #include "virmdev.h"
+-#include "viriommufd.h"
+ 
+ #define VIR_FROM_THIS VIR_FROM_SECURITY
+ 
+@@ -856,17 +855,6 @@ AppArmorSetSecurityHostdevLabel(virSecurityManager *mgr,
+ 
+                 if (AppArmorSetSecurityPCILabel(pci, vfioGroupDev, ptr) < 0)
+                     return -1;
+-            } else {
+-                g_autofree char *vfiofdDev = NULL;
+-
+-                if (virPCIDeviceGetVfioPath(pci, &vfiofdDev) < 0)
+-                    return -1;
+-
+-                if (AppArmorSetSecurityPCILabel(pci, vfiofdDev, ptr) < 0)
+-                    return -1;
+-
+-                if (AppArmorSetSecurityPCILabel(pci, VIR_IOMMU_DEV_PATH, ptr) < 0)
+-                    return -1;
+             }
+         } else {
+             if (virPCIDeviceFileIterate(pci, AppArmorSetSecurityPCILabel, ptr) < 0)
+diff --git a/src/security/security_dac.c b/src/security/security_dac.c
+index 2a4c7f6a3c..d8cf117fc4 100644
+--- a/src/security/security_dac.c
++++ b/src/security/security_dac.c
+@@ -41,7 +41,6 @@
+ #include "virscsivhost.h"
+ #include "virstring.h"
+ #include "virutil.h"
+-#include "viriommufd.h"
+ 
+ #define VIR_FROM_THIS VIR_FROM_SECURITY
+ 
+@@ -1295,17 +1294,6 @@ virSecurityDACSetHostdevLabel(virSecurityManager *mgr,
+                                                         &cbdata) < 0) {
+                     return -1;
+                 }
+-            } else {
+-                g_autofree char *vfiofdDev = NULL;
+-
+-                if (virPCIDeviceGetVfioPath(pci, &vfiofdDev) < 0)
+-                    return -1;
+-
+-                if (virSecurityDACSetHostdevLabelHelper(vfiofdDev, false, &cbdata) < 0)
+-                    return -1;
+-
+-                if (virSecurityDACSetHostdevLabelHelper(VIR_IOMMU_DEV_PATH, false, &cbdata) < 0)
+-                    return -1;
+             }
+         } else {
+             if (virPCIDeviceFileIterate(pci,
+@@ -1476,21 +1464,6 @@ virSecurityDACRestoreHostdevLabel(virSecurityManager *mgr,
+                                                            vfioGroupDev, false) < 0) {
+                     return -1;
+                 }
+-            } else {
+-                g_autofree char *vfiofdDev = NULL;
+-
+-                if (virPCIDeviceGetVfioPath(pci, &vfiofdDev) < 0)
+-                    return -1;
+-
+-                if (virSecurityDACRestoreFileLabelInternal(mgr, NULL,
+-                                                           vfiofdDev, false) < 0) {
+-                    return -1;
+-                }
+-
+-                if (virSecurityDACRestoreFileLabelInternal(mgr, NULL,
+-                                                           VIR_IOMMU_DEV_PATH, false) < 0) {
+-                    return -1;
+-                }
+             }
+         } else {
+             if (virPCIDeviceFileIterate(pci, virSecurityDACRestorePCILabel, mgr) < 0)
+diff --git a/src/security/security_selinux.c b/src/security/security_selinux.c
+index 96ca59a7a4..0fa50630f7 100644
+--- a/src/security/security_selinux.c
++++ b/src/security/security_selinux.c
+@@ -41,7 +41,6 @@
+ #include "virconf.h"
+ #include "virtpm.h"
+ #include "virstring.h"
+-#include "viriommufd.h"
+ 
+ #define VIR_FROM_THIS VIR_FROM_SECURITY
+ 
+@@ -2267,17 +2266,6 @@ virSecuritySELinuxSetHostdevSubsysLabel(virSecurityManager *mgr,
+                                                             &data) < 0) {
+                     return -1;
+                 }
+-            } else {
+-                g_autofree char *vfiofdDev = NULL;
+-
+-                if (virPCIDeviceGetVfioPath(pci, &vfiofdDev) < 0)
+-                    return -1;
+-
+-                if (virSecuritySELinuxSetHostdevLabelHelper(vfiofdDev, false, &data) < 0)
+-                    return -1;
+-
+-                if (virSecuritySELinuxSetHostdevLabelHelper(VIR_IOMMU_DEV_PATH, false, &data) < 0)
+-                    return -1;
+             }
+         } else {
+             if (virPCIDeviceFileIterate(pci, virSecuritySELinuxSetPCILabel, &data) < 0)
+@@ -2519,17 +2507,6 @@ virSecuritySELinuxRestoreHostdevSubsysLabel(virSecurityManager *mgr,
+ 
+                 if (virSecuritySELinuxRestoreFileLabel(mgr, vfioGroupDev, false, false) < 0)
+                     return -1;
+-            } else {
+-                g_autofree char *vfiofdDev = NULL;
+-
+-                if (virPCIDeviceGetVfioPath(pci, &vfiofdDev) < 0)
+-                    return -1;
+-
+-                if (virSecuritySELinuxRestoreFileLabel(mgr, vfiofdDev, false, false) < 0)
+-                    return -1;
+-
+-                if (virSecuritySELinuxRestoreFileLabel(mgr, VIR_IOMMU_DEV_PATH, false, false) < 0)
+-                    return -1;
+             }
+         } else {
+             if (virPCIDeviceFileIterate(pci, virSecuritySELinuxRestorePCILabel, mgr) < 0)
+-- 
+2.54.0

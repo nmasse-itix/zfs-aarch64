@@ -1,0 +1,85 @@
+From 271cfe0d7954d5398af307b24fc5b601977975b8 Mon Sep 17 00:00:00 2001
+Message-ID: <271cfe0d7954d5398af307b24fc5b601977975b8.1772815313.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Mon, 9 Feb 2026 21:28:50 +0100
+Subject: [PATCH] conf: Add firmwareFeatures element for domaincaps
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 928bdc3e67b29ff2314ff538905703e299b1e47e)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/conf/domain_capabilities.c | 15 +++++++++++++++
+ src/conf/domain_capabilities.h |  8 ++++++++
+ 2 files changed, 23 insertions(+)
+
+diff --git a/src/conf/domain_capabilities.c b/src/conf/domain_capabilities.c
+index 49179b97ab..9b3577cd08 100644
+--- a/src/conf/domain_capabilities.c
++++ b/src/conf/domain_capabilities.c
+@@ -422,6 +422,19 @@ virDomainCapsFeatureFormatSimple(virBuffer *buf,
+ }
+ 
+ 
++static void
++virDomainCapsFirmwareFeaturesFormat(virBuffer *buf,
++                                    const virDomainCapsFirmwareFeatures *firmwareFeatures)
++{
++    FORMAT_PROLOGUE(firmwareFeatures);
++
++    ENUM_PROCESS(firmwareFeatures, secureBoot, virTristateBoolTypeToString);
++    ENUM_PROCESS(firmwareFeatures, enrolledKeys, virTristateBoolTypeToString);
++
++    FORMAT_EPILOGUE(firmwareFeatures);
++}
++
++
+ static void
+ virDomainCapsLoaderFormat(virBuffer *buf,
+                           const virDomainCapsLoader *loader)
+@@ -440,12 +453,14 @@ static void
+ virDomainCapsOSFormat(virBuffer *buf,
+                       const virDomainCapsOS *os)
+ {
++    const virDomainCapsFirmwareFeatures *firmwareFeatures = &os->firmwareFeatures;
+     const virDomainCapsLoader *loader = &os->loader;
+ 
+     FORMAT_PROLOGUE(os);
+ 
+     ENUM_PROCESS(os, firmware, virDomainOsDefFirmwareTypeToString);
+ 
++    virDomainCapsFirmwareFeaturesFormat(&childBuf, firmwareFeatures);
+     virDomainCapsLoaderFormat(&childBuf, loader);
+ 
+     FORMAT_EPILOGUE(os);
+diff --git a/src/conf/domain_capabilities.h b/src/conf/domain_capabilities.h
+index b10370db8f..a68fafe235 100644
+--- a/src/conf/domain_capabilities.h
++++ b/src/conf/domain_capabilities.h
+@@ -43,6 +43,13 @@ struct _virDomainCapsStringValues {
+     size_t nvalues; /* number of strings */
+ };
+ 
++typedef struct _virDomainCapsFirmwareFeatures virDomainCapsFirmwareFeatures;
++struct _virDomainCapsFirmwareFeatures {
++    virTristateBool supported;
++    virDomainCapsEnum secureBoot;
++    virDomainCapsEnum enrolledKeys;
++};
++
+ STATIC_ASSERT_ENUM(VIR_DOMAIN_LOADER_TYPE_LAST);
+ STATIC_ASSERT_ENUM(VIR_TRISTATE_BOOL_LAST);
+ typedef struct _virDomainCapsLoader virDomainCapsLoader;
+@@ -59,6 +66,7 @@ typedef struct _virDomainCapsOS virDomainCapsOS;
+ struct _virDomainCapsOS {
+     virTristateBool supported;
+     virDomainCapsEnum firmware;     /* Info about virDomainOsDefFirmware */
++    virDomainCapsFirmwareFeatures firmwareFeatures;
+     virDomainCapsLoader loader;     /* Info about virDomainLoaderDef */
+ };
+ 
+-- 
+2.53.0

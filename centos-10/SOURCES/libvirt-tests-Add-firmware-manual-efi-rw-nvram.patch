@@ -1,0 +1,160 @@
+From 2a9e5ad8bd63161f84c71a8b729643b840e2ae14 Mon Sep 17 00:00:00 2001
+Message-ID: <2a9e5ad8bd63161f84c71a8b729643b840e2ae14.1772815312.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Fri, 5 Dec 2025 18:39:04 +0100
+Subject: [PATCH] tests: Add firmware-manual-efi-rw-nvram
+
+This test case demonstrates a flaw in the XML validation process.
+
+Read/write firmware images already contain an area dedicated to
+variable storage, which they use, so attempting to use a separate
+NVRAM file together with them should have resulted in the domain
+XML being rejected.
+
+The issue will be addressed in an upcoming commit.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 27313799ba1b50741ed7f67773511de0aa882047)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ ...are-manual-efi-rw-nvram.x86_64-latest.args | 37 +++++++++++++++++
+ ...ware-manual-efi-rw-nvram.x86_64-latest.xml | 40 +++++++++++++++++++
+ .../firmware-manual-efi-rw-nvram.xml          | 19 +++++++++
+ tests/qemuxmlconftest.c                       |  1 +
+ 4 files changed, 97 insertions(+)
+ create mode 100644 tests/qemuxmlconfdata/firmware-manual-efi-rw-nvram.x86_64-latest.args
+ create mode 100644 tests/qemuxmlconfdata/firmware-manual-efi-rw-nvram.x86_64-latest.xml
+ create mode 100644 tests/qemuxmlconfdata/firmware-manual-efi-rw-nvram.xml
+
+diff --git a/tests/qemuxmlconfdata/firmware-manual-efi-rw-nvram.x86_64-latest.args b/tests/qemuxmlconfdata/firmware-manual-efi-rw-nvram.x86_64-latest.args
+new file mode 100644
+index 0000000000..6b3eec0a27
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-manual-efi-rw-nvram.x86_64-latest.args
+@@ -0,0 +1,37 @@
++LC_ALL=C \
++PATH=/bin \
++HOME=/var/lib/libvirt/qemu/domain--1-guest \
++USER=test \
++LOGNAME=test \
++XDG_DATA_HOME=/var/lib/libvirt/qemu/domain--1-guest/.local/share \
++XDG_CACHE_HOME=/var/lib/libvirt/qemu/domain--1-guest/.cache \
++XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-guest/.config \
++/usr/bin/qemu-system-x86_64 \
++-name guest=guest,debug-threads=on \
++-S \
++-object '{"qom-type":"secret","id":"masterKey0","format":"raw","file":"/var/lib/libvirt/qemu/domain--1-guest/master-key.aes"}' \
++-blockdev '{"driver":"file","filename":"/usr/share/edk2/ovmf/OVMF.combined.fd","node-name":"libvirt-pflash0-storage","auto-read-only":true,"discard":"unmap"}' \
++-blockdev '{"node-name":"libvirt-pflash0-format","read-only":false,"driver":"raw","file":"libvirt-pflash0-storage"}' \
++-blockdev '{"driver":"file","filename":"/path/to/guest_VARS.fd","node-name":"libvirt-pflash1-storage","read-only":false}' \
++-machine pc-q35-10.0,usb=off,smm=on,dump-guest-core=off,memory-backend=pc.ram,pflash0=libvirt-pflash0-format,pflash1=libvirt-pflash1-storage,acpi=on \
++-accel kvm \
++-cpu qemu64 \
++-global driver=cfi.pflash01,property=secure,value=on \
++-m size=1048576k \
++-object '{"qom-type":"memory-backend-ram","id":"pc.ram","size":1073741824}' \
++-overcommit mem-lock=off \
++-smp 1,sockets=1,cores=1,threads=1 \
++-uuid 63840878-0deb-4095-97e6-fc444d9bc9fa \
++-display none \
++-no-user-config \
++-nodefaults \
++-chardev socket,id=charmonitor,fd=1729,server=on,wait=off \
++-mon chardev=charmonitor,id=monitor,mode=control \
++-rtc base=utc \
++-no-shutdown \
++-boot strict=on \
++-audiodev '{"id":"audio1","driver":"none"}' \
++-global ICH9-LPC.noreboot=off \
++-watchdog-action reset \
++-sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
++-msg timestamp=on
+diff --git a/tests/qemuxmlconfdata/firmware-manual-efi-rw-nvram.x86_64-latest.xml b/tests/qemuxmlconfdata/firmware-manual-efi-rw-nvram.x86_64-latest.xml
+new file mode 100644
+index 0000000000..f6436df80f
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-manual-efi-rw-nvram.x86_64-latest.xml
+@@ -0,0 +1,40 @@
++<domain type='kvm'>
++  <name>guest</name>
++  <uuid>63840878-0deb-4095-97e6-fc444d9bc9fa</uuid>
++  <memory unit='KiB'>1048576</memory>
++  <currentMemory unit='KiB'>1048576</currentMemory>
++  <vcpu placement='static'>1</vcpu>
++  <os firmware='efi'>
++    <type arch='x86_64' machine='pc-q35-10.0'>hvm</type>
++    <firmware>
++      <feature enabled='yes' name='secure-boot'/>
++    </firmware>
++    <loader readonly='no' secure='yes' type='pflash' format='raw'>/usr/share/edk2/ovmf/OVMF.combined.fd</loader>
++    <nvram format='raw'>/path/to/guest_VARS.fd</nvram>
++    <boot dev='hd'/>
++  </os>
++  <features>
++    <acpi/>
++    <smm state='on'/>
++  </features>
++  <cpu mode='custom' match='exact' check='none'>
++    <model fallback='forbid'>qemu64</model>
++  </cpu>
++  <clock offset='utc'/>
++  <on_poweroff>destroy</on_poweroff>
++  <on_reboot>restart</on_reboot>
++  <on_crash>destroy</on_crash>
++  <devices>
++    <emulator>/usr/bin/qemu-system-x86_64</emulator>
++    <controller type='usb' index='0' model='none'/>
++    <controller type='sata' index='0'>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x1f' function='0x2'/>
++    </controller>
++    <controller type='pci' index='0' model='pcie-root'/>
++    <input type='mouse' bus='ps2'/>
++    <input type='keyboard' bus='ps2'/>
++    <audio id='1' type='none'/>
++    <watchdog model='itco' action='reset'/>
++    <memballoon model='none'/>
++  </devices>
++</domain>
+diff --git a/tests/qemuxmlconfdata/firmware-manual-efi-rw-nvram.xml b/tests/qemuxmlconfdata/firmware-manual-efi-rw-nvram.xml
+new file mode 100644
+index 0000000000..81884f4913
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-manual-efi-rw-nvram.xml
+@@ -0,0 +1,19 @@
++<domain type='kvm'>
++  <name>guest</name>
++  <uuid>63840878-0deb-4095-97e6-fc444d9bc9fa</uuid>
++  <memory unit='KiB'>1048576</memory>
++  <vcpu placement='static'>1</vcpu>
++  <os>
++    <type arch='x86_64' machine='pc-q35-10.0'>hvm</type>
++    <loader readonly='no' type='pflash' format='raw'>/usr/share/edk2/ovmf/OVMF.combined.fd</loader>
++    <nvram format='raw'>/path/to/guest_VARS.fd</nvram>
++  </os>
++  <features>
++    <acpi/>
++  </features>
++  <devices>
++    <emulator>/usr/bin/qemu-system-x86_64</emulator>
++    <controller type='usb' model='none'/>
++    <memballoon model='none'/>
++  </devices>
++</domain>
+diff --git a/tests/qemuxmlconftest.c b/tests/qemuxmlconftest.c
+index bddd659fd4..726281a4ab 100644
+--- a/tests/qemuxmlconftest.c
++++ b/tests/qemuxmlconftest.c
+@@ -1583,6 +1583,7 @@ mymain(void)
+     DO_TEST_CAPS_LATEST("firmware-manual-efi-rw-legacy-paths");
+     DO_TEST_CAPS_LATEST("firmware-manual-efi-rw-modern-paths");
+     DO_TEST_CAPS_LATEST("firmware-manual-efi-rw-implicit");
++    DO_TEST_CAPS_LATEST("firmware-manual-efi-rw-nvram");
+     DO_TEST_CAPS_LATEST("firmware-manual-efi-loader-secure");
+     DO_TEST_CAPS_LATEST_PARSE_ERROR("firmware-manual-efi-loader-no-path");
+     DO_TEST_CAPS_LATEST("firmware-manual-efi-loader-path-nonstandard");
+-- 
+2.53.0

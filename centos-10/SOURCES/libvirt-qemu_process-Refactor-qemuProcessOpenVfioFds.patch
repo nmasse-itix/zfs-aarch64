@@ -1,0 +1,77 @@
+From a3696f1e0ba8ddf997e54fccd945593272635762 Mon Sep 17 00:00:00 2001
+Message-ID: <a3696f1e0ba8ddf997e54fccd945593272635762.1771423659.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Sun, 15 Feb 2026 19:15:52 +0100
+Subject: [PATCH] qemu_process: Refactor qemuProcessOpenVfioFds
+
+Follow our switch pattern to simplify the code logic
+and rename the function to follow our naming pattern.
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit c83b4f367f23868793fc6b071771d0e641b7a546)
+
+Resolves: https://issues.redhat.com/browse/RHEL-150351
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/qemu/qemu_process.c | 31 ++++++++++++++++---------------
+ 1 file changed, 16 insertions(+), 15 deletions(-)
+
+diff --git a/src/qemu/qemu_process.c b/src/qemu/qemu_process.c
+index da7a9fc11f..3729edcd7e 100644
+--- a/src/qemu/qemu_process.c
++++ b/src/qemu/qemu_process.c
+@@ -7715,27 +7715,28 @@ qemuProcessOpenVfioDeviceFd(virDomainHostdevDef *hostdev)
+     return 0;
+ }
+ 
+-/**
+- * qemuProcessOpenVfioFds:
+- * @vm: domain object
+- *
+- * Opens all necessary VFIO file descriptors for the domain.
+- *
+- * Returns: 0 on success, -1 on failure
+- */
+ static int
+-qemuProcessOpenVfioFds(virDomainObj *vm)
++qemuProcessPrepareHostHostdev(virDomainObj *vm)
+ {
+     size_t i;
+ 
+-    /* Check if we have any hostdevs that need VFIO FDs */
+     for (i = 0; i < vm->def->nhostdevs; i++) {
+         virDomainHostdevDef *hostdev = vm->def->hostdevs[i];
+ 
+-        if (virHostdevIsPCIDeviceWithIOMMUFD(hostdev)) {
+-            /* Open VFIO device FD */
+-            if (qemuProcessOpenVfioDeviceFd(hostdev) < 0)
+-                return -1;
++        switch (hostdev->source.subsys.type) {
++        case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_PCI:
++            if (virHostdevIsPCIDeviceWithIOMMUFD(hostdev)) {
++                /* Open VFIO device FD */
++                if (qemuProcessOpenVfioDeviceFd(hostdev) < 0)
++                    return -1;
++            }
++            break;
++        case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_USB:
++        case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_SCSI:
++        case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_SCSI_HOST:
++        case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_MDEV:
++        case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_LAST:
++            break;
+         }
+     }
+ 
+@@ -7803,7 +7804,7 @@ qemuProcessPrepareHost(virQEMUDriver *driver,
+         hostdev_flags |= VIR_HOSTDEV_COLD_BOOT;
+     if (qemuHostdevPrepareDomainDevices(driver, vm->def, hostdev_flags) < 0)
+         return -1;
+-    if (qemuProcessOpenVfioFds(vm) < 0)
++    if (qemuProcessPrepareHostHostdev(vm) < 0)
+         return -1;
+ 
+     VIR_DEBUG("Preparing chr device backends");
+-- 
+2.53.0

@@ -1,0 +1,131 @@
+From a11c975eb05296487023db1beb72d5575af6b05a Mon Sep 17 00:00:00 2001
+Message-ID: <a11c975eb05296487023db1beb72d5575af6b05a.1772815313.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Mon, 17 Nov 2025 18:02:15 +0100
+Subject: [PATCH] qemu_firmware: Allow matching both UEFI and BIOS for ROM
+ loader
+
+Currently we apply a 1:1 mapping between loader type and firmware
+type: ROM can only match BIOS and pflash can only match UEFI.
+
+That was accurate at the time when the check was introduced, but
+is no longer the case today: the Intel TDX build of edk2, for
+example, is loaded as a ROM but it still provides an UEFI
+implementation to the guest.
+
+Tweak the matching logic so that a ROM loader is allowed to match
+both BIOS and UEFI firmware descriptors.
+
+The firmware-manual-efi-tdx test case benefits from this change,
+as all the missing information is now correctly filled in.
+
+This will also solve an issue reported to the list, where
+firmware builds targeting the confidential VM use case on aarch64
+would not be usable at all, due to the way UEFI and ACPI are
+depending on each other on the architecture.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 563a47ea7fc255c08d834f8a2d0956bae84317a9)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/qemu/qemu_firmware.c                      | 43 +++++++++++--------
+ ...-manual-efi-tdx.x86_64-latest+inteltdx.xml |  6 ++-
+ 2 files changed, 30 insertions(+), 19 deletions(-)
+
+diff --git a/src/qemu/qemu_firmware.c b/src/qemu/qemu_firmware.c
+index 7953b297bc..52205b72f8 100644
+--- a/src/qemu/qemu_firmware.c
++++ b/src/qemu/qemu_firmware.c
+@@ -937,23 +937,6 @@ qemuFirmwareOSInterfaceTypeToOsDefFirmware(qemuFirmwareOSInterface interface)
+ }
+ 
+ 
+-static qemuFirmwareOSInterface
+-qemuFirmwareOSInterfaceTypeFromOsDefLoaderType(virDomainLoader type)
+-{
+-    switch (type) {
+-    case VIR_DOMAIN_LOADER_TYPE_ROM:
+-        return QEMU_FIRMWARE_OS_INTERFACE_BIOS;
+-    case VIR_DOMAIN_LOADER_TYPE_PFLASH:
+-        return QEMU_FIRMWARE_OS_INTERFACE_UEFI;
+-    case VIR_DOMAIN_LOADER_TYPE_NONE:
+-    case VIR_DOMAIN_LOADER_TYPE_LAST:
+-        break;
+-    }
+-
+-    return QEMU_FIRMWARE_OS_INTERFACE_NONE;
+-}
+-
+-
+ /**
+  * qemuFirmwareEnsureNVRAM:
+  * @def: domain definition
+@@ -1100,6 +1083,8 @@ qemuFirmwareMatchDomain(const virDomainDef *def,
+     const virDomainLoaderDef *loader = def->os.loader;
+     size_t i;
+     qemuFirmwareOSInterface want;
++    bool wantUEFI = false;
++    bool wantBIOS = false;
+     bool supportsS3 = false;
+     bool supportsS4 = false;
+     bool requiresSMM = false;
+@@ -1115,12 +1100,34 @@ qemuFirmwareMatchDomain(const virDomainDef *def,
+     want = qemuFirmwareOSInterfaceTypeFromOsDefFirmware(def->os.firmware);
+ 
+     if (want == QEMU_FIRMWARE_OS_INTERFACE_NONE && loader) {
+-        want = qemuFirmwareOSInterfaceTypeFromOsDefLoaderType(loader->type);
++        /* If an explicit request for a specific type of firmware is
++         * not present, we can still infer this information from
++         * other factors. Specifically, the pflash loader type is
++         * only used for UEFI, while the rom loader type can be used
++         * both for UEFI and BIOS */
++        switch (loader->type) {
++        case VIR_DOMAIN_LOADER_TYPE_PFLASH:
++            wantUEFI = true;
++            break;
++        case VIR_DOMAIN_LOADER_TYPE_ROM:
++            wantUEFI = true;
++            wantBIOS = true;
++            break;
++        case VIR_DOMAIN_LOADER_TYPE_NONE:
++        case VIR_DOMAIN_LOADER_TYPE_LAST:
++        default:
++            break;
++        }
+     }
+ 
+     for (i = 0; i < fw->ninterfaces; i++) {
+         if (fw->interfaces[i] == want)
+             break;
++
++        if ((fw->interfaces[i] == QEMU_FIRMWARE_OS_INTERFACE_UEFI && wantUEFI) ||
++            (fw->interfaces[i] == QEMU_FIRMWARE_OS_INTERFACE_BIOS && wantBIOS)) {
++            break;
++        }
+     }
+ 
+     if (i == fw->ninterfaces) {
+diff --git a/tests/qemuxmlconfdata/firmware-manual-efi-tdx.x86_64-latest+inteltdx.xml b/tests/qemuxmlconfdata/firmware-manual-efi-tdx.x86_64-latest+inteltdx.xml
+index cdb92dcf1d..5b87857425 100644
+--- a/tests/qemuxmlconfdata/firmware-manual-efi-tdx.x86_64-latest+inteltdx.xml
++++ b/tests/qemuxmlconfdata/firmware-manual-efi-tdx.x86_64-latest+inteltdx.xml
+@@ -4,8 +4,12 @@
+   <memory unit='KiB'>1048576</memory>
+   <currentMemory unit='KiB'>1048576</currentMemory>
+   <vcpu placement='static'>1</vcpu>
+-  <os>
++  <os firmware='efi'>
+     <type arch='x86_64' machine='pc-q35-10.0'>hvm</type>
++    <firmware>
++      <feature enabled='yes' name='enrolled-keys'/>
++      <feature enabled='yes' name='secure-boot'/>
++    </firmware>
+     <loader readonly='yes' type='rom' format='raw'>/usr/share/edk2/ovmf/OVMF.inteltdx.secboot.fd</loader>
+     <boot dev='hd'/>
+   </os>
+-- 
+2.53.0

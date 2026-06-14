@@ -1,0 +1,73 @@
+From e5bdfe01cb976c45a440b88061a40f65ac6f8be8 Mon Sep 17 00:00:00 2001
+Message-ID: <e5bdfe01cb976c45a440b88061a40f65ac6f8be8.1771423659.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Sun, 15 Feb 2026 20:10:50 +0100
+Subject: [PATCH] qemu_command: Extract building IOMMUFD props to function
+
+This will be reused by hotplug code.
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 3f7ad3a8a5f0e453c85f186e811e051ead0f769a)
+
+Resolves: https://issues.redhat.com/browse/RHEL-150351
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/qemu/qemu_command.c | 20 ++++++++++++++++----
+ src/qemu/qemu_command.h |  3 +++
+ 2 files changed, 19 insertions(+), 4 deletions(-)
+
+diff --git a/src/qemu/qemu_command.c b/src/qemu/qemu_command.c
+index cca5fed285..521aefbc10 100644
+--- a/src/qemu/qemu_command.c
++++ b/src/qemu/qemu_command.c
+@@ -5337,6 +5337,21 @@ qemuBuildHostdevCommandLine(virCommand *cmd,
+ }
+ 
+ 
++virJSONValue *
++qemuBuildIOMMUFDProps(qemuFDPassDirect *iommufd)
++{
++    g_autoptr(virJSONValue) props = NULL;
++
++    if (qemuMonitorCreateObjectProps(&props, "iommufd",
++                                     "iommufd0",
++                                     "S:fd", qemuFDPassDirectGetPath(iommufd),
++                                     NULL) < 0)
++        return NULL;
++
++    return g_steal_pointer(&props);
++}
++
++
+ static int
+ qemuBuildIOMMUFDCommandLine(virCommand *cmd,
+                             const virDomainDef *def,
+@@ -5350,10 +5365,7 @@ qemuBuildIOMMUFDCommandLine(virCommand *cmd,
+ 
+     qemuFDPassDirectTransferCommand(priv->iommufd, cmd);
+ 
+-    if (qemuMonitorCreateObjectProps(&props, "iommufd",
+-                                     "iommufd0",
+-                                     "S:fd", qemuFDPassDirectGetPath(priv->iommufd),
+-                                     NULL) < 0)
++    if (!(props = qemuBuildIOMMUFDProps(priv->iommufd)))
+         return -1;
+ 
+     if (qemuBuildObjectCommandlineFromJSON(cmd, props) < 0)
+diff --git a/src/qemu/qemu_command.h b/src/qemu/qemu_command.h
+index ad068f1f16..028d002ef9 100644
+--- a/src/qemu/qemu_command.h
++++ b/src/qemu/qemu_command.h
+@@ -190,6 +190,9 @@ int
+ qemuBuildRNGBackendProps(virDomainRNGDef *rng,
+                          virJSONValue **props);
+ 
++virJSONValue *
++qemuBuildIOMMUFDProps(qemuFDPassDirect *iommufd);
++
+ /* Current, best practice */
+ virJSONValue *
+ qemuBuildUSBHostdevDevProps(const virDomainDef *def,
+-- 
+2.53.0

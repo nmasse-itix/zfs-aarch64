@@ -1,0 +1,158 @@
+From 353e7eb26cb922bd342c050273afbcc4ed4dd20e Mon Sep 17 00:00:00 2001
+Message-ID: <353e7eb26cb922bd342c050273afbcc4ed4dd20e.1780571167.git.jdenemar@redhat.com>
+From: Jiri Denemark <jdenemar@redhat.com>
+Date: Mon, 25 May 2026 14:22:58 +0200
+Subject: [PATCH] cpu: Introduce virCPUUpdateFeatures
+
+This new API can be used to update an existing CPU definition with
+features described by CPU data.
+
+Signed-off-by: Jiri Denemark <jdenemar@redhat.com>
+Reviewed-by: Peter Krempa <pkrempa@redhat.com>
+(cherry picked from commit 6be1be4938338477bff14ff24c7ed2a05bc1dadc)
+
+https://redhat.atlassian.net/browse/RHEL-177364
+
+Signed-off-by: Jiri Denemark <jdenemar@redhat.com>
+---
+ src/cpu/cpu.c            | 34 ++++++++++++++++++++++++++++++++++
+ src/cpu/cpu.h            | 12 ++++++++++++
+ src/cpu/cpu_x86.c        | 23 +++++++++++++++++++++++
+ src/libvirt_private.syms |  1 +
+ 4 files changed, 70 insertions(+)
+
+diff --git a/src/cpu/cpu.c b/src/cpu/cpu.c
+index d81e620a1d..3e9affa1cd 100644
+--- a/src/cpu/cpu.c
++++ b/src/cpu/cpu.c
+@@ -1359,6 +1359,40 @@ virCPUGetCanonicalModel(virArch arch,
+ }
+ 
+ 
++/** virCPUUpdateFeatures:
++ *
++ * @arch: CPU architecture
++ * @cpu: CPU definition to update
++ * @cpuData: CPU data describing features
++ * @policy: to be used by the updated features
++ *
++ * Updates features described in @cpuData to use the specified @policy. Missing
++ * features will be automatically added to the CPU definition.
++ *
++ * Returns 0 on success, -1 otherwise.
++ */
++int
++virCPUUpdateFeatures(virArch arch,
++                     virCPUDef *cpu,
++                     virCPUData *cpuData,
++                     virCPUFeaturePolicy policy)
++{
++    struct cpuArchDriver *driver;
++
++    VIR_DEBUG("arch=%s, cpu=%p, model=%s, policy=%s",
++              virArchToString(arch), cpu, NULLSTR(cpu->model),
++              virCPUFeaturePolicyTypeToString(policy));
++
++    if (!(driver = cpuGetSubDriver(arch)))
++        return -1;
++
++    if (!driver->updateFeatures)
++        return 0;
++
++    return driver->updateFeatures(cpu, cpuData, policy);
++}
++
++
+ /**
+  * virCPUArchIsSupported:
+  *
+diff --git a/src/cpu/cpu.h b/src/cpu/cpu.h
+index 36fd123675..65711ac085 100644
+--- a/src/cpu/cpu.h
++++ b/src/cpu/cpu.h
+@@ -143,6 +143,11 @@ typedef int
+ typedef const char *
+ (*virCPUArchGetCanonicalModel)(const char *model);
+ 
++typedef int
++(*virCPUArchUpdateFeatures)(virCPUDef *cpu,
++                            virCPUData *cpuData,
++                            virCPUFeaturePolicy policy);
++
+ struct cpuArchDriver {
+     const char *name;
+     const virArch *arch;
+@@ -172,6 +177,7 @@ struct cpuArchDriver {
+     virCPUArchDataGetHost dataGetHost;
+     virCPUArchGetCheckMode getCheckMode;
+     virCPUArchGetCanonicalModel getCanonicalModel;
++    virCPUArchUpdateFeatures updateFeatures;
+ };
+ 
+ 
+@@ -332,6 +338,12 @@ const char *
+ virCPUGetCanonicalModel(virArch arch,
+                         const char *model);
+ 
++int
++virCPUUpdateFeatures(virArch arch,
++                     virCPUDef *cpu,
++                     virCPUData *cpuData,
++                     virCPUFeaturePolicy policy);
++
+ bool
+ virCPUArchIsSupported(virArch arch);
+ 
+diff --git a/src/cpu/cpu_x86.c b/src/cpu/cpu_x86.c
+index e5825fbb4d..6e860de458 100644
+--- a/src/cpu/cpu_x86.c
++++ b/src/cpu/cpu_x86.c
+@@ -3790,6 +3790,28 @@ virCPUx86GetCanonicalModel(const char *modelName)
+ }
+ 
+ 
++static int
++virCPUx86UpdateFeatures(virCPUDef *cpu,
++                        virCPUData *cpuData,
++                        virCPUFeaturePolicy policy)
++{
++    virCPUx86Data *data = &cpuData->data.x86;
++    virCPUx86Map *map;
++    size_t i;
++
++    if (!(map = virCPUx86GetMap()))
++        return -1;
++
++    for (i = 0; i < map->nfeatures; i++) {
++        virCPUx86Feature *feature = map->features[i];
++        if (x86DataIsSubset(data, &feature->data))
++            virCPUDefUpdateFeature(cpu, feature->name, policy);
++    }
++
++    return 0;
++}
++
++
+ struct cpuArchDriver cpuDriverX86 = {
+     .name = "x86",
+     .arch = archs,
+@@ -3824,4 +3846,5 @@ struct cpuArchDriver cpuDriverX86 = {
+ #endif
+     .getCheckMode = virCPUx86GetCheckMode,
+     .getCanonicalModel = virCPUx86GetCanonicalModel,
++    .updateFeatures = virCPUx86UpdateFeatures,
+ };
+diff --git a/src/libvirt_private.syms b/src/libvirt_private.syms
+index 3eb6943440..4a0f9065fa 100644
+--- a/src/libvirt_private.syms
++++ b/src/libvirt_private.syms
+@@ -1586,6 +1586,7 @@ virCPUGetVendorForModel;
+ virCPUProbeHost;
+ virCPUTranslate;
+ virCPUUpdate;
++virCPUUpdateFeatures;
+ virCPUUpdateLive;
+ virCPUValidateFeatures;
+ 
+-- 
+2.54.0

@@ -1,0 +1,107 @@
+From 84c12b67bed448ae5129e3b7c18b52fa397cf217 Mon Sep 17 00:00:00 2001
+Message-ID: <84c12b67bed448ae5129e3b7c18b52fa397cf217.1780571166.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Wed, 18 Mar 2026 13:10:37 +0100
+Subject: [PATCH] qemu: Update qemuDomainNeedsVFIO to ignore PCI hostdev with
+ IOMMUFD
+
+This function is used to figure out if VM needs access to /dev/vfio/vfio.
+In case of PCI host devices that is true only if IOMMUFD is not enabled.
+
+This fixes error when hotplugging PCI host device with IOMMUFD disabled
+to a VM that already has PCI host device with IOMMIFD enabled:
+
+    Could not open '/dev/vfio/vfio': No such file or directory
+
+The function is used in this case to check if /dev/vfio/vfio was already
+made available to QEMU or not.
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Peter Krempa <pkrempa@redhat.com>
+(cherry picked from commit d1fb5cf127d7681fa6c27e5b163ef410132aea49)
+
+Resolves: https://redhat.atlassian.net/browse/RHEL-156803
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/conf/domain_conf.c   | 14 ++++++++++++++
+ src/conf/domain_conf.h   |  3 +++
+ src/libvirt_private.syms |  1 +
+ src/qemu/qemu_domain.c   |  9 ++++++++-
+ 4 files changed, 26 insertions(+), 1 deletion(-)
+
+diff --git a/src/conf/domain_conf.c b/src/conf/domain_conf.c
+index 99d2a0aa53..576a1bd79b 100644
+--- a/src/conf/domain_conf.c
++++ b/src/conf/domain_conf.c
+@@ -32520,6 +32520,20 @@ virDomainDefHasPCIHostdevWithIOMMUFD(const virDomainDef *def)
+ }
+ 
+ 
++bool
++virDomainDefHasPCIHostdevWithoutIOMMUFD(const virDomainDef *def)
++{
++    size_t i;
++
++    for (i = 0; i < def->nhostdevs; i++) {
++        if (virHostdevIsPCIDeviceWithoutIOMMUFD(def->hostdevs[i]))
++            return true;
++    }
++
++    return false;
++}
++
++
+ bool
+ virDomainDefHasMdevHostdev(const virDomainDef *def)
+ {
+diff --git a/src/conf/domain_conf.h b/src/conf/domain_conf.h
+index 8f5780ee4c..f1c8478208 100644
+--- a/src/conf/domain_conf.h
++++ b/src/conf/domain_conf.h
+@@ -4658,6 +4658,9 @@ virDomainDefHasPCIHostdev(const virDomainDef *def);
+ bool
+ virDomainDefHasPCIHostdevWithIOMMUFD(const virDomainDef *def);
+ 
++bool
++virDomainDefHasPCIHostdevWithoutIOMMUFD(const virDomainDef *def);
++
+ bool
+ virDomainDefHasMdevHostdev(const virDomainDef *def);
+ 
+diff --git a/src/libvirt_private.syms b/src/libvirt_private.syms
+index ea1e2d8586..d2563e587a 100644
+--- a/src/libvirt_private.syms
++++ b/src/libvirt_private.syms
+@@ -349,6 +349,7 @@ virDomainDefHasOldStyleROUEFI;
+ virDomainDefHasOldStyleUEFI;
+ virDomainDefHasPCIHostdev;
+ virDomainDefHasPCIHostdevWithIOMMUFD;
++virDomainDefHasPCIHostdevWithoutIOMMUFD;
+ virDomainDefHasTimer;
+ virDomainDefHasUSB;
+ virDomainDefHasVcpusOffline;
+diff --git a/src/qemu/qemu_domain.c b/src/qemu/qemu_domain.c
+index 57f18a02b6..a61939aa15 100644
+--- a/src/qemu/qemu_domain.c
++++ b/src/qemu/qemu_domain.c
+@@ -9284,10 +9284,17 @@ qemuDomainSupportsVideoVga(const virDomainVideoDef *video,
+ }
+ 
+ 
++/**
++ * qemuDomainNeedsVFIO:
++ * @def: domain definition to check
++ *
++ * Check the domain definition to figure out if QEMU needs access
++ * to /dev/vfio/vfio. It's not required if IOMMUFD is used.
++ */
+ bool
+ qemuDomainNeedsVFIO(const virDomainDef *def)
+ {
+-    return virDomainDefHasPCIHostdev(def) ||
++    return virDomainDefHasPCIHostdevWithoutIOMMUFD(def) ||
+         virDomainDefHasMdevHostdev(def) ||
+         virDomainDefHasNVMeDisk(def);
+ }
+-- 
+2.54.0

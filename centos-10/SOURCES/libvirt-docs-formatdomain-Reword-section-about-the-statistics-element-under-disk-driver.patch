@@ -1,0 +1,51 @@
+From ea6f8a96929577416a5cc4f4452f920312aef081 Mon Sep 17 00:00:00 2001
+Message-ID: <ea6f8a96929577416a5cc4f4452f920312aef081.1771336682.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Fri, 30 Jan 2026 17:37:48 +0100
+Subject: [PATCH] docs: formatdomain: Reword section about the '<statistics>'
+ element under disk driver
+
+Separate the timed statistics group and link to the fields which are
+returned by it.
+
+Prepare the wording for more statistics configs in the future.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit ad65b00c1393f7f13e15744e2e1be4fb531e2a17)
+
+https://issues.redhat.com/browse/RHEL-147866 [rhel-9.8]
+https://issues.redhat.com/browse/RHEL-131335 [rhel-10.2]
+---
+ docs/formatdomain.rst | 16 +++++++++++-----
+ 1 file changed, 11 insertions(+), 5 deletions(-)
+
+diff --git a/docs/formatdomain.rst b/docs/formatdomain.rst
+index 45f262113b..70882c6820 100644
+--- a/docs/formatdomain.rst
++++ b/docs/formatdomain.rst
+@@ -3605,11 +3605,17 @@ paravirtualized driver is specified via the ``disk`` element.
+           </iothreads>
+         </driver>
+ 
+-   -  The optional ``statistics`` sub-element allows configuring statistics
+-      collection in configurable intervals for the given disk. Intervals are
+-      configured by ``<statistic>`` sub-elements with ``interval`` attribute
+-      configuring the collection window duration in seconds. The statistics
+-      are available via the bulk statistics API.
++   -  The optional ``statistics`` sub-element allows configuring various optional
++      statistics collection.
++
++      Statistic values returned under
++      `VIR_DOMAIN_STATS_BLOCK_SUFFIX_TIMED_GROUP_PREFIX <html/libvirt-libvirt-domain.html#VIR_DOMAIN_STATS_BLOCK_SUFFIX_TIMED_GROUP_PREFIX>`__
++      typed parameter prefix returned by the
++      `virConnectGetAllDomainStats <html/libvirt-libvirt-domain.html#virConnectGetAllDomainStats>`__
++      API are collected based on one or more configurable intervals. An interval
++      of collection is configured by ``<statistic>`` sub-elements with
++      ``interval`` attribute configuring the collection window duration in
++      seconds.
+ 
+       Example::
+ 
+-- 
+2.53.0

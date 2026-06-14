@@ -1,0 +1,34 @@
+From ca8a9f6b124dbfe5809c83d7f2d268bb18b9fa75 Mon Sep 17 00:00:00 2001
+Message-ID: <ca8a9f6b124dbfe5809c83d7f2d268bb18b9fa75.1769699749.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Fri, 23 Jan 2026 08:54:32 +0100
+Subject: [PATCH] qemuSnapshotUpdateBackingStore: Remove stale comment
+
+The code does a 'qemu-img rebase' rather than a 'qemu-img create' what
+the commit suggests. Since we enumerate all arguments right below,
+there's no need for a comment.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Pavel Hrdina <phrdina@redhat.com>
+(cherry picked from commit 452c281aee7a043b59a288de043ea4e3b75a6b7c)
+
+ https://issues.redhat.com/browse/RHEL-144089 [rhel-10.2]
+ https://issues.redhat.com/browse/RHEL-144090 [rhel-9.8]
+---
+ src/qemu/qemu_snapshot.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/src/qemu/qemu_snapshot.c b/src/qemu/qemu_snapshot.c
+index dfc3f449e3..942ba0d437 100644
+--- a/src/qemu/qemu_snapshot.c
++++ b/src/qemu/qemu_snapshot.c
+@@ -3698,7 +3698,6 @@ qemuSnapshotUpdateBackingStore(qemuSnapshotDeleteExternalData *data)
+         struct _qemuSnapshotDisksWithBackingStoreData *backingData = cur->data;
+         g_autoptr(virCommand) cmd = NULL;
+ 
+-        /* creates cmd line args: qemu-img create -f qcow2 -o */
+         if (!(cmd = virCommandNewArgList("qemu-img",
+                                          "rebase",
+                                          "-u",
+-- 
+2.52.0

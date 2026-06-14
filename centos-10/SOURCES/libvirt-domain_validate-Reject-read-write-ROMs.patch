@@ -1,0 +1,140 @@
+From 3872c63fb5af9e6d37f14b157171ab9fead24b83 Mon Sep 17 00:00:00 2001
+Message-ID: <3872c63fb5af9e6d37f14b157171ab9fead24b83.1772815312.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Fri, 12 Dec 2025 16:31:09 +0100
+Subject: [PATCH] domain_validate: Reject read/write ROMs
+
+The combination doesn't make sense.
+
+After this change the firmware-manual-bios-rw test case starts
+failing, as it should have in the first place.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit a5ae34aa74647e06114d85601c146a991323284b)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/conf/domain_validate.c                    |  6 ++++
+ ...firmware-manual-bios-rw.x86_64-latest.args | 32 -------------------
+ .../firmware-manual-bios-rw.x86_64-latest.err |  1 +
+ .../firmware-manual-bios-rw.x86_64-latest.xml | 28 ----------------
+ tests/qemuxmlconftest.c                       |  2 +-
+ 5 files changed, 8 insertions(+), 61 deletions(-)
+ delete mode 100644 tests/qemuxmlconfdata/firmware-manual-bios-rw.x86_64-latest.args
+ create mode 100644 tests/qemuxmlconfdata/firmware-manual-bios-rw.x86_64-latest.err
+ delete mode 100644 tests/qemuxmlconfdata/firmware-manual-bios-rw.x86_64-latest.xml
+
+diff --git a/src/conf/domain_validate.c b/src/conf/domain_validate.c
+index 09c1b3f13f..93a54f8cc7 100644
+--- a/src/conf/domain_validate.c
++++ b/src/conf/domain_validate.c
+@@ -1766,6 +1766,12 @@ virDomainDefOSValidate(const virDomainDef *def,
+     }
+ 
+     if (loader->readonly == VIR_TRISTATE_BOOL_NO) {
++        if (loader->type == VIR_DOMAIN_LOADER_TYPE_ROM) {
++            virReportError(VIR_ERR_XML_DETAIL, "%s",
++                           _("ROM loader type cannot be used as read/write"));
++            return -1;
++        }
++
+         if (loader->nvramTemplate) {
+             virReportError(VIR_ERR_XML_DETAIL, "%s",
+                            _("NVRAM template is not permitted when loader is read/write"));
+diff --git a/tests/qemuxmlconfdata/firmware-manual-bios-rw.x86_64-latest.args b/tests/qemuxmlconfdata/firmware-manual-bios-rw.x86_64-latest.args
+deleted file mode 100644
+index 969c7ad68c..0000000000
+--- a/tests/qemuxmlconfdata/firmware-manual-bios-rw.x86_64-latest.args
++++ /dev/null
+@@ -1,32 +0,0 @@
+-LC_ALL=C \
+-PATH=/bin \
+-HOME=/var/lib/libvirt/qemu/domain--1-guest \
+-USER=test \
+-LOGNAME=test \
+-XDG_DATA_HOME=/var/lib/libvirt/qemu/domain--1-guest/.local/share \
+-XDG_CACHE_HOME=/var/lib/libvirt/qemu/domain--1-guest/.cache \
+-XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-guest/.config \
+-/usr/bin/qemu-system-x86_64 \
+--name guest=guest,debug-threads=on \
+--S \
+--object '{"qom-type":"secret","id":"masterKey0","format":"raw","file":"/var/lib/libvirt/qemu/domain--1-guest/master-key.aes"}' \
+--machine pc-i440fx-10.0,usb=off,dump-guest-core=off,memory-backend=pc.ram,acpi=off \
+--accel tcg \
+--cpu qemu64 \
+--bios /usr/share/seabios/bios.bin \
+--m size=1048576k \
+--object '{"qom-type":"memory-backend-ram","id":"pc.ram","size":1073741824}' \
+--overcommit mem-lock=off \
+--smp 1,sockets=1,cores=1,threads=1 \
+--uuid 63840878-0deb-4095-97e6-fc444d9bc9fa \
+--display none \
+--no-user-config \
+--nodefaults \
+--chardev socket,id=charmonitor,fd=1729,server=on,wait=off \
+--mon chardev=charmonitor,id=monitor,mode=control \
+--rtc base=utc \
+--no-shutdown \
+--boot strict=on \
+--audiodev '{"id":"audio1","driver":"none"}' \
+--sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
+--msg timestamp=on
+diff --git a/tests/qemuxmlconfdata/firmware-manual-bios-rw.x86_64-latest.err b/tests/qemuxmlconfdata/firmware-manual-bios-rw.x86_64-latest.err
+new file mode 100644
+index 0000000000..13e9d7c0f1
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-manual-bios-rw.x86_64-latest.err
+@@ -0,0 +1 @@
++ROM loader type cannot be used as read/write
+diff --git a/tests/qemuxmlconfdata/firmware-manual-bios-rw.x86_64-latest.xml b/tests/qemuxmlconfdata/firmware-manual-bios-rw.x86_64-latest.xml
+deleted file mode 100644
+index 65bb8493c9..0000000000
+--- a/tests/qemuxmlconfdata/firmware-manual-bios-rw.x86_64-latest.xml
++++ /dev/null
+@@ -1,28 +0,0 @@
+-<domain type='qemu'>
+-  <name>guest</name>
+-  <uuid>63840878-0deb-4095-97e6-fc444d9bc9fa</uuid>
+-  <memory unit='KiB'>1048576</memory>
+-  <currentMemory unit='KiB'>1048576</currentMemory>
+-  <vcpu placement='static'>1</vcpu>
+-  <os>
+-    <type arch='x86_64' machine='pc-i440fx-10.0'>hvm</type>
+-    <loader readonly='no' type='rom' format='raw'>/usr/share/seabios/bios.bin</loader>
+-    <boot dev='hd'/>
+-  </os>
+-  <cpu mode='custom' match='exact' check='none'>
+-    <model fallback='forbid'>qemu64</model>
+-  </cpu>
+-  <clock offset='utc'/>
+-  <on_poweroff>destroy</on_poweroff>
+-  <on_reboot>restart</on_reboot>
+-  <on_crash>destroy</on_crash>
+-  <devices>
+-    <emulator>/usr/bin/qemu-system-x86_64</emulator>
+-    <controller type='usb' index='0' model='none'/>
+-    <controller type='pci' index='0' model='pci-root'/>
+-    <input type='mouse' bus='ps2'/>
+-    <input type='keyboard' bus='ps2'/>
+-    <audio id='1' type='none'/>
+-    <memballoon model='none'/>
+-  </devices>
+-</domain>
+diff --git a/tests/qemuxmlconftest.c b/tests/qemuxmlconftest.c
+index ba33267d4e..a45487b1b5 100644
+--- a/tests/qemuxmlconftest.c
++++ b/tests/qemuxmlconftest.c
+@@ -1576,7 +1576,7 @@ mymain(void)
+     DO_TEST_CAPS_LATEST("firmware-manual-bios");
+     DO_TEST_CAPS_LATEST("firmware-manual-bios-stateless");
+     DO_TEST_CAPS_LATEST_PARSE_ERROR("firmware-manual-bios-not-stateless");
+-    DO_TEST_CAPS_LATEST("firmware-manual-bios-rw");
++    DO_TEST_CAPS_LATEST_PARSE_ERROR("firmware-manual-bios-rw");
+     DO_TEST_CAPS_LATEST("firmware-manual-efi");
+     DO_TEST_CAPS_LATEST("firmware-manual-efi-features");
+     DO_TEST_CAPS_LATEST_ABI_UPDATE_PARSE_ERROR("firmware-manual-efi-features");
+-- 
+2.53.0

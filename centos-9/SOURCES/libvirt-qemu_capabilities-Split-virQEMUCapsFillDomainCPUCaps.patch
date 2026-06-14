@@ -1,0 +1,150 @@
+From b41da9180160e455bf36d9db7870b64457a6ca8c Mon Sep 17 00:00:00 2001
+Message-ID: <b41da9180160e455bf36d9db7870b64457a6ca8c.1780571166.git.jdenemar@redhat.com>
+From: Jiri Denemark <jdenemar@redhat.com>
+Date: Thu, 21 May 2026 12:24:25 +0200
+Subject: [PATCH] qemu_capabilities: Split virQEMUCapsFillDomainCPUCaps
+
+Each CPU mode is filled in its own dedicated function.
+
+Signed-off-by: Jiri Denemark <jdenemar@redhat.com>
+Reviewed-by: Peter Krempa <pkrempa@redhat.com>
+(cherry picked from commit 354ac21caba1da52d3d48e57c7395f899efc9ca4)
+
+https://redhat.atlassian.net/browse/RHEL-177364
+
+Signed-off-by: Jiri Denemark <jdenemar@redhat.com>
+---
+ src/qemu/qemu_capabilities.c | 96 ++++++++++++++++++++++++------------
+ 1 file changed, 64 insertions(+), 32 deletions(-)
+
+diff --git a/src/qemu/qemu_capabilities.c b/src/qemu/qemu_capabilities.c
+index ed6aa86da2..0b32296cc8 100644
+--- a/src/qemu/qemu_capabilities.c
++++ b/src/qemu/qemu_capabilities.c
+@@ -6553,6 +6553,66 @@ virQEMUCapsFillDomainOSCaps(virDomainCapsOS *os,
+ }
+ 
+ 
++static void
++virQEMUCapsFillDomainCPUHostPassthrough(virQEMUCaps *qemuCaps,
++                                        virDomainCaps *domCaps)
++{
++    domCaps->cpu.hostPassthrough = true;
++
++    domCaps->cpu.hostPassthroughMigratable.report = true;
++    if (virQEMUCapsGet(qemuCaps, QEMU_CAPS_CPU_MIGRATABLE)) {
++        VIR_DOMAIN_CAPS_ENUM_SET(domCaps->cpu.hostPassthroughMigratable,
++                                 VIR_TRISTATE_SWITCH_ON);
++    }
++    VIR_DOMAIN_CAPS_ENUM_SET(domCaps->cpu.hostPassthroughMigratable,
++                             VIR_TRISTATE_SWITCH_OFF);
++}
++
++
++static void
++virQEMUCapsFillDomainCPUMaximum(virDomainCaps *domCaps)
++{
++    domCaps->cpu.maximum = true;
++
++    domCaps->cpu.maximumMigratable.report = true;
++    VIR_DOMAIN_CAPS_ENUM_SET(domCaps->cpu.maximumMigratable,
++                             VIR_TRISTATE_SWITCH_ON);
++    VIR_DOMAIN_CAPS_ENUM_SET(domCaps->cpu.maximumMigratable,
++                             VIR_TRISTATE_SWITCH_OFF);
++}
++
++
++static void
++virQEMUCapsFillDomainCPUHostModel(virQEMUCaps *qemuCaps,
++                                  virDomainCaps *domCaps)
++{
++    virCPUDef *cpu = virQEMUCapsGetHostModel(qemuCaps, domCaps->virttype,
++                                             VIR_QEMU_CAPS_HOST_CPU_REPORTED);
++
++    domCaps->cpu.hostModel = virCPUDefCopy(cpu);
++    domCaps->cpu.hostModel->addr = virQEMUCapsGetHostPhysAddr(qemuCaps,
++                                                              domCaps->virttype);
++}
++
++
++static void
++virQEMUCapsFillDomainCPUCustom(virQEMUCaps *qemuCaps,
++                               virDomainCaps *domCaps)
++{
++    const char *forbidden[] = { "host", NULL };
++    g_auto(GStrv) models = NULL;
++
++    if (virCPUGetModels(domCaps->arch, &models) >= 0) {
++        domCaps->cpu.custom = virQEMUCapsGetCPUModels(qemuCaps,
++                                                      domCaps->virttype,
++                                                      (const char **)models,
++                                                      forbidden);
++    } else {
++        domCaps->cpu.custom = NULL;
++    }
++}
++
++
+ static void
+ virQEMUCapsFillDomainCPUCaps(virQEMUCaps *qemuCaps,
+                              virArch hostarch,
+@@ -6561,53 +6621,25 @@ virQEMUCapsFillDomainCPUCaps(virQEMUCaps *qemuCaps,
+     if (virQEMUCapsIsCPUModeSupported(qemuCaps, hostarch, domCaps->virttype,
+                                       VIR_CPU_MODE_HOST_PASSTHROUGH,
+                                       domCaps->machine)) {
+-        domCaps->cpu.hostPassthrough = true;
+-
+-        domCaps->cpu.hostPassthroughMigratable.report = true;
+-        if (virQEMUCapsGet(qemuCaps, QEMU_CAPS_CPU_MIGRATABLE)) {
+-            VIR_DOMAIN_CAPS_ENUM_SET(domCaps->cpu.hostPassthroughMigratable,
+-                                     VIR_TRISTATE_SWITCH_ON);
+-        }
+-        VIR_DOMAIN_CAPS_ENUM_SET(domCaps->cpu.hostPassthroughMigratable,
+-                                 VIR_TRISTATE_SWITCH_OFF);
++        virQEMUCapsFillDomainCPUHostPassthrough(qemuCaps, domCaps);
+     }
+ 
+     if (virQEMUCapsIsCPUModeSupported(qemuCaps, hostarch, domCaps->virttype,
+                                       VIR_CPU_MODE_MAXIMUM,
+                                       domCaps->machine)) {
+-        domCaps->cpu.maximum = true;
+-
+-        domCaps->cpu.maximumMigratable.report = true;
+-        VIR_DOMAIN_CAPS_ENUM_SET(domCaps->cpu.maximumMigratable,
+-                                 VIR_TRISTATE_SWITCH_ON);
+-        VIR_DOMAIN_CAPS_ENUM_SET(domCaps->cpu.maximumMigratable,
+-                                 VIR_TRISTATE_SWITCH_OFF);
++        virQEMUCapsFillDomainCPUMaximum(domCaps);
+     }
+ 
+     if (virQEMUCapsIsCPUModeSupported(qemuCaps, hostarch, domCaps->virttype,
+                                       VIR_CPU_MODE_HOST_MODEL,
+                                       domCaps->machine)) {
+-        virCPUDef *cpu = virQEMUCapsGetHostModel(qemuCaps, domCaps->virttype,
+-                                                   VIR_QEMU_CAPS_HOST_CPU_REPORTED);
+-        domCaps->cpu.hostModel = virCPUDefCopy(cpu);
+-        domCaps->cpu.hostModel->addr = virQEMUCapsGetHostPhysAddr(qemuCaps,
+-                                                                  domCaps->virttype);
++        virQEMUCapsFillDomainCPUHostModel(qemuCaps, domCaps);
+     }
+ 
+     if (virQEMUCapsIsCPUModeSupported(qemuCaps, hostarch, domCaps->virttype,
+                                       VIR_CPU_MODE_CUSTOM,
+                                       domCaps->machine)) {
+-        const char *forbidden[] = { "host", NULL };
+-        g_auto(GStrv) models = NULL;
+-
+-        if (virCPUGetModels(domCaps->arch, &models) >= 0) {
+-            domCaps->cpu.custom = virQEMUCapsGetCPUModels(qemuCaps,
+-                                                          domCaps->virttype,
+-                                                          (const char **)models,
+-                                                          forbidden);
+-        } else {
+-            domCaps->cpu.custom = NULL;
+-        }
++        virQEMUCapsFillDomainCPUCustom(qemuCaps, domCaps);
+     }
+ }
+ 
+-- 
+2.54.0

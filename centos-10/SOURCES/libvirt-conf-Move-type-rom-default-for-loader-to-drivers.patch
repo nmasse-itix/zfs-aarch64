@@ -1,0 +1,104 @@
+From 08ff36546b810ae14135c19c99fb1dc1aa5fcbb2 Mon Sep 17 00:00:00 2001
+Message-ID: <08ff36546b810ae14135c19c99fb1dc1aa5fcbb2.1772815313.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Tue, 3 Feb 2026 15:18:39 +0100
+Subject: [PATCH] conf: Move type=rom default for loader to drivers
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Right now we set this default in the common parsing code, which
+is not a big problem per se but would get in the way of some
+upcoming changes.
+
+Leave this choice to individual drivers instead. Only the QEMU
+and Xen drivers use the value for anything, so we can limit the
+amount of code duplication this change causes.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+Reviewed-by: Daniel P. Berrangé <berrange@redhat.com>
+(cherry picked from commit 1504b7f687bdfc679377e605d076776b18533468)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/conf/domain_postparse.c | 19 -------------------
+ src/libxl/libxl_domain.c    |  6 ++++++
+ src/qemu/qemu_firmware.c    |  5 +++++
+ 3 files changed, 11 insertions(+), 19 deletions(-)
+
+diff --git a/src/conf/domain_postparse.c b/src/conf/domain_postparse.c
+index 38e731348d..cbaae75c02 100644
+--- a/src/conf/domain_postparse.c
++++ b/src/conf/domain_postparse.c
+@@ -89,22 +89,6 @@ virDomainDefPostParseMemory(virDomainDef *def,
+ }
+ 
+ 
+-static int
+-virDomainDefPostParseOs(virDomainDef *def)
+-{
+-    if (!def->os.loader)
+-        return 0;
+-
+-    if (def->os.loader->path &&
+-        def->os.loader->type == VIR_DOMAIN_LOADER_TYPE_NONE) {
+-        /* By default, loader is type of 'rom' */
+-        def->os.loader->type = VIR_DOMAIN_LOADER_TYPE_ROM;
+-    }
+-
+-    return 0;
+-}
+-
+-
+ static void
+ virDomainDefPostParseMemtune(virDomainDef *def)
+ {
+@@ -1251,9 +1235,6 @@ virDomainDefPostParseCommon(virDomainDef *def,
+     if (virDomainDefPostParseMemory(def, data->parseFlags) < 0)
+         return -1;
+ 
+-    if (virDomainDefPostParseOs(def) < 0)
+-        return -1;
+-
+     virDomainDefPostParseMemtune(def);
+ 
+     if (virDomainDefRejectDuplicateControllers(def) < 0)
+diff --git a/src/libxl/libxl_domain.c b/src/libxl/libxl_domain.c
+index 9842d6fece..c6717e31cf 100644
+--- a/src/libxl/libxl_domain.c
++++ b/src/libxl/libxl_domain.c
+@@ -279,6 +279,12 @@ libxlDomainDefPostParse(virDomainDef *def,
+             def->features[VIR_DOMAIN_FEATURE_ACPI] = VIR_TRISTATE_SWITCH_ON;
+     }
+ 
++    if (def->os.loader &&
++        def->os.loader->path &&
++        !def->os.loader->type) {
++        def->os.loader->type = VIR_DOMAIN_LOADER_TYPE_ROM;
++    }
++
+     /* add implicit balloon device */
+     if (def->memballoon == NULL) {
+         virDomainMemballoonDef *memballoon;
+diff --git a/src/qemu/qemu_firmware.c b/src/qemu/qemu_firmware.c
+index 519828f6f9..6a074055ca 100644
+--- a/src/qemu/qemu_firmware.c
++++ b/src/qemu/qemu_firmware.c
+@@ -1662,6 +1662,11 @@ qemuFirmwareFillDomainCustom(virDomainDef *def)
+     if (!loader)
+         return;
+ 
++    if (loader->path &&
++        !loader->type) {
++        loader->type = VIR_DOMAIN_LOADER_TYPE_ROM;
++    }
++
+     if (loader->path &&
+         !loader->format) {
+         loader->format = VIR_STORAGE_FILE_RAW;
+-- 
+2.53.0

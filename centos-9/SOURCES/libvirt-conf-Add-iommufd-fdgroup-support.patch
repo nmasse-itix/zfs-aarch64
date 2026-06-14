@@ -1,0 +1,160 @@
+From 99ca73f9c43c7a266cf65f0012a5350197d0f229 Mon Sep 17 00:00:00 2001
+Message-ID: <99ca73f9c43c7a266cf65f0012a5350197d0f229.1780571166.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Fri, 13 Mar 2026 15:28:17 +0100
+Subject: [PATCH] conf: Add iommufd fdgroup support
+
+This will allow management applications running libvirt without
+necessary permissions to pass FD for /dev/iommu with per-process
+locked memory accounting enabled.
+
+Kernel uses per-user locked memory accounting by default which may
+cause error while starting multiple VMs with host devices using IOMMUFD.
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Peter Krempa <pkrempa@redhat.com>
+(cherry picked from commit 58875a6df679c5272f61028d33bf1380c51b0d5b)
+
+Resolves: https://redhat.atlassian.net/browse/RHEL-156803
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ docs/formatdomain.rst                  |  8 +++++++-
+ src/conf/domain_conf.c                 |  6 ++++++
+ src/conf/domain_conf.h                 |  1 +
+ src/conf/domain_validate.c             | 16 ++++++++++++++++
+ src/conf/schemas/domaincommon.rng      |  3 +++
+ tests/genericxml2xmlindata/iommufd.xml |  2 +-
+ 6 files changed, 34 insertions(+), 2 deletions(-)
+
+diff --git a/docs/formatdomain.rst b/docs/formatdomain.rst
+index 86b3bad903..225152e0f2 100644
+--- a/docs/formatdomain.rst
++++ b/docs/formatdomain.rst
+@@ -1368,7 +1368,7 @@ Host Device IOMMUFD
+ 
+    <domain>
+      ...
+-     <iommufd enabled='yes'/>
++     <iommufd enabled='yes' fdgroup='iommu'/>
+      ...
+    </domain>
+ 
+@@ -1382,6 +1382,12 @@ Host Device IOMMUFD
+    This controls IOMMUFD usage for all host devices, each device can change this
+    global default by setting ``iommufd`` attribute for ``driver`` element.
+ 
++   Optional ``fdgroup`` attribute can be used together with
++   `virDomainFDAssociate <html/libvirt-libvirt-domain.html#virDomainFDAssociate>`__
++   to pass /dev/iommu FD instead of letting libvirt to open it. Caller is
++   responsible for setting per-process locked memory accounting otherwise
++   starting multiple VMs with host devices using IOMMUFD may fail.
++
+ Resource partitioning
+ ---------------------
+ 
+diff --git a/src/conf/domain_conf.c b/src/conf/domain_conf.c
+index 1e91561fea..cec0f88f0f 100644
+--- a/src/conf/domain_conf.c
++++ b/src/conf/domain_conf.c
+@@ -4192,6 +4192,8 @@ void virDomainDefFree(virDomainDef *def)
+     g_free(def->kvm_features);
+     g_free(def->tcg_features);
+ 
++    g_free(def->iommufd_fdgroup);
++
+     virBlkioDeviceArrayClear(def->blkio.devices,
+                              def->blkio.ndevices);
+     g_free(def->blkio.devices);
+@@ -19765,6 +19767,8 @@ virDomainDefIommufdParse(virDomainDef *def,
+     if (virXMLPropTristateBool(nodes[0], "enabled", VIR_XML_PROP_REQUIRED, &def->iommufd) < 0)
+         return -1;
+ 
++    def->iommufd_fdgroup = virXMLPropString(nodes[0], "fdgroup");
++
+     return 0;
+ }
+ 
+@@ -27998,6 +28002,8 @@ virDomainDefIommufdFormat(virBuffer *buf,
+     virBufferAsprintf(&attrBuf, " enabled='%s'",
+                       virTristateBoolTypeToString(def->iommufd));
+ 
++    virBufferEscapeString(&attrBuf, " fdgroup='%s'", def->iommufd_fdgroup);
++
+     virXMLFormatElement(buf, "iommufd", &attrBuf, NULL);
+ }
+ 
+diff --git a/src/conf/domain_conf.h b/src/conf/domain_conf.h
+index e12064a3ab..8c8c11c0cf 100644
+--- a/src/conf/domain_conf.h
++++ b/src/conf/domain_conf.h
+@@ -3232,6 +3232,7 @@ struct _virDomainDef {
+     virDomainFeatureTCG *tcg_features;
+ 
+     virTristateBool iommufd;
++    char *iommufd_fdgroup;
+ 
+     bool tseg_specified;
+     unsigned long long tseg_size;
+diff --git a/src/conf/domain_validate.c b/src/conf/domain_validate.c
+index 4558e7b210..3e6ba5e609 100644
+--- a/src/conf/domain_validate.c
++++ b/src/conf/domain_validate.c
+@@ -1995,6 +1995,19 @@ virDomainDefValidateThrottleGroups(const virDomainDef *def)
+ }
+ 
+ 
++static int
++virDomainDefValidateIommufd(const virDomainDef *def)
++{
++    if (def->iommufd == VIR_TRISTATE_BOOL_NO && def->iommufd_fdgroup) {
++        virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
++                       _("Setting 'fdgroup' when 'iommufd' is disabled is not supported."));
++        return -1;
++    }
++
++    return 0;
++}
++
++
+ static int
+ virDomainDefValidateInternal(const virDomainDef *def,
+                              virDomainXMLOption *xmlopt)
+@@ -2056,6 +2069,9 @@ virDomainDefValidateInternal(const virDomainDef *def,
+     if (virDomainDefValidateThrottleGroups(def) < 0)
+         return -1;
+ 
++    if (virDomainDefValidateIommufd(def) < 0)
++        return -1;
++
+     return 0;
+ }
+ 
+diff --git a/src/conf/schemas/domaincommon.rng b/src/conf/schemas/domaincommon.rng
+index 81b57a937a..9fde565d94 100644
+--- a/src/conf/schemas/domaincommon.rng
++++ b/src/conf/schemas/domaincommon.rng
+@@ -1353,6 +1353,9 @@
+       <attribute name="enabled">
+         <ref name="virYesNo"/>
+       </attribute>
++      <optional>
++        <attribute name="fdgroup"/>
++      </optional>
+     </element>
+   </define>
+ 
+diff --git a/tests/genericxml2xmlindata/iommufd.xml b/tests/genericxml2xmlindata/iommufd.xml
+index 63ea839383..10d59ca548 100644
+--- a/tests/genericxml2xmlindata/iommufd.xml
++++ b/tests/genericxml2xmlindata/iommufd.xml
+@@ -4,7 +4,7 @@
+   <memory unit='KiB'>219136</memory>
+   <currentMemory unit='KiB'>219136</currentMemory>
+   <vcpu placement='static'>1</vcpu>
+-  <iommufd enabled='yes'/>
++  <iommufd enabled='yes' fdgroup='iommu'/>
+   <os>
+     <type arch='i686' machine='pc'>hvm</type>
+     <boot dev='hd'/>
+-- 
+2.54.0

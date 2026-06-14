@@ -1,0 +1,49 @@
+From e80e42974e03a8c18bda11714608271d372558ae Mon Sep 17 00:00:00 2001
+Message-ID: <e80e42974e03a8c18bda11714608271d372558ae.1772815313.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Mon, 9 Feb 2026 19:18:32 +0100
+Subject: [PATCH] schema: Add firmwareFeatures element for domaincaps
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 463322ec48d48886ac38604565923cb283dca26e)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/conf/schemas/domaincaps.rng | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/src/conf/schemas/domaincaps.rng b/src/conf/schemas/domaincaps.rng
+index 8d0380951d..3b24caeca6 100644
+--- a/src/conf/schemas/domaincaps.rng
++++ b/src/conf/schemas/domaincaps.rng
+@@ -68,6 +68,15 @@
+     </element>
+   </define>
+ 
++  <define name="firmwareFeatures">
++    <element name="firmwareFeatures">
++      <ref name="supported"/>
++      <optional>
++        <ref name="enum"/>
++      </optional>
++    </element>
++  </define>
++
+   <define name="loader">
+     <element name="loader">
+       <ref name="supported"/>
+@@ -83,6 +92,9 @@
+       <interleave>
+         <ref name="supported"/>
+         <ref name="enum"/>
++        <optional>
++          <ref name="firmwareFeatures"/>
++        </optional>
+         <optional>
+           <ref name="loader"/>
+         </optional>
+-- 
+2.53.0

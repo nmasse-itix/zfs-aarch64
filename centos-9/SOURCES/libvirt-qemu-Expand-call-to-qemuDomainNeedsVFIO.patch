@@ -1,0 +1,51 @@
+From 5512f4ffa8f4ea8a4afd354e4592b69dc5c39c61 Mon Sep 17 00:00:00 2001
+Message-ID: <5512f4ffa8f4ea8a4afd354e4592b69dc5c39c61.1780571166.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Wed, 18 Mar 2026 12:52:05 +0100
+Subject: [PATCH] qemu: Expand call to qemuDomainNeedsVFIO
+
+The function qemuDomainNeedsVFIO() was originally used by other parts
+of qemu code to figure out if the VM needs /dev/vfio/vfio.
+
+Later it was also used by code calculating locked memory limit for all
+architectures, and after that change again and used only for PPC64.
+
+Now it needs to be changed again due to IOMMUFD support, the
+/dev/vfio/vfio device is used by QEMU only if IOMMUFD is not used
+but for accounting we still need consider all PCI host devices
+because if IOMMUFD is used it still requires increasing locked
+memory limit.
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Peter Krempa <pkrempa@redhat.com>
+(cherry picked from commit c89b2bf1a80e3261bd18cdb352be1ffce9f4639e)
+
+Resolves: https://redhat.atlassian.net/browse/RHEL-156803
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/qemu/qemu_domain.c | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/src/qemu/qemu_domain.c b/src/qemu/qemu_domain.c
+index 5c9f4831fd..57f18a02b6 100644
+--- a/src/qemu/qemu_domain.c
++++ b/src/qemu/qemu_domain.c
+@@ -8259,8 +8259,14 @@ getPPC64MemLockLimitBytes(virDomainDef *def)
+         passthroughLimit = maxMemory +
+                            128 * (1ULL<<30) / 512 * nPCIHostBridges +
+                            8192;
+-    } else if (qemuDomainNeedsVFIO(def) || virDomainDefHasVDPANet(def)) {
+-        /* For regular (non-NVLink2 present) VFIO passthrough, the value
++    } else if (virDomainDefHasPCIHostdev(def) ||
++               virDomainDefHasMdevHostdev(def) ||
++               virDomainDefHasNVMeDisk(def) ||
++               virDomainDefHasVDPANet(def)) {
++        /* Not using qemuDomainNeedsVFIO() as that doesn't take PCI host
++         * devices with IOMMFD into account.
++         *
++         * For regular (non-NVLink2 present) VFIO passthrough, the value
+          * of passthroughLimit is:
+          *
+          * passthroughLimit := max( 2 GiB * #PHBs,                       (c)
+-- 
+2.54.0

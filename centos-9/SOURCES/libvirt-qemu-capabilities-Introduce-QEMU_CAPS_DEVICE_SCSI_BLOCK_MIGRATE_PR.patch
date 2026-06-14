@@ -1,0 +1,58 @@
+From d774dcd5a64a14a044ed801103b203bc54b8ac7a Mon Sep 17 00:00:00 2001
+Message-ID: <d774dcd5a64a14a044ed801103b203bc54b8ac7a.1771336751.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Thu, 11 Dec 2025 19:26:40 +0100
+Subject: [PATCH] qemu: capabilities: Introduce
+ QEMU_CAPS_DEVICE_SCSI_BLOCK_MIGRATE_PR
+
+Introduce capability for persisten migration control support.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit b0edb7eb9b819e0560bb7d65b4e0c89082b3b43b)
+
+https://issues.redhat.com/browse/RHEL-140614 [rhel-9.8]
+https://issues.redhat.com/browse/RHEL-135115 [rhel-10.2]
+
+Conflicts:
+ - Commit befdd44bf836c3ba46e46d57b587127e12736591 adding
+   QEMU_CAPS_VIRTIO_IOMMU_AW_BITS was not backported
+---
+ src/qemu/qemu_capabilities.c | 2 ++
+ src/qemu/qemu_capabilities.h | 1 +
+ 2 files changed, 3 insertions(+)
+
+diff --git a/src/qemu/qemu_capabilities.c b/src/qemu/qemu_capabilities.c
+index 1efb77d03b..2c8bd62c99 100644
+--- a/src/qemu/qemu_capabilities.c
++++ b/src/qemu/qemu_capabilities.c
+@@ -755,6 +755,7 @@ VIR_ENUM_IMPL(virQEMUCaps,
+               "disk-timed-stats", /* QEMU_CAPS_DISK_TIMED_STATS */
+               "query-accelerators", /* QEMU_CAPS_QUERY_ACCELERATORS */
+               "mshv", /* QEMU_CAPS_MSHV */
++              "scsi-block.migrate-pr", /* QEMU_CAPS_DEVICE_SCSI_BLOCK_MIGRATE_PR */
+     );
+ 
+ 
+@@ -1536,6 +1537,7 @@ static struct virQEMUCapsDevicePropsFlags virQEMUCapsDevicePropsSCSIDisk[] = {
+ };
+ 
+ static struct virQEMUCapsDevicePropsFlags virQEMUCapsDevicePropsSCSIBlock[] = {
++    { "migrate-pr", QEMU_CAPS_DEVICE_SCSI_BLOCK_MIGRATE_PR, NULL },
+ };
+ 
+ static struct virQEMUCapsDevicePropsFlags virQEMUCapsDevicePropsSCSIGeneric[] = {
+diff --git a/src/qemu/qemu_capabilities.h b/src/qemu/qemu_capabilities.h
+index f180844e66..0c76f2edda 100644
+--- a/src/qemu/qemu_capabilities.h
++++ b/src/qemu/qemu_capabilities.h
+@@ -730,6 +730,7 @@ typedef enum { /* virQEMUCapsFlags grouping marker for syntax-check */
+     QEMU_CAPS_DISK_TIMED_STATS, /* timed stats support ('stats-intervals' property of disk frontends) */
+     QEMU_CAPS_QUERY_ACCELERATORS, /* query-accelerators command */
+     QEMU_CAPS_MSHV, /* -accel mshv */
++    QEMU_CAPS_DEVICE_SCSI_BLOCK_MIGRATE_PR, /* persistent reservation migration support */
+ 
+     QEMU_CAPS_LAST /* this must always be the last item */
+ } virQEMUCapsFlags;
+-- 
+2.53.0

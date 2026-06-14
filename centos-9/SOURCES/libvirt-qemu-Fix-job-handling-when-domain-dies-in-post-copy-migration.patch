@@ -1,0 +1,60 @@
+From 0c8a23f5f3e063b35b890d5538e5497f51d1095c Mon Sep 17 00:00:00 2001
+Message-ID: <0c8a23f5f3e063b35b890d5538e5497f51d1095c.1780571166.git.jdenemar@redhat.com>
+From: Jiri Denemark <jdenemar@redhat.com>
+Date: Mon, 23 Feb 2026 16:23:10 +0100
+Subject: [PATCH] qemu: Fix job handling when domain dies in post-copy
+ migration
+
+When a domain is in post-copy migration phase, we need to keep the job
+active if something fails to protect the domain from changes.
+Unfortunately, there is a race between migration code and
+qemuProcessStop that can cause the job to stay active even when the
+domain is gone and thus preventing the domain from being started again
+(until virtqemud is restarted). The race is caused by unlocking the vm
+object when calling virConnectUnregisterCloseCallback. While the domain
+is unlocked qemuProcessStop can finish its work and the domain may no
+longer be active when we get the lock back. The post-copy path does not
+properly check if a domain is still active.
+
+Instead of adding the virDomainObjIsActive check in all places where
+this could happen, we can add it in virDomainObjIsPostcopy and
+virDomainObjIsFailedPostcopy and let the code take the pre-copy cleanup
+path. Clearly an inactive domain can never be in (failed) post-copy
+migration.
+
+https://issues.redhat.com/browse/RHEL-145179
+
+Signed-off-by: Jiri Denemark <jdenemar@redhat.com>
+Reviewed-by: Peter Krempa <pkrempa@redhat.com>
+(cherry picked from commit 3d1e6d92de784e5c9d2a5e4bc18829c92278343a)
+Signed-off-by: Jiri Denemark <jdenemar@redhat.com>
+---
+ src/conf/domain_conf.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/src/conf/domain_conf.c b/src/conf/domain_conf.c
+index 1f7b1ca340..35de8bab6b 100644
+--- a/src/conf/domain_conf.c
++++ b/src/conf/domain_conf.c
+@@ -30493,6 +30493,9 @@ bool
+ virDomainObjIsFailedPostcopy(virDomainObj *dom,
+                              virDomainJobObj *job)
+ {
++    if (!virDomainObjIsActive(dom))
++        return false;
++
+     if (job && job->asyncPaused &&
+         (job->asyncJob == VIR_ASYNC_JOB_MIGRATION_IN ||
+          job->asyncJob == VIR_ASYNC_JOB_MIGRATION_OUT))
+@@ -30509,6 +30512,9 @@ bool
+ virDomainObjIsPostcopy(virDomainObj *dom,
+                        virDomainJobObj *job)
+ {
++    if (!virDomainObjIsActive(dom))
++        return false;
++
+     if (virDomainObjIsFailedPostcopy(dom, job))
+         return true;
+ 
+-- 
+2.54.0

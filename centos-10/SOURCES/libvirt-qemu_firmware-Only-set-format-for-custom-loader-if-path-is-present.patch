@@ -1,0 +1,45 @@
+From 9298881a07f0e25ec594d4157421eb61c9014c85 Mon Sep 17 00:00:00 2001
+Message-ID: <9298881a07f0e25ec594d4157421eb61c9014c85.1772815313.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Tue, 3 Feb 2026 16:05:05 +0100
+Subject: [PATCH] qemu_firmware: Only set format for custom loader if path is
+ present
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+We only set the template format if the template path is present,
+and we should be consistent with that. The format on its own is
+not very interesting anyway.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+Reviewed-by: Daniel P. Berrangé <berrange@redhat.com>
+(cherry picked from commit 375c82a0f8e61f3762f0a7ffa26624f841a79d76)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/qemu/qemu_firmware.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/src/qemu/qemu_firmware.c b/src/qemu/qemu_firmware.c
+index 436b06c388..519828f6f9 100644
+--- a/src/qemu/qemu_firmware.c
++++ b/src/qemu/qemu_firmware.c
+@@ -1662,8 +1662,10 @@ qemuFirmwareFillDomainCustom(virDomainDef *def)
+     if (!loader)
+         return;
+ 
+-    if (!loader->format)
++    if (loader->path &&
++        !loader->format) {
+         loader->format = VIR_STORAGE_FILE_RAW;
++    }
+ 
+     if (loader->nvramTemplate &&
+         !loader->nvramTemplateFormat) {
+-- 
+2.53.0

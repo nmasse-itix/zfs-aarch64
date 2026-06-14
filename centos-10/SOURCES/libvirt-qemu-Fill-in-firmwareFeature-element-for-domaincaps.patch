@@ -1,0 +1,1675 @@
+From 4bd7e64afab1ed9dc695880295bbc86764fb6e07 Mon Sep 17 00:00:00 2001
+Message-ID: <4bd7e64afab1ed9dc695880295bbc86764fb6e07.1772815313.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Mon, 9 Feb 2026 21:37:23 +0100
+Subject: [PATCH] qemu: Fill in firmwareFeature element for domaincaps
+
+On architectures that support neither UEFI nor BIOS as firmware,
+such as ppc64 and s390x, the enums end up empty. This correctly
+indicates that filtering by firmware feature is not possible, and
+is consistent with the fact that the existing "firmware" enum is
+also empty in those cases, meaning that firmware autoselection
+itself is just not applicable.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 87c072c08b8183bffdd4c3b4508586f588572881)
+
+Conflicts:
+
+  * tests/domaincapsdata/qemu_10.1.0.s390x.xml
+    tests/domaincapsdata/qemu_10.2.0-virt.aarch64.xml
+    tests/domaincapsdata/qemu_10.2.0.aarch64.xml
+    tests/domaincapsdata/qemu_11.0.0-q35.x86_64.xml
+    tests/domaincapsdata/qemu_11.0.0-tcg.x86_64.xml
+    tests/domaincapsdata/qemu_11.0.0-virt.aarch64.xml
+    tests/domaincapsdata/qemu_11.0.0.aarch64.xml
+    tests/domaincapsdata/qemu_11.0.0.x86_64.xml
+
+    - Missing downstream
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/qemu/qemu_capabilities.c                  | 21 ++++++++++++--
+ src/qemu/qemu_firmware.c                      | 28 +++++++++++++++++--
+ src/qemu/qemu_firmware.h                      |  2 ++
+ .../qemu_10.0.0-q35.x86_64+amdsev.xml         | 10 +++++++
+ .../domaincapsdata/qemu_10.0.0-q35.x86_64.xml | 10 +++++++
+ .../qemu_10.0.0-tcg.x86_64+amdsev.xml         |  8 ++++++
+ .../domaincapsdata/qemu_10.0.0-tcg.x86_64.xml |  8 ++++++
+ .../qemu_10.0.0-virt.aarch64.xml              |  8 ++++++
+ tests/domaincapsdata/qemu_10.0.0.aarch64.xml  |  8 ++++++
+ tests/domaincapsdata/qemu_10.0.0.ppc64.xml    |  4 +++
+ tests/domaincapsdata/qemu_10.0.0.s390x.xml    |  4 +++
+ .../qemu_10.0.0.x86_64+amdsev.xml             |  8 ++++++
+ tests/domaincapsdata/qemu_10.0.0.x86_64.xml   |  8 ++++++
+ .../qemu_10.1.0-q35.x86_64+inteltdx.xml       | 10 +++++++
+ .../domaincapsdata/qemu_10.1.0-q35.x86_64.xml | 10 +++++++
+ .../qemu_10.1.0-tcg.x86_64+inteltdx.xml       |  8 ++++++
+ .../domaincapsdata/qemu_10.1.0-tcg.x86_64.xml |  8 ++++++
+ .../qemu_10.1.0.x86_64+inteltdx.xml           |  8 ++++++
+ tests/domaincapsdata/qemu_10.1.0.x86_64.xml   |  8 ++++++
+ .../qemu_10.2.0-q35.x86_64+mshv.xml           | 10 +++++++
+ .../domaincapsdata/qemu_10.2.0-q35.x86_64.xml | 10 +++++++
+ .../qemu_10.2.0-tcg.x86_64+mshv.xml           |  8 ++++++
+ .../domaincapsdata/qemu_10.2.0-tcg.x86_64.xml |  8 ++++++
+ .../qemu_10.2.0.x86_64+mshv.xml               |  8 ++++++
+ tests/domaincapsdata/qemu_10.2.0.x86_64.xml   |  8 ++++++
+ .../domaincapsdata/qemu_6.2.0-q35.x86_64.xml  | 10 +++++++
+ .../domaincapsdata/qemu_6.2.0-tcg.x86_64.xml  |  8 ++++++
+ tests/domaincapsdata/qemu_6.2.0.ppc64.xml     |  4 +++
+ tests/domaincapsdata/qemu_6.2.0.x86_64.xml    |  8 ++++++
+ .../domaincapsdata/qemu_7.0.0-q35.x86_64.xml  | 10 +++++++
+ .../domaincapsdata/qemu_7.0.0-tcg.x86_64.xml  |  8 ++++++
+ tests/domaincapsdata/qemu_7.0.0.ppc64.xml     |  4 +++
+ tests/domaincapsdata/qemu_7.0.0.x86_64.xml    |  8 ++++++
+ .../domaincapsdata/qemu_7.1.0-q35.x86_64.xml  | 10 +++++++
+ .../domaincapsdata/qemu_7.1.0-tcg.x86_64.xml  |  8 ++++++
+ tests/domaincapsdata/qemu_7.1.0.ppc64.xml     |  4 +++
+ tests/domaincapsdata/qemu_7.1.0.x86_64.xml    |  8 ++++++
+ .../qemu_7.2.0-hvf.x86_64+hvf.xml             |  8 ++++++
+ .../domaincapsdata/qemu_7.2.0-q35.x86_64.xml  | 10 +++++++
+ .../qemu_7.2.0-tcg.x86_64+hvf.xml             |  8 ++++++
+ .../domaincapsdata/qemu_7.2.0-tcg.x86_64.xml  |  8 ++++++
+ tests/domaincapsdata/qemu_7.2.0.ppc.xml       |  4 +++
+ tests/domaincapsdata/qemu_7.2.0.x86_64.xml    |  8 ++++++
+ .../domaincapsdata/qemu_8.0.0-q35.x86_64.xml  | 10 +++++++
+ .../domaincapsdata/qemu_8.0.0-tcg.x86_64.xml  |  8 ++++++
+ tests/domaincapsdata/qemu_8.0.0.x86_64.xml    |  8 ++++++
+ .../domaincapsdata/qemu_8.1.0-q35.x86_64.xml  | 10 +++++++
+ .../domaincapsdata/qemu_8.1.0-tcg.x86_64.xml  |  8 ++++++
+ tests/domaincapsdata/qemu_8.1.0.s390x.xml     |  4 +++
+ tests/domaincapsdata/qemu_8.1.0.x86_64.xml    |  8 ++++++
+ .../domaincapsdata/qemu_8.2.0-q35.x86_64.xml  | 10 +++++++
+ .../qemu_8.2.0-tcg-virt.loongarch64.xml       |  8 ++++++
+ .../domaincapsdata/qemu_8.2.0-tcg.x86_64.xml  |  8 ++++++
+ .../qemu_8.2.0-virt.aarch64.xml               |  8 ++++++
+ .../qemu_8.2.0-virt.loongarch64.xml           |  8 ++++++
+ tests/domaincapsdata/qemu_8.2.0.aarch64.xml   |  8 ++++++
+ tests/domaincapsdata/qemu_8.2.0.armv7l.xml    |  4 +++
+ tests/domaincapsdata/qemu_8.2.0.s390x.xml     |  4 +++
+ tests/domaincapsdata/qemu_8.2.0.x86_64.xml    |  8 ++++++
+ .../domaincapsdata/qemu_9.0.0-q35.x86_64.xml  | 10 +++++++
+ .../domaincapsdata/qemu_9.0.0-tcg.x86_64.xml  |  8 ++++++
+ tests/domaincapsdata/qemu_9.0.0.sparc.xml     |  4 +++
+ tests/domaincapsdata/qemu_9.0.0.x86_64.xml    |  8 ++++++
+ .../domaincapsdata/qemu_9.1.0-q35.x86_64.xml  | 10 +++++++
+ .../qemu_9.1.0-tcg-virt.riscv64.xml           |  8 ++++++
+ .../domaincapsdata/qemu_9.1.0-tcg.x86_64.xml  |  8 ++++++
+ .../qemu_9.1.0-virt.riscv64.xml               |  8 ++++++
+ tests/domaincapsdata/qemu_9.1.0.s390x.xml     |  4 +++
+ tests/domaincapsdata/qemu_9.1.0.x86_64.xml    |  8 ++++++
+ .../qemu_9.2.0-hvf.aarch64+hvf.xml            |  8 ++++++
+ .../qemu_9.2.0-q35.x86_64+amdsev.xml          | 10 +++++++
+ .../domaincapsdata/qemu_9.2.0-q35.x86_64.xml  | 10 +++++++
+ .../qemu_9.2.0-tcg.x86_64+amdsev.xml          |  8 ++++++
+ .../domaincapsdata/qemu_9.2.0-tcg.x86_64.xml  |  8 ++++++
+ tests/domaincapsdata/qemu_9.2.0.s390x.xml     |  4 +++
+ .../qemu_9.2.0.x86_64+amdsev.xml              |  8 ++++++
+ tests/domaincapsdata/qemu_9.2.0.x86_64.xml    |  8 ++++++
+ tests/qemufirmwaretest.c                      |  7 ++++-
+ 78 files changed, 631 insertions(+), 5 deletions(-)
+
+diff --git a/src/qemu/qemu_capabilities.c b/src/qemu/qemu_capabilities.c
+index ed6aa86da2..7d88b8521a 100644
+--- a/src/qemu/qemu_capabilities.c
++++ b/src/qemu/qemu_capabilities.c
+@@ -6521,8 +6521,11 @@ virQEMUCapsFillDomainOSCaps(virDomainCapsOS *os,
+                             virFirmware **firmwares,
+                             size_t nfirmwares)
+ {
++    virDomainCapsFirmwareFeatures *firmwareFeatures = &os->firmwareFeatures;
+     virDomainCapsLoader *capsLoader = &os->loader;
+     uint64_t autoFirmwares = 0;
++    uint64_t featureSecureBoot = 0;
++    uint64_t featureEnrolledKeys = 0;
+     bool secure = false;
+     virFirmware **firmwaresAlt = NULL;
+     size_t nfirmwaresAlt = 0;
+@@ -6531,8 +6534,9 @@ virQEMUCapsFillDomainOSCaps(virDomainCapsOS *os,
+     os->supported = VIR_TRISTATE_BOOL_YES;
+     os->firmware.report = true;
+ 
+-    if (qemuFirmwareGetSupported(machine, arch, privileged,
+-                                 &autoFirmwares, &secure,
++    if (qemuFirmwareGetSupported(machine, arch, privileged, &autoFirmwares,
++                                 &featureSecureBoot, &featureEnrolledKeys,
++                                 &secure,
+                                  &firmwaresAlt, &nfirmwaresAlt) < 0)
+         return -1;
+ 
+@@ -6541,6 +6545,19 @@ virQEMUCapsFillDomainOSCaps(virDomainCapsOS *os,
+     if (autoFirmwares & (1ULL << VIR_DOMAIN_OS_DEF_FIRMWARE_EFI))
+         VIR_DOMAIN_CAPS_ENUM_SET(os->firmware, VIR_DOMAIN_OS_DEF_FIRMWARE_EFI);
+ 
++    firmwareFeatures->supported = VIR_TRISTATE_BOOL_YES;
++    firmwareFeatures->secureBoot.report = true;
++    firmwareFeatures->enrolledKeys.report = true;
++
++    if (featureSecureBoot & (1ULL << VIR_TRISTATE_BOOL_YES))
++        VIR_DOMAIN_CAPS_ENUM_SET(firmwareFeatures->secureBoot, VIR_TRISTATE_BOOL_YES);
++    if (featureSecureBoot & (1ULL << VIR_TRISTATE_BOOL_NO))
++        VIR_DOMAIN_CAPS_ENUM_SET(firmwareFeatures->secureBoot, VIR_TRISTATE_BOOL_NO);
++    if (featureEnrolledKeys & (1ULL << VIR_TRISTATE_BOOL_YES))
++        VIR_DOMAIN_CAPS_ENUM_SET(firmwareFeatures->enrolledKeys, VIR_TRISTATE_BOOL_YES);
++    if (featureEnrolledKeys & (1ULL << VIR_TRISTATE_BOOL_NO))
++        VIR_DOMAIN_CAPS_ENUM_SET(firmwareFeatures->enrolledKeys, VIR_TRISTATE_BOOL_NO);
++
+     if (virQEMUCapsFillDomainLoaderCaps(capsLoader, secure,
+                                         firmwaresAlt ? firmwaresAlt : firmwares,
+                                         firmwaresAlt ? nfirmwaresAlt : nfirmwares) < 0)
+diff --git a/src/qemu/qemu_firmware.c b/src/qemu/qemu_firmware.c
+index 52205b72f8..436b06c388 100644
+--- a/src/qemu/qemu_firmware.c
++++ b/src/qemu/qemu_firmware.c
+@@ -1972,6 +1972,8 @@ qemuFirmwareFillDomain(virQEMUDriver *driver,
+  * @arch: architecture
+  * @privileged: whether running as privileged user
+  * @supported: returned bitmap of supported interfaces
++ * @featureSecureBoot: bitmap of virTristateBool values for secure-boot feature
++ * @featureEnrolledKeys: bitmap of virTristateBool values for enrolled-keys feature
+  * @secure: true if at least one secure boot enabled FW was found
+  * @fws: (optional) list of found firmwares
+  * @nfws: (optional) number of members in @fws
+@@ -2001,6 +2003,8 @@ qemuFirmwareGetSupported(const char *machine,
+                          virArch arch,
+                          bool privileged,
+                          uint64_t *supported,
++                         uint64_t *featureSecureBoot,
++                         uint64_t *featureEnrolledKeys,
+                          bool *secure,
+                          virFirmware ***fws,
+                          size_t *nfws)
+@@ -2010,6 +2014,8 @@ qemuFirmwareGetSupported(const char *machine,
+     size_t i;
+ 
+     *supported = VIR_DOMAIN_OS_DEF_FIRMWARE_NONE;
++    *featureSecureBoot = VIR_TRISTATE_BOOL_ABSENT;
++    *featureEnrolledKeys = VIR_TRISTATE_BOOL_ABSENT;
+     *secure = false;
+ 
+     if (fws) {
+@@ -2027,6 +2033,8 @@ qemuFirmwareGetSupported(const char *machine,
+         const qemuFirmwareMappingMemory *memory = &fw->mapping.data.memory;
+         const char *fwpath = NULL;
+         const char *nvrampath = NULL;
++        bool secureBootFound = false;
++        bool enrolledKeysFound = false;
+         size_t j;
+ 
+         if (!qemuFirmwareMatchesMachineArch(fw, machine, arch))
+@@ -2051,6 +2059,14 @@ qemuFirmwareGetSupported(const char *machine,
+ 
+         for (j = 0; j < fw->nfeatures; j++) {
+             switch (fw->features[j]) {
++            case QEMU_FIRMWARE_FEATURE_SECURE_BOOT:
++                *featureSecureBoot |= 1ULL << VIR_TRISTATE_BOOL_YES;
++                secureBootFound = true;
++                break;
++            case QEMU_FIRMWARE_FEATURE_ENROLLED_KEYS:
++                *featureEnrolledKeys |= 1ULL << VIR_TRISTATE_BOOL_YES;
++                enrolledKeysFound = true;
++                break;
+             case QEMU_FIRMWARE_FEATURE_REQUIRES_SMM:
+                 *secure = true;
+                 break;
+@@ -2061,8 +2077,6 @@ qemuFirmwareGetSupported(const char *machine,
+             case QEMU_FIRMWARE_FEATURE_AMD_SEV_ES:
+             case QEMU_FIRMWARE_FEATURE_AMD_SEV_SNP:
+             case QEMU_FIRMWARE_FEATURE_INTEL_TDX:
+-            case QEMU_FIRMWARE_FEATURE_ENROLLED_KEYS:
+-            case QEMU_FIRMWARE_FEATURE_SECURE_BOOT:
+             case QEMU_FIRMWARE_FEATURE_VERBOSE_DYNAMIC:
+             case QEMU_FIRMWARE_FEATURE_VERBOSE_STATIC:
+             case QEMU_FIRMWARE_FEATURE_LAST:
+@@ -2070,6 +2084,16 @@ qemuFirmwareGetSupported(const char *machine,
+             }
+         }
+ 
++        /* Do this here to ensure that we only advertise "no" as a
++         * value for each feature if we have actually found a
++         * suitable firmware that doesn't list it, as opposed to
++         * having found no matching firmware at all, which will
++         * instead result in an empty enum */
++        if (!secureBootFound)
++            *featureSecureBoot |= 1ULL << VIR_TRISTATE_BOOL_NO;
++        if (!enrolledKeysFound)
++            *featureEnrolledKeys |= 1ULL << VIR_TRISTATE_BOOL_NO;
++
+         switch (fw->mapping.device) {
+         case QEMU_FIRMWARE_DEVICE_FLASH:
+             fwpath = flash->executable.filename;
+diff --git a/src/qemu/qemu_firmware.h b/src/qemu/qemu_firmware.h
+index 39572d979d..6789ec83f7 100644
+--- a/src/qemu/qemu_firmware.h
++++ b/src/qemu/qemu_firmware.h
+@@ -52,6 +52,8 @@ qemuFirmwareGetSupported(const char *machine,
+                          virArch arch,
+                          bool privileged,
+                          uint64_t *supported,
++                         uint64_t *featureSecureBoot,
++                         uint64_t *featureEnrolledKeys,
+                          bool *secure,
+                          virFirmware ***fws,
+                          size_t *nfws);
+diff --git a/tests/domaincapsdata/qemu_10.0.0-q35.x86_64+amdsev.xml b/tests/domaincapsdata/qemu_10.0.0-q35.x86_64+amdsev.xml
+index aeccdf612d..b68767d7b3 100644
+--- a/tests/domaincapsdata/qemu_10.0.0-q35.x86_64+amdsev.xml
++++ b/tests/domaincapsdata/qemu_10.0.0-q35.x86_64+amdsev.xml
+@@ -10,6 +10,16 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_10.0.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_10.0.0-q35.x86_64.xml
+index 86a740099b..70da32ccf1 100644
+--- a/tests/domaincapsdata/qemu_10.0.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.0.0-q35.x86_64.xml
+@@ -10,6 +10,16 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64+amdsev.xml b/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64+amdsev.xml
+index 5d9ce948f8..6d2723f950 100644
+--- a/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64+amdsev.xml
++++ b/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64+amdsev.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64.xml
+index 3915ec38cf..cbddffef6b 100644
+--- a/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_10.0.0-virt.aarch64.xml b/tests/domaincapsdata/qemu_10.0.0-virt.aarch64.xml
+index 058bd84a33..bacd5665ad 100644
+--- a/tests/domaincapsdata/qemu_10.0.0-virt.aarch64.xml
++++ b/tests/domaincapsdata/qemu_10.0.0-virt.aarch64.xml
+@@ -9,6 +9,14 @@
+     <enum name='firmware'>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_10.0.0.aarch64.xml b/tests/domaincapsdata/qemu_10.0.0.aarch64.xml
+index 058bd84a33..bacd5665ad 100644
+--- a/tests/domaincapsdata/qemu_10.0.0.aarch64.xml
++++ b/tests/domaincapsdata/qemu_10.0.0.aarch64.xml
+@@ -9,6 +9,14 @@
+     <enum name='firmware'>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_10.0.0.ppc64.xml b/tests/domaincapsdata/qemu_10.0.0.ppc64.xml
+index f3ff165aa1..a913d20b3e 100644
+--- a/tests/domaincapsdata/qemu_10.0.0.ppc64.xml
++++ b/tests/domaincapsdata/qemu_10.0.0.ppc64.xml
+@@ -7,6 +7,10 @@
+   <iothreads supported='yes'/>
+   <os supported='yes'>
+     <enum name='firmware'/>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'/>
++      <enum name='enrolledKeys'/>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_10.0.0.s390x.xml b/tests/domaincapsdata/qemu_10.0.0.s390x.xml
+index 220afb9d7d..22a4bee3fd 100644
+--- a/tests/domaincapsdata/qemu_10.0.0.s390x.xml
++++ b/tests/domaincapsdata/qemu_10.0.0.s390x.xml
+@@ -7,6 +7,10 @@
+   <iothreads supported='yes'/>
+   <os supported='yes'>
+     <enum name='firmware'/>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'/>
++      <enum name='enrolledKeys'/>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_10.0.0.x86_64+amdsev.xml b/tests/domaincapsdata/qemu_10.0.0.x86_64+amdsev.xml
+index 9dcc7f2e44..7227638020 100644
+--- a/tests/domaincapsdata/qemu_10.0.0.x86_64+amdsev.xml
++++ b/tests/domaincapsdata/qemu_10.0.0.x86_64+amdsev.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_10.0.0.x86_64.xml b/tests/domaincapsdata/qemu_10.0.0.x86_64.xml
+index c0c3a2e6db..38edf287f4 100644
+--- a/tests/domaincapsdata/qemu_10.0.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.0.0.x86_64.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_10.1.0-q35.x86_64+inteltdx.xml b/tests/domaincapsdata/qemu_10.1.0-q35.x86_64+inteltdx.xml
+index 346a94c1ec..77b13100b8 100644
+--- a/tests/domaincapsdata/qemu_10.1.0-q35.x86_64+inteltdx.xml
++++ b/tests/domaincapsdata/qemu_10.1.0-q35.x86_64+inteltdx.xml
+@@ -10,6 +10,16 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_10.1.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_10.1.0-q35.x86_64.xml
+index fc82987630..c48ba4e218 100644
+--- a/tests/domaincapsdata/qemu_10.1.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.1.0-q35.x86_64.xml
+@@ -10,6 +10,16 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64+inteltdx.xml b/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64+inteltdx.xml
+index 07fe65d429..e2502f5746 100644
+--- a/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64+inteltdx.xml
++++ b/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64+inteltdx.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64.xml
+index 34e5812613..50087d531f 100644
+--- a/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_10.1.0.x86_64+inteltdx.xml b/tests/domaincapsdata/qemu_10.1.0.x86_64+inteltdx.xml
+index 1d476275a2..478004b0fc 100644
+--- a/tests/domaincapsdata/qemu_10.1.0.x86_64+inteltdx.xml
++++ b/tests/domaincapsdata/qemu_10.1.0.x86_64+inteltdx.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_10.1.0.x86_64.xml b/tests/domaincapsdata/qemu_10.1.0.x86_64.xml
+index 3be5e34fe6..8f7bff70f3 100644
+--- a/tests/domaincapsdata/qemu_10.1.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.1.0.x86_64.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_10.2.0-q35.x86_64+mshv.xml b/tests/domaincapsdata/qemu_10.2.0-q35.x86_64+mshv.xml
+index 6914726a8b..313e7c24a4 100644
+--- a/tests/domaincapsdata/qemu_10.2.0-q35.x86_64+mshv.xml
++++ b/tests/domaincapsdata/qemu_10.2.0-q35.x86_64+mshv.xml
+@@ -9,6 +9,16 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_10.2.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_10.2.0-q35.x86_64.xml
+index baf8f458db..d3630eb096 100644
+--- a/tests/domaincapsdata/qemu_10.2.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.2.0-q35.x86_64.xml
+@@ -10,6 +10,16 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64+mshv.xml b/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64+mshv.xml
+index 35331dc4d4..cc3427cef7 100644
+--- a/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64+mshv.xml
++++ b/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64+mshv.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64.xml
+index 7fba7f45f3..4c90f1d7be 100644
+--- a/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_10.2.0.x86_64+mshv.xml b/tests/domaincapsdata/qemu_10.2.0.x86_64+mshv.xml
+index faf9b15e0d..84be18497b 100644
+--- a/tests/domaincapsdata/qemu_10.2.0.x86_64+mshv.xml
++++ b/tests/domaincapsdata/qemu_10.2.0.x86_64+mshv.xml
+@@ -9,6 +9,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_10.2.0.x86_64.xml b/tests/domaincapsdata/qemu_10.2.0.x86_64.xml
+index 354653d49a..fa2f5e8ebd 100644
+--- a/tests/domaincapsdata/qemu_10.2.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.2.0.x86_64.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_6.2.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_6.2.0-q35.x86_64.xml
+index 0b66b77e73..4465574814 100644
+--- a/tests/domaincapsdata/qemu_6.2.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_6.2.0-q35.x86_64.xml
+@@ -10,6 +10,16 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_6.2.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_6.2.0-tcg.x86_64.xml
+index ce4b14f28c..ba9ad68ad2 100644
+--- a/tests/domaincapsdata/qemu_6.2.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_6.2.0-tcg.x86_64.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_6.2.0.ppc64.xml b/tests/domaincapsdata/qemu_6.2.0.ppc64.xml
+index fb8361ae97..9f3e6a7f3f 100644
+--- a/tests/domaincapsdata/qemu_6.2.0.ppc64.xml
++++ b/tests/domaincapsdata/qemu_6.2.0.ppc64.xml
+@@ -7,6 +7,10 @@
+   <iothreads supported='yes'/>
+   <os supported='yes'>
+     <enum name='firmware'/>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'/>
++      <enum name='enrolledKeys'/>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_6.2.0.x86_64.xml b/tests/domaincapsdata/qemu_6.2.0.x86_64.xml
+index 33b2e4905e..d804bd64ce 100644
+--- a/tests/domaincapsdata/qemu_6.2.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_6.2.0.x86_64.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_7.0.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_7.0.0-q35.x86_64.xml
+index 2d7519ae94..40170cea50 100644
+--- a/tests/domaincapsdata/qemu_7.0.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.0.0-q35.x86_64.xml
+@@ -10,6 +10,16 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_7.0.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_7.0.0-tcg.x86_64.xml
+index 01975a5e34..6f424760a8 100644
+--- a/tests/domaincapsdata/qemu_7.0.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.0.0-tcg.x86_64.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_7.0.0.ppc64.xml b/tests/domaincapsdata/qemu_7.0.0.ppc64.xml
+index 03bbe16497..604aa5e0ad 100644
+--- a/tests/domaincapsdata/qemu_7.0.0.ppc64.xml
++++ b/tests/domaincapsdata/qemu_7.0.0.ppc64.xml
+@@ -7,6 +7,10 @@
+   <iothreads supported='yes'/>
+   <os supported='yes'>
+     <enum name='firmware'/>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'/>
++      <enum name='enrolledKeys'/>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_7.0.0.x86_64.xml b/tests/domaincapsdata/qemu_7.0.0.x86_64.xml
+index 8fa3d3e0f4..a67e929551 100644
+--- a/tests/domaincapsdata/qemu_7.0.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.0.0.x86_64.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_7.1.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_7.1.0-q35.x86_64.xml
+index 1991133a62..71c48d74dc 100644
+--- a/tests/domaincapsdata/qemu_7.1.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.1.0-q35.x86_64.xml
+@@ -10,6 +10,16 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_7.1.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_7.1.0-tcg.x86_64.xml
+index 41bfdbecb6..682137ec8d 100644
+--- a/tests/domaincapsdata/qemu_7.1.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.1.0-tcg.x86_64.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_7.1.0.ppc64.xml b/tests/domaincapsdata/qemu_7.1.0.ppc64.xml
+index 03d6b23a45..399eeb3b18 100644
+--- a/tests/domaincapsdata/qemu_7.1.0.ppc64.xml
++++ b/tests/domaincapsdata/qemu_7.1.0.ppc64.xml
+@@ -7,6 +7,10 @@
+   <iothreads supported='yes'/>
+   <os supported='yes'>
+     <enum name='firmware'/>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'/>
++      <enum name='enrolledKeys'/>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_7.1.0.x86_64.xml b/tests/domaincapsdata/qemu_7.1.0.x86_64.xml
+index 54e8e9d87a..966abb1b0a 100644
+--- a/tests/domaincapsdata/qemu_7.1.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.1.0.x86_64.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_7.2.0-hvf.x86_64+hvf.xml b/tests/domaincapsdata/qemu_7.2.0-hvf.x86_64+hvf.xml
+index 58ef1bde99..c8d889287c 100644
+--- a/tests/domaincapsdata/qemu_7.2.0-hvf.x86_64+hvf.xml
++++ b/tests/domaincapsdata/qemu_7.2.0-hvf.x86_64+hvf.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_7.2.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_7.2.0-q35.x86_64.xml
+index 7c325b52aa..995ad7f220 100644
+--- a/tests/domaincapsdata/qemu_7.2.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.2.0-q35.x86_64.xml
+@@ -10,6 +10,16 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64+hvf.xml b/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64+hvf.xml
+index 27ecea6fe0..1bbd737021 100644
+--- a/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64+hvf.xml
++++ b/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64+hvf.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64.xml
+index 27ecea6fe0..1bbd737021 100644
+--- a/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_7.2.0.ppc.xml b/tests/domaincapsdata/qemu_7.2.0.ppc.xml
+index 7cbde763ef..223387444c 100644
+--- a/tests/domaincapsdata/qemu_7.2.0.ppc.xml
++++ b/tests/domaincapsdata/qemu_7.2.0.ppc.xml
+@@ -6,6 +6,10 @@
+   <iothreads supported='yes'/>
+   <os supported='yes'>
+     <enum name='firmware'/>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'/>
++      <enum name='enrolledKeys'/>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_7.2.0.x86_64.xml b/tests/domaincapsdata/qemu_7.2.0.x86_64.xml
+index b9a174368a..be0ee62910 100644
+--- a/tests/domaincapsdata/qemu_7.2.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.2.0.x86_64.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_8.0.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_8.0.0-q35.x86_64.xml
+index 60893adebf..f225cf0a8e 100644
+--- a/tests/domaincapsdata/qemu_8.0.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.0.0-q35.x86_64.xml
+@@ -10,6 +10,16 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_8.0.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_8.0.0-tcg.x86_64.xml
+index 23e41eb13c..e770746f74 100644
+--- a/tests/domaincapsdata/qemu_8.0.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.0.0-tcg.x86_64.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_8.0.0.x86_64.xml b/tests/domaincapsdata/qemu_8.0.0.x86_64.xml
+index daa91d428f..4c8a36eeb0 100644
+--- a/tests/domaincapsdata/qemu_8.0.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.0.0.x86_64.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_8.1.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_8.1.0-q35.x86_64.xml
+index df003825ea..5d08abbe3b 100644
+--- a/tests/domaincapsdata/qemu_8.1.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.1.0-q35.x86_64.xml
+@@ -10,6 +10,16 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_8.1.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_8.1.0-tcg.x86_64.xml
+index 10330281bd..ea506799bf 100644
+--- a/tests/domaincapsdata/qemu_8.1.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.1.0-tcg.x86_64.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_8.1.0.s390x.xml b/tests/domaincapsdata/qemu_8.1.0.s390x.xml
+index c86f0113f3..4237262f31 100644
+--- a/tests/domaincapsdata/qemu_8.1.0.s390x.xml
++++ b/tests/domaincapsdata/qemu_8.1.0.s390x.xml
+@@ -7,6 +7,10 @@
+   <iothreads supported='yes'/>
+   <os supported='yes'>
+     <enum name='firmware'/>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'/>
++      <enum name='enrolledKeys'/>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_8.1.0.x86_64.xml b/tests/domaincapsdata/qemu_8.1.0.x86_64.xml
+index 205334e84b..bab985379c 100644
+--- a/tests/domaincapsdata/qemu_8.1.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.1.0.x86_64.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_8.2.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_8.2.0-q35.x86_64.xml
+index bd9dbf8cba..c5c08d8fd1 100644
+--- a/tests/domaincapsdata/qemu_8.2.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.2.0-q35.x86_64.xml
+@@ -10,6 +10,16 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_8.2.0-tcg-virt.loongarch64.xml b/tests/domaincapsdata/qemu_8.2.0-tcg-virt.loongarch64.xml
+index 10e514dd45..6228916208 100644
+--- a/tests/domaincapsdata/qemu_8.2.0-tcg-virt.loongarch64.xml
++++ b/tests/domaincapsdata/qemu_8.2.0-tcg-virt.loongarch64.xml
+@@ -9,6 +9,14 @@
+     <enum name='firmware'>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_8.2.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_8.2.0-tcg.x86_64.xml
+index 60e5cb8632..da3121b8de 100644
+--- a/tests/domaincapsdata/qemu_8.2.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.2.0-tcg.x86_64.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_8.2.0-virt.aarch64.xml b/tests/domaincapsdata/qemu_8.2.0-virt.aarch64.xml
+index f67204a14c..c1dceda12d 100644
+--- a/tests/domaincapsdata/qemu_8.2.0-virt.aarch64.xml
++++ b/tests/domaincapsdata/qemu_8.2.0-virt.aarch64.xml
+@@ -9,6 +9,14 @@
+     <enum name='firmware'>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_8.2.0-virt.loongarch64.xml b/tests/domaincapsdata/qemu_8.2.0-virt.loongarch64.xml
+index 6e05a09abb..8206dc0486 100644
+--- a/tests/domaincapsdata/qemu_8.2.0-virt.loongarch64.xml
++++ b/tests/domaincapsdata/qemu_8.2.0-virt.loongarch64.xml
+@@ -9,6 +9,14 @@
+     <enum name='firmware'>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_8.2.0.aarch64.xml b/tests/domaincapsdata/qemu_8.2.0.aarch64.xml
+index f67204a14c..c1dceda12d 100644
+--- a/tests/domaincapsdata/qemu_8.2.0.aarch64.xml
++++ b/tests/domaincapsdata/qemu_8.2.0.aarch64.xml
+@@ -9,6 +9,14 @@
+     <enum name='firmware'>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_8.2.0.armv7l.xml b/tests/domaincapsdata/qemu_8.2.0.armv7l.xml
+index 7a537a1abc..b64779c84a 100644
+--- a/tests/domaincapsdata/qemu_8.2.0.armv7l.xml
++++ b/tests/domaincapsdata/qemu_8.2.0.armv7l.xml
+@@ -6,6 +6,10 @@
+   <iothreads supported='yes'/>
+   <os supported='yes'>
+     <enum name='firmware'/>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'/>
++      <enum name='enrolledKeys'/>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_8.2.0.s390x.xml b/tests/domaincapsdata/qemu_8.2.0.s390x.xml
+index ad80492e30..9f92c3c192 100644
+--- a/tests/domaincapsdata/qemu_8.2.0.s390x.xml
++++ b/tests/domaincapsdata/qemu_8.2.0.s390x.xml
+@@ -7,6 +7,10 @@
+   <iothreads supported='yes'/>
+   <os supported='yes'>
+     <enum name='firmware'/>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'/>
++      <enum name='enrolledKeys'/>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_8.2.0.x86_64.xml b/tests/domaincapsdata/qemu_8.2.0.x86_64.xml
+index c6558915c1..83ea8565d8 100644
+--- a/tests/domaincapsdata/qemu_8.2.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.2.0.x86_64.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_9.0.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_9.0.0-q35.x86_64.xml
+index 930014727d..a4521f150e 100644
+--- a/tests/domaincapsdata/qemu_9.0.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.0.0-q35.x86_64.xml
+@@ -10,6 +10,16 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_9.0.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_9.0.0-tcg.x86_64.xml
+index 19adcfe249..00d3e1b8d1 100644
+--- a/tests/domaincapsdata/qemu_9.0.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.0.0-tcg.x86_64.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_9.0.0.sparc.xml b/tests/domaincapsdata/qemu_9.0.0.sparc.xml
+index 93d8d40c2c..7eb384d512 100644
+--- a/tests/domaincapsdata/qemu_9.0.0.sparc.xml
++++ b/tests/domaincapsdata/qemu_9.0.0.sparc.xml
+@@ -6,6 +6,10 @@
+   <iothreads supported='yes'/>
+   <os supported='yes'>
+     <enum name='firmware'/>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'/>
++      <enum name='enrolledKeys'/>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_9.0.0.x86_64.xml b/tests/domaincapsdata/qemu_9.0.0.x86_64.xml
+index bc4e7fa1ee..d61070b968 100644
+--- a/tests/domaincapsdata/qemu_9.0.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.0.0.x86_64.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_9.1.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_9.1.0-q35.x86_64.xml
+index 927c1b4fab..226aad41b2 100644
+--- a/tests/domaincapsdata/qemu_9.1.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.1.0-q35.x86_64.xml
+@@ -10,6 +10,16 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_9.1.0-tcg-virt.riscv64.xml b/tests/domaincapsdata/qemu_9.1.0-tcg-virt.riscv64.xml
+index cb519f348c..c32d4380aa 100644
+--- a/tests/domaincapsdata/qemu_9.1.0-tcg-virt.riscv64.xml
++++ b/tests/domaincapsdata/qemu_9.1.0-tcg-virt.riscv64.xml
+@@ -9,6 +9,14 @@
+     <enum name='firmware'>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_9.1.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_9.1.0-tcg.x86_64.xml
+index a8b1bfed73..d18c62d268 100644
+--- a/tests/domaincapsdata/qemu_9.1.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.1.0-tcg.x86_64.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_9.1.0-virt.riscv64.xml b/tests/domaincapsdata/qemu_9.1.0-virt.riscv64.xml
+index 8e9bd3a15b..7a013e77c4 100644
+--- a/tests/domaincapsdata/qemu_9.1.0-virt.riscv64.xml
++++ b/tests/domaincapsdata/qemu_9.1.0-virt.riscv64.xml
+@@ -8,6 +8,14 @@
+     <enum name='firmware'>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_9.1.0.s390x.xml b/tests/domaincapsdata/qemu_9.1.0.s390x.xml
+index 2854713ca3..e26cab26f3 100644
+--- a/tests/domaincapsdata/qemu_9.1.0.s390x.xml
++++ b/tests/domaincapsdata/qemu_9.1.0.s390x.xml
+@@ -7,6 +7,10 @@
+   <iothreads supported='yes'/>
+   <os supported='yes'>
+     <enum name='firmware'/>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'/>
++      <enum name='enrolledKeys'/>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_9.1.0.x86_64.xml b/tests/domaincapsdata/qemu_9.1.0.x86_64.xml
+index e4d36b95ac..a27712673a 100644
+--- a/tests/domaincapsdata/qemu_9.1.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.1.0.x86_64.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_9.2.0-hvf.aarch64+hvf.xml b/tests/domaincapsdata/qemu_9.2.0-hvf.aarch64+hvf.xml
+index a65d9d36fd..06bb829a2a 100644
+--- a/tests/domaincapsdata/qemu_9.2.0-hvf.aarch64+hvf.xml
++++ b/tests/domaincapsdata/qemu_9.2.0-hvf.aarch64+hvf.xml
+@@ -9,6 +9,14 @@
+     <enum name='firmware'>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_9.2.0-q35.x86_64+amdsev.xml b/tests/domaincapsdata/qemu_9.2.0-q35.x86_64+amdsev.xml
+index 39bdb2615b..aac1d4d923 100644
+--- a/tests/domaincapsdata/qemu_9.2.0-q35.x86_64+amdsev.xml
++++ b/tests/domaincapsdata/qemu_9.2.0-q35.x86_64+amdsev.xml
+@@ -10,6 +10,16 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_9.2.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_9.2.0-q35.x86_64.xml
+index cc31c01dee..ef6ee01d00 100644
+--- a/tests/domaincapsdata/qemu_9.2.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.2.0-q35.x86_64.xml
+@@ -10,6 +10,16 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>yes</value>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64+amdsev.xml b/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64+amdsev.xml
+index d01e029394..0ec1a9900d 100644
+--- a/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64+amdsev.xml
++++ b/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64+amdsev.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64.xml
+index 6088c4b905..c8a0da3d22 100644
+--- a/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_9.2.0.s390x.xml b/tests/domaincapsdata/qemu_9.2.0.s390x.xml
+index ef379afe69..e00d7efd99 100644
+--- a/tests/domaincapsdata/qemu_9.2.0.s390x.xml
++++ b/tests/domaincapsdata/qemu_9.2.0.s390x.xml
+@@ -7,6 +7,10 @@
+   <iothreads supported='yes'/>
+   <os supported='yes'>
+     <enum name='firmware'/>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'/>
++      <enum name='enrolledKeys'/>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_9.2.0.x86_64+amdsev.xml b/tests/domaincapsdata/qemu_9.2.0.x86_64+amdsev.xml
+index c0485f8ffa..d6e3f8dc12 100644
+--- a/tests/domaincapsdata/qemu_9.2.0.x86_64+amdsev.xml
++++ b/tests/domaincapsdata/qemu_9.2.0.x86_64+amdsev.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/domaincapsdata/qemu_9.2.0.x86_64.xml b/tests/domaincapsdata/qemu_9.2.0.x86_64.xml
+index dcb78a93c6..89e081a0e1 100644
+--- a/tests/domaincapsdata/qemu_9.2.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.2.0.x86_64.xml
+@@ -10,6 +10,14 @@
+       <value>bios</value>
+       <value>efi</value>
+     </enum>
++    <firmwareFeatures supported='yes'>
++      <enum name='secureBoot'>
++        <value>no</value>
++      </enum>
++      <enum name='enrolledKeys'>
++        <value>no</value>
++      </enum>
++    </firmwareFeatures>
+     <loader supported='yes'>
+       <value>/obviously/fake/firmware1.fd</value>
+       <value>/obviously/fake/firmware2.fd</value>
+diff --git a/tests/qemufirmwaretest.c b/tests/qemufirmwaretest.c
+index a4fb5c9b9c..2eb9d8e701 100644
+--- a/tests/qemufirmwaretest.c
++++ b/tests/qemufirmwaretest.c
+@@ -155,6 +155,8 @@ testSupportedFW(const void *opaque)
+     const struct supportedData *data = opaque;
+     uint64_t actualInterfaces;
+     uint64_t expectedInterfaces = 0;
++    uint64_t actualFeatureSecureBoot;
++    uint64_t actualFeatureEnrolledKeys;
+     bool actualSecure;
+     virFirmware **expFWs = NULL;
+     size_t nexpFWs = 0;
+@@ -182,7 +184,10 @@ testSupportedFW(const void *opaque)
+     }
+ 
+     if (qemuFirmwareGetSupported(data->machine, data->arch, false,
+-                                 &actualInterfaces, &actualSecure, &actFWs, &nactFWs) < 0) {
++                                 &actualInterfaces,
++                                 &actualFeatureSecureBoot,
++                                 &actualFeatureEnrolledKeys,
++                                 &actualSecure, &actFWs, &nactFWs) < 0) {
+         fprintf(stderr, "Unable to get list of supported interfaces\n");
+         goto cleanup;
+     }
+-- 
+2.53.0

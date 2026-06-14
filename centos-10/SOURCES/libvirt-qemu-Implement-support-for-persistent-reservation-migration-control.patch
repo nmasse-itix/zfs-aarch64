@@ -1,0 +1,220 @@
+From 3f03b1cbc20d0af7900cc43cc576a356a95a292b Mon Sep 17 00:00:00 2001
+Message-ID: <3f03b1cbc20d0af7900cc43cc576a356a95a292b.1771336681.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Thu, 11 Dec 2025 19:47:16 +0100
+Subject: [PATCH] qemu: Implement support for persistent reservation migration
+ control
+
+The 'migration' attribute for the '<reservations>' element allows to
+control the persistent reservation migration feature independently of
+the machine type default.
+
+Add the XML plumbing and qemu support.
+
+We consider it ABI for now since it influences qemu migration protocol.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 0d3ef7cb71979172de2c531d865e4525a314f902)
+
+https://issues.redhat.com/browse/RHEL-140614 [rhel-9.8]
+https://issues.redhat.com/browse/RHEL-135115 [rhel-10.2]
+---
+ docs/formatdomain.rst                         |  3 +++
+ src/conf/domain_conf.c                        | 21 +++++++++++++++++++
+ src/conf/schemas/storagecommon.rng            |  5 +++++
+ src/conf/storage_source_conf.c                | 10 +++++++++
+ src/conf/storage_source_conf.h                |  2 ++
+ src/qemu/qemu_command.c                       |  4 ++++
+ src/qemu/qemu_validate.c                      | 16 ++++++++++++++
+ ...irtio-scsi-reservations.x86_64-latest.args |  2 +-
+ .../disk-virtio-scsi-reservations.xml         |  2 +-
+ 9 files changed, 63 insertions(+), 2 deletions(-)
+
+diff --git a/docs/formatdomain.rst b/docs/formatdomain.rst
+index 167912348e..9836837441 100644
+--- a/docs/formatdomain.rst
++++ b/docs/formatdomain.rst
+@@ -3169,6 +3169,9 @@ paravirtualized driver is specified via the ``disk`` element.
+       the socket, and finally ``mode`` which accepts one value ``client``
+       specifying the role of hypervisor. It's recommended to allow libvirt
+       manage the persistent reservations.
++      :since:`Since 12.1.0` the ``migration`` (values ``yes``, ``no``) controls
++      whether the hypervisor should attempt to migrate persistent reservations
++      during migration.
+    ``initiator``
+       :since:`Since 4.7.0`, the ``initiator`` element is supported for
+       a disk ``type`` "network" that is using a ``source`` element with the
+diff --git a/src/conf/domain_conf.c b/src/conf/domain_conf.c
+index 902c1188ef..f5c4d135a9 100644
+--- a/src/conf/domain_conf.c
++++ b/src/conf/domain_conf.c
+@@ -20951,6 +20951,27 @@ virDomainDiskDefCheckABIStability(virDomainDiskDef *src,
+         return false;
+     }
+ 
++    /* While not guest visible it influences the qemu migration stream so
++     * we need to keep it identical */
++    if (src->src->pr || dst->src->pr) {
++        virTristateBool srcmig = VIR_TRISTATE_BOOL_ABSENT;
++        virTristateBool dstmig = VIR_TRISTATE_BOOL_ABSENT;
++
++        if (src->src->pr)
++            srcmig = src->src->pr->migration;
++
++        if (dst->src->pr)
++            dstmig = dst->src->pr->migration;
++
++        if (srcmig != dstmig) {
++            virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
++                           _("Target disk reservations 'migration' property %1$s does not match source %2$s"),
++                           virTristateBoolTypeToString(dstmig),
++                           virTristateBoolTypeToString(srcmig));
++            return false;
++        }
++    }
++
+     if (!virDomainVirtioOptionsCheckABIStability(src->virtio, dst->virtio))
+         return false;
+ 
+diff --git a/src/conf/schemas/storagecommon.rng b/src/conf/schemas/storagecommon.rng
+index 14704c737e..450d53131f 100644
+--- a/src/conf/schemas/storagecommon.rng
++++ b/src/conf/schemas/storagecommon.rng
+@@ -104,6 +104,11 @@
+           <ref name="virYesNo"/>
+         </attribute>
+       </optional>
++      <optional>
++        <attribute name="migration">
++          <ref name="virYesNo"/>
++        </attribute>
++      </optional>
+       <optional>
+         <ref name="unixSocketSource"/>
+       </optional>
+diff --git a/src/conf/storage_source_conf.c b/src/conf/storage_source_conf.c
+index 087de1eaf2..24d4b0de6a 100644
+--- a/src/conf/storage_source_conf.c
++++ b/src/conf/storage_source_conf.c
+@@ -330,6 +330,11 @@ virStoragePRDefParseXML(xmlXPathContextPtr ctxt)
+                                &prd->managed) < 0)
+         goto cleanup;
+ 
++    if (virXMLPropTristateBool(ctxt->node, "migration",
++                               VIR_XML_PROP_NONZERO,
++                               &prd->migration) < 0)
++        goto cleanup;
++
+     type = virXPathString("string(./source[1]/@type)", ctxt);
+     path = virXPathString("string(./source[1]/@path)", ctxt);
+     mode = virXPathString("string(./source[1]/@mode)", ctxt);
+@@ -384,6 +389,11 @@ virStoragePRDefFormat(virBuffer *buf,
+ {
+     virBufferAsprintf(buf, "<reservations managed='%s'",
+                       virTristateBoolTypeToString(prd->managed));
++
++    if (prd->migration != VIR_TRISTATE_BOOL_ABSENT)
++        virBufferAsprintf(buf, " migration='%s'",
++                          virTristateBoolTypeToString(prd->migration));
++
+     if (prd->path &&
+         (prd->managed == VIR_TRISTATE_BOOL_NO || !migratable)) {
+         virBufferAddLit(buf, ">\n");
+diff --git a/src/conf/storage_source_conf.h b/src/conf/storage_source_conf.h
+index fc868b31af..5a4b088eeb 100644
+--- a/src/conf/storage_source_conf.h
++++ b/src/conf/storage_source_conf.h
+@@ -235,6 +235,8 @@ struct _virStoragePRDef {
+     virTristateBool managed;
+     char *path;
+ 
++    virTristateBool migration;
++
+     /* manager object alias */
+     char *mgralias;
+ };
+diff --git a/src/qemu/qemu_command.c b/src/qemu/qemu_command.c
+index f355352018..c8626e6d49 100644
+--- a/src/qemu/qemu_command.c
++++ b/src/qemu/qemu_command.c
+@@ -1691,6 +1691,7 @@ qemuBuildDiskDeviceProps(const virDomainDef *def,
+     g_autofree char *usbdiskalias = NULL;
+     const virDomainDeviceInfo *deviceinfo = &disk->info;
+     g_autoptr(virJSONValue) statistics = NULL;
++    virTristateBool migrate_pr = VIR_TRISTATE_BOOL_ABSENT;
+     virDomainDeviceInfo usbSCSIinfo = {
+         .type = VIR_DOMAIN_DEVICE_ADDRESS_TYPE_DRIVE,
+         .addr.drive = { .diskbus = VIR_DOMAIN_DISK_BUS_USB },
+@@ -1716,6 +1717,8 @@ qemuBuildDiskDeviceProps(const virDomainDef *def,
+     case VIR_DOMAIN_DISK_BUS_SCSI:
+         if (disk->device == VIR_DOMAIN_DISK_DEVICE_LUN) {
+             driver = "scsi-block";
++            if (disk->src->pr)
++                migrate_pr = disk->src->pr->migration;
+         } else {
+             if (disk->device == VIR_DOMAIN_DISK_DEVICE_CDROM) {
+                 driver = "scsi-cd";
+@@ -1937,6 +1940,7 @@ qemuBuildDiskDeviceProps(const virDomainDef *def,
+                               "S:rerror", rpolicy,
+                               "A:stats-intervals", &statistics,
+                               "T:dpofua", disk->dpofua, /* SCSI-only, ensured by validation */
++                              "T:migrate-pr", migrate_pr, /* 'scsi-block' only, ensured by validation */
+                               NULL) < 0)
+         return NULL;
+ 
+diff --git a/src/qemu/qemu_validate.c b/src/qemu/qemu_validate.c
+index da08fd17cd..a3dbd9a33b 100644
+--- a/src/qemu/qemu_validate.c
++++ b/src/qemu/qemu_validate.c
+@@ -3227,6 +3227,22 @@ qemuValidateDomainDeviceDefDiskFrontend(const virDomainDiskDef *disk,
+         }
+     }
+ 
++    if (disk->src->pr &&
++        disk->src->pr->migration != VIR_TRISTATE_BOOL_ABSENT) {
++        if (disk->device != VIR_DOMAIN_DISK_DEVICE_LUN ||
++            disk->bus != VIR_DOMAIN_DISK_BUS_SCSI) {
++            virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
++                           _("persistent reservation migration supported only with 'lun' disks on 'scsi' bus"));
++            return -1;
++        }
++
++        if (!virQEMUCapsGet(qemuCaps, QEMU_CAPS_DEVICE_SCSI_BLOCK_MIGRATE_PR)) {
++            virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
++                           _("persistent reservation migration not supported by this qemu"));
++            return -1;
++        }
++    }
++
+     if (disk->rotation_rate) {
+         if (disk->bus != VIR_DOMAIN_DISK_BUS_SCSI &&
+             disk->bus != VIR_DOMAIN_DISK_BUS_IDE &&
+diff --git a/tests/qemuxmlconfdata/disk-virtio-scsi-reservations.x86_64-latest.args b/tests/qemuxmlconfdata/disk-virtio-scsi-reservations.x86_64-latest.args
+index cbc2a0f398..f1d7a450ee 100644
+--- a/tests/qemuxmlconfdata/disk-virtio-scsi-reservations.x86_64-latest.args
++++ b/tests/qemuxmlconfdata/disk-virtio-scsi-reservations.x86_64-latest.args
+@@ -33,7 +33,7 @@ XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-QEMUGuest1/.config \
+ -device '{"driver":"scsi-block","bus":"scsi0.0","channel":0,"scsi-id":0,"lun":0,"drive":"libvirt-2-storage","id":"scsi0-0-0-0","bootindex":1}' \
+ -object '{"qom-type":"pr-manager-helper","id":"pr-helper-libvirt-1-storage","path":"/path/to/qemu-pr-helper.sock"}' \
+ -blockdev '{"driver":"host_device","filename":"/dev/HostVG/QEMUGuest2","pr-manager":"pr-helper-libvirt-1-storage","node-name":"libvirt-1-storage","read-only":false}' \
+--device '{"driver":"scsi-block","bus":"scsi0.0","channel":0,"scsi-id":0,"lun":1,"drive":"libvirt-1-storage","id":"scsi0-0-0-1"}' \
++-device '{"driver":"scsi-block","bus":"scsi0.0","channel":0,"scsi-id":0,"lun":1,"drive":"libvirt-1-storage","id":"scsi0-0-0-1","migrate-pr":true}' \
+ -audiodev '{"id":"audio1","driver":"none"}' \
+ -device '{"driver":"virtio-balloon-pci","id":"balloon0","bus":"pci.0","addr":"0x4"}' \
+ -sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
+diff --git a/tests/qemuxmlconfdata/disk-virtio-scsi-reservations.xml b/tests/qemuxmlconfdata/disk-virtio-scsi-reservations.xml
+index 9c55d6ec3e..7f9160ff3a 100644
+--- a/tests/qemuxmlconfdata/disk-virtio-scsi-reservations.xml
++++ b/tests/qemuxmlconfdata/disk-virtio-scsi-reservations.xml
+@@ -28,7 +28,7 @@
+     <disk type='block' device='lun'>
+       <driver name='qemu' type='raw'/>
+       <source dev='/dev/HostVG/QEMUGuest2'>
+-        <reservations managed='no'>
++        <reservations managed='no' migration='yes'>
+           <source type='unix' path='/path/to/qemu-pr-helper.sock' mode='client'/>
+         </reservations>
+       </source>
+-- 
+2.53.0

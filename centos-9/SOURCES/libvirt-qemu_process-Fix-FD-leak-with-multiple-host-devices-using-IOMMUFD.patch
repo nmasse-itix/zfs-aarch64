@@ -1,0 +1,48 @@
+From 84ff22de6dd06a6e63cb989cf58ec0e8eb44fb06 Mon Sep 17 00:00:00 2001
+Message-ID: <84ff22de6dd06a6e63cb989cf58ec0e8eb44fb06.1771423832.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Sun, 15 Feb 2026 19:13:19 +0100
+Subject: [PATCH] qemu_process: Fix FD leak with multiple host devices using
+ IOMMUFD
+
+We would open IOMMU device for each host device with IOMMUFD backend
+leaking FD except for the last one. Since we are adding only single
+iommufd object we need to open it only once.
+
+Fixes: 2f0999a161910e3992458902ce90d37f8b8f2642
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit d194f362f342c22731670e365e8a2681759dbc57)
+
+Resolves: https://issues.redhat.com/browse/RHEL-150353
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/qemu/qemu_process.c | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/src/qemu/qemu_process.c b/src/qemu/qemu_process.c
+index 3bd81c55b3..da7a9fc11f 100644
+--- a/src/qemu/qemu_process.c
++++ b/src/qemu/qemu_process.c
+@@ -7736,13 +7736,15 @@ qemuProcessOpenVfioFds(virDomainObj *vm)
+             /* Open VFIO device FD */
+             if (qemuProcessOpenVfioDeviceFd(hostdev) < 0)
+                 return -1;
+-
+-            /* Open IOMMU FD */
+-            if (qemuProcessOpenIommuFd(vm) < 0)
+-                return -1;
+         }
+     }
+ 
++    /* Open IOMMU FD */
++    if (virDomainDefHasPCIHostdevWithIOMMUFD(vm->def) &&
++        qemuProcessOpenIommuFd(vm) < 0) {
++        return -1;
++    }
++
+     return 0;
+ }
+ 
+-- 
+2.53.0

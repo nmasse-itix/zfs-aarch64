@@ -1,0 +1,119 @@
+From e52edf2ed7f3e1e379fb85ae0c0870113912c9d6 Mon Sep 17 00:00:00 2001
+Message-ID: <e52edf2ed7f3e1e379fb85ae0c0870113912c9d6.1780571166.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Wed, 18 Mar 2026 17:59:01 +0100
+Subject: [PATCH] qemu: Implement iommufd
+
+Ideally this should be done in qemuDomainHostdevDefPostParse but that
+would require a lot of refactoring mainly due to how interface backed by
+hostdev works.
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Peter Krempa <pkrempa@redhat.com>
+(cherry picked from commit fc516031ed865f78d590068424ada19a941046ba)
+
+Resolves: https://redhat.atlassian.net/browse/RHEL-156803
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/qemu/qemu_domain.c  | 12 +++++++++---
+ src/qemu/qemu_domain.h  |  3 ++-
+ src/qemu/qemu_hotplug.c |  2 +-
+ src/qemu/qemu_process.c |  4 ++--
+ 4 files changed, 14 insertions(+), 7 deletions(-)
+
+diff --git a/src/qemu/qemu_domain.c b/src/qemu/qemu_domain.c
+index a61939aa15..495cbd4f7d 100644
+--- a/src/qemu/qemu_domain.c
++++ b/src/qemu/qemu_domain.c
+@@ -10120,10 +10120,12 @@ qemuDomainPrepareHostdevSCSI(virDomainHostdevDef *hostdev,
+ 
+ 
+ static int
+-qemuDomainPrepareHostdevPCI(virDomainHostdevDef *hostdev,
++qemuDomainPrepareHostdevPCI(const virDomainDef *def,
++                            virDomainHostdevDef *hostdev,
+                             virQEMUCaps *qemuCaps)
+ {
+     virDeviceHostdevPCIDriverName *driverName = &hostdev->source.subsys.u.pci.driver.name;
++    virDomainHostdevSubsysPCI *pcisrc = &hostdev->source.subsys.u.pci;
+ 
+     /* assign defaults for hostdev passthrough */
+     switch (*driverName) {
+@@ -10160,12 +10162,16 @@ qemuDomainPrepareHostdevPCI(virDomainHostdevDef *hostdev,
+         return -1;
+     }
+ 
++    if (pcisrc->driver.iommufd == VIR_TRISTATE_BOOL_ABSENT)
++        pcisrc->driver.iommufd = def->iommufd;
++
+     return 0;
+ }
+ 
+ 
+ int
+-qemuDomainPrepareHostdev(virDomainHostdevDef *hostdev,
++qemuDomainPrepareHostdev(const virDomainDef *def,
++                         virDomainHostdevDef *hostdev,
+                          qemuDomainObjPrivate *priv)
+ {
+     if (hostdev->mode != VIR_DOMAIN_HOSTDEV_MODE_SUBSYS)
+@@ -10175,7 +10181,7 @@ qemuDomainPrepareHostdev(virDomainHostdevDef *hostdev,
+     case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_SCSI:
+         return qemuDomainPrepareHostdevSCSI(hostdev, priv);
+     case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_PCI:
+-        return qemuDomainPrepareHostdevPCI(hostdev, priv->qemuCaps);
++        return qemuDomainPrepareHostdevPCI(def, hostdev, priv->qemuCaps);
+     case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_USB:
+     case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_SCSI_HOST:
+     case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_MDEV:
+diff --git a/src/qemu/qemu_domain.h b/src/qemu/qemu_domain.h
+index 62c5252b9f..8cd221062c 100644
+--- a/src/qemu/qemu_domain.h
++++ b/src/qemu/qemu_domain.h
+@@ -1048,7 +1048,8 @@ qemuDomainDiskCachemodeFlags(virDomainDiskCache cachemode,
+                              bool *noflush);
+ 
+ int
+-qemuDomainPrepareHostdev(virDomainHostdevDef *hostdev,
++qemuDomainPrepareHostdev(const virDomainDef *def,
++                         virDomainHostdevDef *hostdev,
+                          qemuDomainObjPrivate *priv);
+ 
+ char * qemuDomainGetManagedPRSocketPath(qemuDomainObjPrivate *priv);
+diff --git a/src/qemu/qemu_hotplug.c b/src/qemu/qemu_hotplug.c
+index 994cc749f6..25fe699bb3 100644
+--- a/src/qemu/qemu_hotplug.c
++++ b/src/qemu/qemu_hotplug.c
+@@ -2900,7 +2900,7 @@ qemuDomainAttachHostDevice(virQEMUDriver *driver,
+         return -1;
+     }
+ 
+-    if (qemuDomainPrepareHostdev(hostdev, vm->privateData) < 0)
++    if (qemuDomainPrepareHostdev(vm->def, hostdev, vm->privateData) < 0)
+         return -1;
+ 
+     switch (hostdev->source.subsys.type) {
+diff --git a/src/qemu/qemu_process.c b/src/qemu/qemu_process.c
+index 9b8b378b1f..d13bce8fcf 100644
+--- a/src/qemu/qemu_process.c
++++ b/src/qemu/qemu_process.c
+@@ -6050,7 +6050,7 @@ qemuProcessPrepareDomainNetwork(virDomainObj *vm)
+                 /* For hostdev present in qemuProcessPrepareDomain() phase this was
+                  * done already, but this code runs after that, so we have to call
+                  * it ourselves. */
+-                if (qemuDomainPrepareHostdev(hostdev, priv) < 0)
++                if (qemuDomainPrepareHostdev(def, hostdev, priv) < 0)
+                     return -1;
+ 
+                 virDomainHostdevInsert(def, hostdev);
+@@ -6838,7 +6838,7 @@ qemuProcessPrepareDomainHostdevs(virDomainObj *vm,
+     for (i = 0; i < vm->def->nhostdevs; i++) {
+         virDomainHostdevDef *hostdev = vm->def->hostdevs[i];
+ 
+-        if (qemuDomainPrepareHostdev(hostdev, priv) < 0)
++        if (qemuDomainPrepareHostdev(vm->def, hostdev, priv) < 0)
+             return -1;
+     }
+ 
+-- 
+2.54.0

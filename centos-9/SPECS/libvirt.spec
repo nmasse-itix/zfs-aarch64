@@ -287,7 +287,7 @@
 Summary: Library providing a simple virtualization API
 Name: libvirt
 Version: 11.10.0
-Release: 3%{?dist}%{?extra_release}
+Release: 13%{?dist}%{?extra_release}
 License: GPL-2.0-or-later AND LGPL-2.1-only AND LGPL-2.1-or-later AND OFL-1.1
 URL: https://libvirt.org/
 
@@ -306,6 +306,114 @@ Patch8: libvirt-qemu_validate-Drop-VIR_DOMAIN_HYPERV_SYNIC-dependency-on-VIR_DOM
 Patch9: libvirt-qemu_validate-Drop-VIR_DOMAIN_HYPERV_STIMER-dependency-on-VIR_DOMAIN_HYPERV_VPINDEX.patch
 Patch10: libvirt-esx_util-Introduce-esxUtil_EscapeInventoryObject.patch
 Patch11: libvirt-esx-URI-encode-inventory-objects-twice.patch
+Patch12: libvirt-qemuSecurityMoveImageMetadata-Move-seclabels-only-to-virStorageSource-of-same-type.patch
+Patch13: libvirt-qemuDomainSetThrottleGroup-Enforce-non-zero-groupname-string-length.patch
+Patch14: libvirt-qemuDomainSetBlockIoTuneField-Move-setting-of-group_name-out-of-the-loop.patch
+Patch15: libvirt-qemuDomainSetThrottleGroup-Always-honour-thottle-group-name-passed-as-argument.patch
+Patch16: libvirt-qemuDomainSetThrottleGroup-Don-t-put-group-name-into-the-tunable-event-twice.patch
+Patch17: libvirt-qemuSnapshotDiskHasBackingDisk-Avoid-call-of-virStorageSourceIsSameLocation-with-NULL-argument.patch
+Patch18: libvirt-qemuSnapshotUpdateBackingStore-Remove-stale-comment.patch
+Patch19: libvirt-qemuSnapshotDiskHasBackingDisk-Use-proper-max_depth-when-calling-virStorageSourceGetMetadata.patch
+Patch20: libvirt-virDomainSnapshotDefAssignExternalNames-Improve-error-message.patch
+Patch21: libvirt-qemuSnapshotUpdateBackingStore-Retry-as-curent-user-if-qemu-img-fails.patch
+Patch22: libvirt-qemublocktest-Iterate-all-nodenames-in-testQemuDetectBitmaps.patch
+Patch23: libvirt-qemu-monitor-Detect-list-of-bitmaps-from-qcow2-format-specific-data.patch
+Patch24: libvirt-qemuMigrationDstPrepareAnyBlockDirtyBitmaps-Fix-check-for-existing-bitmaps.patch
+Patch25: libvirt-qemu-migration-Always-offer-block-dirty-bitmaps-during-migration.patch
+Patch26: libvirt-qemuMigrationDstPrepareAnyBlockDirtyBitmaps-Always-consider-offered-bitmaps.patch
+Patch27: libvirt-qemu-Implement-support-for-associating-iommufd-to-hostdev.patch
+Patch28: libvirt-qemu-Introduce-privateData-for-hostdevs.patch
+Patch29: libvirt-qemu-Support-per-process-memory-accounting-for-iommufd.patch
+Patch30: libvirt-qemu-open-VFIO-FDs-from-libvirt-backend.patch
+Patch31: libvirt-qemu-open-iommufd-FD-from-libvirt-backend.patch
+Patch32: libvirt-qemu-Update-Cgroup-namespace-and-seclabel-for-iommufd.patch
+Patch33: libvirt-tests-qemuxmlconfdata-provide-iommufd-sample-XML-and-CLI-args.patch
+Patch34: libvirt-src-Use-device-alias-when-ifname-is-unset-in-virDomainInterfaceAddresses.patch
+Patch35: libvirt-qemu-Ignore-cmp_legacy-CPU-flag.patch
+Patch36: libvirt-qemu-capabilities-Probe-properties-of-scsi-block-and-scsi-generic-devices.patch
+Patch37: libvirt-qemu-capabilities-Introduce-QEMU_CAPS_DEVICE_SCSI_BLOCK_MIGRATE_PR.patch
+Patch38: libvirt-RHEL-ONLY-backport-test-data-for-migrate-pr-capability-of-scsi-block.patch
+Patch39: libvirt-qemu-Implement-support-for-persistent-reservation-migration-control.patch
+Patch40: libvirt-qemu-Extract-disk-setup-done-via-QMP-into-a-separate-helper.patch
+Patch41: libvirt-qemu-process-Rename-qemuProcessSetupDiskThrottling-to-qemuProcessSetupDisks.patch
+Patch42: libvirt-qemu-monitor-Extract-block-latency-histogram-stats-into-qemuBlockStats.patch
+Patch43: libvirt-Expose-latency-histograms-via-virConnectGetAllDomainStats.patch
+Patch44: libvirt-qemu-monitor-Add-handlers-for-block-latency-histogram-set.patch
+Patch45: libvirt-docs-formatdomain-Fix-indentation-of-docs-for-disk-driver-statistics-element.patch
+Patch46: libvirt-docs-formatdomain-Reword-section-about-the-statistics-element-under-disk-driver.patch
+Patch47: libvirt-Introduce-support-for-disk-operation-latency-histogram-collection.patch
+Patch48: libvirt-qemu-Setup-disk-latency-histograms-on-startup-hotplug-update.patch
+Patch49: libvirt-qemu-Introduce-QEMU_CAPS_OBJECT_IOMMUFD.patch
+Patch50: libvirt-qemu-Move-IOMMUFD-validation-to-qemu_validate.patch
+Patch51: libvirt-util-Move-openning-IOMMU-device-to-viriommufd.patch
+Patch52: libvirt-qemu_process-Refactor-qemuProcessOpenIommuFd.patch
+Patch53: libvirt-util-Move-openning-VFIO-device-to-virpci.patch
+Patch54: libvirt-qemu_process-Refactor-qemuProcessOpenVfioDeviceFd.patch
+Patch55: libvirt-util-Use-virPCIDevice-as-argument-in-virPCIDeviceGetVfioPath.patch
+Patch56: libvirt-conf-Introduce-virHostdevIsPCIDeviceWithIOMMUFD.patch
+Patch57: libvirt-conf-Introduce-virDomainDefHasPCIHostdevWithIOMMUFD.patch
+Patch58: libvirt-qemu_domain-Add-missing-IOMMUFD-cleanup.patch
+Patch59: libvirt-qemu_process-Fix-FD-leak-with-multiple-host-devices-using-IOMMUFD.patch
+Patch60: libvirt-qemu_process-Refactor-qemuProcessOpenVfioFds.patch
+Patch61: libvirt-qemuxmlconftest-Refactor-host-device-preparation.patch
+Patch62: libvirt-qemuxmlconftest-Rename-and-refactor-testSetupHostdevPrivateData.patch
+Patch63: libvirt-qemuxmlconftest-Set-fake-FD-for-IOMMUFD.patch
+Patch64: libvirt-qemu-Convert-IOMMUFD-to-qemuFDPassDirect.patch
+Patch65: libvirt-qemu-Convert-vfioDeviceFd-to-qemuFDPassDirect.patch
+Patch66: libvirt-qemu_command-Don-t-use-host-property-if-IOMMUFD-is-used.patch
+Patch67: libvirt-qemu-Save-IOMMUFD-state-into-status-XML.patch
+Patch68: libvirt-qemu_hotplug-Remove-iommufd-object-if-no-longer-needed.patch
+Patch69: libvirt-qemu_command-Extract-building-IOMMUFD-props-to-function.patch
+Patch70: libvirt-qemu_hotplug-Add-support-to-hotplug-host-device-with-IOMMUFD.patch
+Patch71: libvirt-conf-Introduce-iommufd-enum-for-domaincaps.patch
+Patch72: libvirt-qemu-Fill-iommufd-domain-capability.patch
+Patch73: libvirt-tests-properly-mock-VFIO-and-IOMMU-checks.patch
+Patch74: libvirt-iommufd-fix-FD-leak-in-case-of-error.patch
+Patch75: libvirt-domain_conf-initialize-network-hostdev-private-data.patch
+Patch76: libvirt-qemu_hotplug-enter-monitor-in-order-to-rollback-passed-FD.patch
+Patch77: libvirt-qemu_hotplug-Fix-crash-when-attaching-network-inteface-with-hostdev-network.patch
+Patch78: libvirt-conf-Parse-hyperv-features-even-for-host-model.patch
+Patch79: libvirt-qemu-Wire-up-new-hyperv-host-model-mode-behavior.patch
+Patch80: libvirt-Introduce-EXPAND_CPU_FEATURES-flag-for-domain-capabilities.patch
+Patch81: libvirt-qemu-Implement-VIR_CONNECT_GET_DOMAIN_CAPABILITIES_EXPAND_CPU_FEATURES.patch
+Patch82: libvirt-virsh-Add-expand-cpu-features-option-for-domcapabilities.patch
+Patch83: libvirt-docs-Clarify-host-model-description-in-domain-capabilities.patch
+Patch84: libvirt-qemu-Fix-job-handling-when-domain-dies-in-post-copy-migration.patch
+Patch85: libvirt-security_apparmor-Use-g_auto-in-AppArmorSetSecurityHostdevLabel.patch
+Patch86: libvirt-security-Cleanup-hostdev-label-error-logic.patch
+Patch87: libvirt-qemu-Fix-IOMMUFD-and-VFIO-security-labels.patch
+Patch88: libvirt-viriommufd-Set-IOMMU_OPTION_RLIMIT_MODE-only-when-running-privileged.patch
+Patch89: libvirt-conf-Move-and-rename-virStorageSourceFDTuple-object.patch
+Patch90: libvirt-conf-Refactor-virHostdevIsPCIDevice.patch
+Patch91: libvirt-hypervisor-Fix-virHostdevNeedsVFIO-detection.patch
+Patch92: libvirt-qemu-Expand-call-to-qemuDomainNeedsVFIO.patch
+Patch93: libvirt-qemu-Update-qemuDomainNeedsVFIO-to-ignore-PCI-hostdev-with-IOMMUFD.patch
+Patch94: libvirt-src-Use-virHostdevIsPCIDeviceWith-to-check-for-IOMMUFD.patch
+Patch95: libvirt-conf-Introduce-domain-iommufd-element.patch
+Patch96: libvirt-qemu-Implement-iommufd.patch
+Patch97: libvirt-conf-Add-iommufd-fdgroup-support.patch
+Patch98: libvirt-qemu-Implement-iommufd-fdgroup.patch
+Patch99: libvirt-tests-Add-iommufd-fdgroup-test.patch
+Patch100: libvirt-hypervisor-Call-virWaitForDevices-after-detaching-host-devices.patch
+Patch101: libvirt-qemuMigrationSrcBeginXML-Don-t-call-qemuMigrationSrcBeginPhaseBlockDirtyBitmaps-with-offline-VM.patch
+Patch102: libvirt-qemuMigrationSrcBeginPhase-Don-t-call-qemuBlockNodesEnsureActive-with-offline-VM.patch
+Patch103: libvirt-util-virGetSubIDs-do-not-limit-file-size.patch
+Patch104: libvirt-cpu_conf-Introduce-virCPUDefSortFeatures.patch
+Patch105: libvirt-qemu_capabilities-Split-virQEMUCapsFillDomainCPUCaps.patch
+Patch106: libvirt-qemu-Move-domain-caps-flags-handling-to-virQEMUCapsFillDomainCPUHostModel.patch
+Patch107: libvirt-qemu_capabilities-Always-sort-features-in-host-model-CPU.patch
+Patch108: libvirt-qemu_capabilities-Use-g_autoptr-in-virQEMUCapsInitHostCPUModel.patch
+Patch109: libvirt-qemu_capabilities-Split-conditions-in-virQEMUCapsInitHostCPUModel.patch
+Patch110: libvirt-qemu_capabilities-Cache-expanded-CPU.patch
+Patch111: libvirt-domaincapstest-Test-EXPAND_CPU_FEATURES-flag.patch
+Patch112: libvirt-util-Publish-and-mock-virHostCPUGetMSRFromKVM.patch
+Patch113: libvirt-cpu_x86-Introduce-virCPUx86DataAddMSR.patch
+Patch114: libvirt-cpu-Introduce-virCPUUpdateFeatures.patch
+Patch115: libvirt-Fix-documentation-of-VIR_CONNECT_GET_DOMAIN_CAPABILITIES_EXPAND_CPU_FEATURES.patch
+Patch116: libvirt-Introduce-VIR_CONNECT_GET_DOMAIN_CAPABILITIES_SUPPORTED_CPU_FEATURES-flag.patch
+Patch117: libvirt-virsh-Add-supported-cpu-features-option-for-domcapabilities.patch
+Patch118: libvirt-domaincapstest-Test-SUPPORTED_CPU_FEATURES-flag.patch
+Patch119: libvirt-qemu_capabilities-Fix-domain-capabilities-on-AMD-CPUs.patch
 
 
 Requires: libvirt-daemon = %{version}-%{release}
@@ -2697,6 +2805,135 @@ exit 0
 %endif
 
 %changelog
+* Thu Jun  4 2026 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-13
+- conf: Parse hyperv features even for host-model (RHEL-151688)
+- qemu: Wire up new hyperv host-model mode behavior (RHEL-151688)
+- Introduce EXPAND_CPU_FEATURES flag for domain capabilities (RHEL-153653)
+- qemu: Implement VIR_CONNECT_GET_DOMAIN_CAPABILITIES_EXPAND_CPU_FEATURES (RHEL-153653)
+- virsh: Add --expand-cpu-features option for domcapabilities (RHEL-153653)
+- docs: Clarify host-model description in domain capabilities (RHEL-153653)
+- qemu: Fix job handling when domain dies in post-copy migration (RHEL-145179)
+- security_apparmor: Use g_auto* in AppArmorSetSecurityHostdevLabel (RHEL-159902)
+- security: Cleanup hostdev label error logic (RHEL-159902)
+- qemu: Fix IOMMUFD and VFIO security labels (RHEL-159902)
+- viriommufd: Set IOMMU_OPTION_RLIMIT_MODE only when running privileged (RHEL-156803)
+- conf: Move and rename virStorageSourceFDTuple object (RHEL-156803)
+- conf: Refactor virHostdevIsPCIDevice (RHEL-156803)
+- hypervisor: Fix virHostdevNeedsVFIO detection (RHEL-156803)
+- qemu: Expand call to qemuDomainNeedsVFIO (RHEL-156803)
+- qemu: Update qemuDomainNeedsVFIO to ignore PCI hostdev with IOMMUFD (RHEL-156803)
+- src: Use virHostdevIsPCIDeviceWith* to check for IOMMUFD (RHEL-156803)
+- conf: Introduce domain iommufd element (RHEL-156803)
+- qemu: Implement iommufd (RHEL-156803)
+- conf: Add iommufd fdgroup support (RHEL-156803)
+- qemu: Implement iommufd fdgroup (RHEL-156803)
+- tests: Add iommufd fdgroup test (RHEL-156803)
+- hypervisor: Call virWaitForDevices() after detaching host devices (RHEL-156803)
+- qemuMigrationSrcBeginXML: Don't call 'qemuMigrationSrcBeginPhaseBlockDirtyBitmaps' with offline VM (RHEL-173433)
+- qemuMigrationSrcBeginPhase: Don't call 'qemuBlockNodesEnsureActive' with offline VM (RHEL-173433)
+- util: virGetSubIDs: do not limit file size (RHEL-174491)
+- cpu_conf: Introduce virCPUDefSortFeatures (RHEL-177364)
+- qemu_capabilities: Split virQEMUCapsFillDomainCPUCaps (RHEL-177364)
+- qemu: Move domain caps flags handling to virQEMUCapsFillDomainCPUHostModel (RHEL-177364)
+- qemu_capabilities: Always sort features in host-model CPU (RHEL-177364)
+- qemu_capabilities: Use g_autoptr in virQEMUCapsInitHostCPUModel (RHEL-177364)
+- qemu_capabilities: Split conditions in virQEMUCapsInitHostCPUModel (RHEL-177364)
+- qemu_capabilities: Cache expanded CPU (RHEL-177364)
+- domaincapstest: Test EXPAND_CPU_FEATURES flag (RHEL-177364)
+- util: Publish and mock virHostCPUGetMSRFromKVM (RHEL-177364)
+- cpu_x86: Introduce virCPUx86DataAddMSR (RHEL-177364)
+- cpu: Introduce virCPUUpdateFeatures (RHEL-177364)
+- Fix documentation of VIR_CONNECT_GET_DOMAIN_CAPABILITIES_EXPAND_CPU_FEATURES (RHEL-177364)
+- Introduce VIR_CONNECT_GET_DOMAIN_CAPABILITIES_SUPPORTED_CPU_FEATURES flag (RHEL-177364)
+- virsh: Add --supported-cpu-features option for domcapabilities (RHEL-177364)
+- domaincapstest: Test SUPPORTED_CPU_FEATURES flag (RHEL-177364)
+- qemu_capabilities: Fix domain capabilities on AMD CPUs (RHEL-177364)
+- distro: Replace old gating with tmt
+
+* Tue Mar 10 2026 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-12
+- qemu_hotplug: Fix crash when attaching network inteface with hostdev network (RHEL-151953)
+
+* Fri Mar  6 2026 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-11
+- domain_conf: initialize network hostdev private data (RHEL-151953)
+- qemu_hotplug: enter monitor in order to rollback passed FD (RHEL-151953)
+
+* Wed Feb 18 2026 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-10
+- qemu: Introduce QEMU_CAPS_OBJECT_IOMMUFD (RHEL-150353)
+- qemu: Move IOMMUFD validation to qemu_validate (RHEL-150353)
+- util: Move openning IOMMU device to viriommufd (RHEL-150353)
+- qemu_process: Refactor qemuProcessOpenIommuFd (RHEL-150353)
+- util: Move openning VFIO device to virpci (RHEL-150353)
+- qemu_process: Refactor qemuProcessOpenVfioDeviceFd (RHEL-150353)
+- util: Use virPCIDevice as argument in virPCIDeviceGetVfioPath (RHEL-150353)
+- conf: Introduce virHostdevIsPCIDeviceWithIOMMUFD (RHEL-150353)
+- conf: Introduce virDomainDefHasPCIHostdevWithIOMMUFD (RHEL-150353)
+- qemu_domain: Add missing IOMMUFD cleanup (RHEL-150353)
+- qemu_process: Fix FD leak with multiple host devices using IOMMUFD (RHEL-150353)
+- qemu_process: Refactor qemuProcessOpenVfioFds (RHEL-150353)
+- qemuxmlconftest: Refactor host device preparation (RHEL-150353)
+- qemuxmlconftest: Rename and refactor testSetupHostdevPrivateData (RHEL-150353)
+- qemuxmlconftest: Set fake FD for IOMMUFD (RHEL-150353)
+- qemu: Convert IOMMUFD to qemuFDPassDirect (RHEL-150353)
+- qemu: Convert vfioDeviceFd to qemuFDPassDirect (RHEL-150353)
+- qemu_command: Don't use host property if IOMMUFD is used (RHEL-150353)
+- qemu: Save IOMMUFD state into status XML (RHEL-150353)
+- qemu_hotplug: Remove iommufd object if no longer needed (RHEL-150353)
+- qemu_command: Extract building IOMMUFD props to function (RHEL-150353)
+- qemu_hotplug: Add support to hotplug host device with IOMMUFD (RHEL-150353)
+- conf: Introduce iommufd enum for domaincaps (RHEL-138544)
+- qemu: Fill iommufd domain capability (RHEL-138544)
+- tests: properly mock VFIO and IOMMU checks (RHEL-138544)
+- iommufd: fix FD leak in case of error (RHEL-150353)
+
+* Tue Feb 17 2026 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-9
+- qemu: capabilities: Probe properties of 'scsi-block' and 'scsi-generic' devices (RHEL-140614)
+- qemu: capabilities: Introduce QEMU_CAPS_DEVICE_SCSI_BLOCK_MIGRATE_PR (RHEL-140614)
+- RHEL-ONLY: backport test data for 'migrate-pr' capability of 'scsi-block' (RHEL-140614)
+- qemu: Implement support for persistent reservation migration control (RHEL-140614)
+- qemu: Extract disk setup done via QMP into a separate helper (RHEL-147866)
+- qemu: process: Rename 'qemuProcessSetupDiskThrottling' to 'qemuProcessSetupDisks' (RHEL-147866)
+- qemu: monitor: Extract block latency histogram stats into 'qemuBlockStats' (RHEL-147866)
+- Expose latency histograms via 'virConnectGetAllDomainStats' (RHEL-147866)
+- qemu: monitor: Add handlers for 'block-latency-histogram-set' (RHEL-147866)
+- docs: formatdomain: Fix indentation of docs for <disk><driver><statistics> element (RHEL-147866)
+- docs: formatdomain: Reword section about the '<statistics>' element under disk driver (RHEL-147866)
+- Introduce support for disk operation latency histogram collection (RHEL-147866)
+- qemu: Setup disk latency histograms on startup/hotplug/update (RHEL-147866)
+
+* Wed Feb 11 2026 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-8
+- qemu: Ignore cmp_legacy CPU flag (RHEL-146629)
+
+* Tue Feb 10 2026 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-7
+- src: Use device alias when ifname is unset in virDomainInterfaceAddresses() (RHEL-141496)
+
+* Fri Feb  6 2026 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-6
+- qemu: Implement support for associating iommufd to hostdev (RHEL-126345)
+- qemu: Introduce privateData for hostdevs (RHEL-126345)
+- qemu: Support per-process memory accounting for iommufd (RHEL-126345)
+- qemu: open VFIO FDs from libvirt backend (RHEL-126345)
+- qemu: open iommufd FD from libvirt backend (RHEL-126345)
+- qemu: Update Cgroup, namespace, and seclabel for iommufd (RHEL-126345)
+- tests: qemuxmlconfdata: provide iommufd sample XML and CLI args (RHEL-126345)
+
+* Wed Feb  4 2026 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-5
+- qemublocktest: Iterate all nodenames in 'testQemuDetectBitmaps' (RHEL-145770)
+- qemu: monitor: Detect list of bitmaps from 'qcow2' format specific data (RHEL-145770)
+- qemuMigrationDstPrepareAnyBlockDirtyBitmaps: Fix check for existing bitmaps (RHEL-145770)
+- qemu: migration: Always offer block dirty bitmaps during migration (RHEL-145770)
+- qemuMigrationDstPrepareAnyBlockDirtyBitmaps: Always consider offered bitmaps (RHEL-145770)
+
+* Thu Jan 29 2026 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-4
+- qemuSecurityMoveImageMetadata: Move seclabels only to virStorageSource of same type (RHEL-140624)
+- qemuDomainSetThrottleGroup: Enforce non-zero 'groupname' string length (RHEL-144010)
+- qemuDomainSetBlockIoTuneField: Move setting of 'group_name' out of the loop (RHEL-144010)
+- qemuDomainSetThrottleGroup: Always honour thottle group name passed as argument (RHEL-144010)
+- qemuDomainSetThrottleGroup: Don't put group name into the 'tunable' event twice (RHEL-144010)
+- qemuSnapshotDiskHasBackingDisk: Avoid call of virStorageSourceIsSameLocation with NULL argument (RHEL-144090)
+- qemuSnapshotUpdateBackingStore: Remove stale comment (RHEL-144090)
+- qemuSnapshotDiskHasBackingDisk: Use proper 'max_depth' when calling 'virStorageSourceGetMetadata' (RHEL-144090)
+- virDomainSnapshotDefAssignExternalNames: Improve error message (RHEL-144090)
+- qemuSnapshotUpdateBackingStore: Retry as curent user if qemu-img fails (RHEL-144090)
+
 * Tue Jan 13 2026 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-3
 - util: json: Increase JSON nesting limit when parsing to 300 (RHEL-135128)
 - virjsontest: Add test for nesting depth (RHEL-135128)

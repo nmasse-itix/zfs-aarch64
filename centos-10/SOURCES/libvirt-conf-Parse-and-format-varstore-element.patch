@@ -1,0 +1,385 @@
+From 50a7a37ea4d6c8ffab8110a58db1b16b9d1d7b84 Mon Sep 17 00:00:00 2001
+Message-ID: <50a7a37ea4d6c8ffab8110a58db1b16b9d1d7b84.1772815313.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Mon, 19 Jan 2026 14:20:06 +0100
+Subject: [PATCH] conf: Parse and format varstore element
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This will be used to configure the backing storage used by the
+uefi-vars QEMU device.
+
+Dealing with the element itself is trivial, however we have to
+refactor the existing code which deals with the loader and nvram
+elements slightly: in particular, we can no longer perform an
+early exit if those elements are absent.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+Reviewed-by: Daniel P. Berrangé <berrange@redhat.com>
+(cherry picked from commit 3feee6d0aba5abf5e69d69b0022c08ea6bd5af3e)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ docs/formatdomain.rst             | 23 +++++++--
+ docs/kbase/secureboot.rst         | 46 ++++++++++++------
+ src/conf/domain_conf.c            | 81 ++++++++++++++++++++++++++++---
+ src/conf/domain_conf.h            |  9 ++++
+ src/conf/schemas/domaincommon.rng | 22 ++++++++-
+ src/conf/virconftypes.h           |  2 +
+ src/libvirt_private.syms          |  2 +
+ 7 files changed, 157 insertions(+), 28 deletions(-)
+
+diff --git a/docs/formatdomain.rst b/docs/formatdomain.rst
+index 152fd7f530..7d6cc45efd 100644
+--- a/docs/formatdomain.rst
++++ b/docs/formatdomain.rst
+@@ -196,9 +196,9 @@ harddisk, cdrom, network) determining where to obtain/find the boot image.
+ 
+ ``firmware``
+    The ``firmware`` attribute allows management applications to automatically
+-   fill ``<loader/>`` and ``<nvram/>`` elements and possibly enable some
+-   features required by selected firmware. Accepted values are ``bios`` and
+-   ``efi``.
++   fill ``<loader/>`` and ``<nvram/>`` or ``<varstore/>`` elements and possibly
++   enable some features required by selected firmware. Accepted values are
++   ``bios`` and ``efi``.
+    The selection process scans for files describing installed firmware images in
+    specified location and uses the most specific one which fulfills domain
+    requirements. The locations in order of preference (from generic to most
+@@ -311,6 +311,23 @@ harddisk, cdrom, network) determining where to obtain/find the boot image.
+    It is not valid to provide this element if the loader is marked as
+    stateless.
+ 
++``varstore``
++   This works much the same way as the ``<nvram/>`` element described above,
++   except that variable storage is handled by the ``uefi-vars`` QEMU device
++   instead of being backed by a pflash device. :since:`Since 12.1.0 (QEMU only)`
++
++   The ``path`` attribute contains the path of the domain-specific file where
++   variables are stored, while the ``template`` attribute points to a template
++   that the domain-specific file can be (re)generated from. Assuming that the
++   necessary JSON firmware descriptor files are present, both attributes will
++   be filled in automatically by libvirt.
++
++   Using ``<varstore/>`` instead of ``<nvram/>`` is particularly useful on
++   non-x86 architectures such as aarch64, where it represents the only way to
++   get Secure Boot working. It can be used on x86 too, and doing so will make
++   it possible to keep UEFI authenticated variables safe from tampering without
++   requiring the use of SMM emulation.
++
+ ``boot``
+    The ``dev`` attribute takes one of the values "fd", "hd", "cdrom" or
+    "network" and is used to specify the next boot device to consider. The
+diff --git a/docs/kbase/secureboot.rst b/docs/kbase/secureboot.rst
+index 6c22b08d22..b411b65f00 100644
+--- a/docs/kbase/secureboot.rst
++++ b/docs/kbase/secureboot.rst
+@@ -74,8 +74,8 @@ Changing an existing VM
+ 
+ When a VM is defined, libvirt will pick the firmware that best
+ satisfies the provided criteria and record this information for use
+-on subsequent boots. The resulting XML configuration will look like
+-this:
++on subsequent boots. The resulting XML configuration will look either
++like this:
+ 
+ ::
+ 
+@@ -88,14 +88,28 @@ this:
+     <nvram template='/usr/share/edk2/ovmf/OVMF_VARS.secboot.fd'>/var/lib/libvirt/qemu/nvram/vm_VARS.fd</nvram>
+   </os>
+ 
++or like this:
++
++::
++
++  <os firmware='efi'>
++    <firmware>
++      <feature enabled='yes' name='enrolled-keys'/>
++      <feature enabled='yes' name='secure-boot'/>
++    </firmware>
++    <loader type='rom' format='raw'>/usr/share/edk2/aarch64/QEMU_EFI.qemuvars.fd</loader>
++    <varstore template='/usr/share/edk2/aarch64/vars.secboot.json' path='/var/lib/libvirt/qemu/varstore/vm.json'/>
++  </os>
++
+ In order to force libvirt to repeat the firmware autoselection
+-process, it's necessary to remove the ``<loader>`` and ``<nvram>``
+-elements. Failure to do so will likely result in an error.
++process, it's necessary to remove the ``<loader>`` as well as the
++``<nvram>`` or ``<varstore>`` elements, depending on what's
++applicable. Failure to do so will likely result in an error.
+ 
+ Note that updating the XML configuration as described above is
+-**not** enough to change the Secure Boot status: the NVRAM file
+-associated with the VM has to be regenerated from its template as
+-well.
++**not** enough to change the Secure Boot status: the NVRAM/varstore
++file associated with the VM has to be regenerated from its template
++as well.
+ 
+ In order to do that, update the XML and then start the VM with
+ 
+@@ -107,9 +121,9 @@ This option is only available starting with libvirt 8.1.0, so if your
+ version of libvirt is older than that you will have to delete the
+ NVRAM file manually before starting the VM.
+ 
+-Most guest operating systems will be able to cope with the NVRAM file
+-being reinitialized, but in some cases the VM will be unable to boot
+-after the change.
++Most guest operating systems will be able to cope with the
++NVRAM/varstore file being reinitialized, but in some cases the VM
++will be unable to boot after the change.
+ 
+ 
+ Additional information
+@@ -126,15 +140,15 @@ can be used to validate the operating system signature need to be
+ provided as well.
+ 
+ Asking for the ``enrolled-keys`` firmware feature to be enabled will
+-cause libvirt to initialize the NVRAM file associated with the VM
+-from a template that contains a suitable set of keys. These keys
+-being present will cause the firmware to enforce the Secure Boot
++cause libvirt to initialize the NVRAM/varstore file associated with
++the VM from a template that contains a suitable set of keys. These
++keys being present will cause the firmware to enforce the Secure Boot
+ signing requirements.
+ 
+ The opposite configuration, where the feature is explicitly disabled,
+-will result in no keys being present in the NVRAM file. Unable to
+-verify signatures, the firmware will allow even unsigned operating
+-systems to run.
++will result in no keys being present in the NVRAM/varstore file.
++Unable to verify signatures, the firmware will allow even unsigned
++operating systems to run.
+ 
+ If running unsigned code is desired, it's also possible to ask for
+ the ``secure-boot`` feature to be disabled, which will cause libvirt
+diff --git a/src/conf/domain_conf.c b/src/conf/domain_conf.c
+index e72cda0048..16ea9f0b2e 100644
+--- a/src/conf/domain_conf.c
++++ b/src/conf/domain_conf.c
+@@ -3932,6 +3932,27 @@ virDomainLoaderDefFree(virDomainLoaderDef *loader)
+     g_free(loader);
+ }
+ 
++virDomainVarstoreDef *
++virDomainVarstoreDefNew(void)
++{
++    virDomainVarstoreDef *def = NULL;
++
++    def = g_new0(virDomainVarstoreDef, 1);
++
++    return def;
++}
++
++void
++virDomainVarstoreDefFree(virDomainVarstoreDef *varstore)
++{
++    if (!varstore)
++        return;
++
++    g_free(varstore->path);
++    g_free(varstore->template);
++    g_free(varstore);
++}
++
+ 
+ static void
+ virDomainResctrlMonDefFree(virDomainResctrlMonDef *domresmon)
+@@ -4034,6 +4055,7 @@ virDomainOSDefClear(virDomainOSDef *os)
+         virDomainOSACPITableDefFree(os->acpiTables[i]);
+     g_free(os->acpiTables);
+     virDomainLoaderDefFree(os->loader);
++    virDomainVarstoreDefFree(os->varstore);
+     g_free(os->bootloader);
+     g_free(os->bootloaderArgs);
+ }
+@@ -17983,6 +18005,17 @@ virDomainLoaderDefParseXMLLoader(virDomainLoaderDef *loader,
+ }
+ 
+ 
++static int
++virDomainVarstoreDefParseXML(virDomainVarstoreDef *varstore,
++                             xmlNodePtr varstoreNode)
++{
++    varstore->path = virXMLPropString(varstoreNode, "path");
++    varstore->template = virXMLPropString(varstoreNode, "template");
++
++    return 0;
++}
++
++
+ static int
+ virDomainLoaderDefParseXML(virDomainLoaderDef *loader,
+                            xmlNodePtr loaderNode,
+@@ -18430,16 +18463,29 @@ virDomainDefParseBootLoaderOptions(virDomainDef *def,
+     xmlNodePtr loaderNode = virXPathNode("./os/loader[1]", ctxt);
+     xmlNodePtr nvramNode = virXPathNode("./os/nvram[1]", ctxt);
+     xmlNodePtr nvramSourceNode = virXPathNode("./os/nvram/source[1]", ctxt);
++    xmlNodePtr varstoreNode = virXPathNode("./os/varstore[1]", ctxt);
+ 
+-    if (!loaderNode && !nvramNode)
+-        return 0;
+-
+-    def->os.loader = virDomainLoaderDefNew();
+-
+-    if (virDomainLoaderDefParseXML(def->os.loader,
+-                                   loaderNode, nvramNode, nvramSourceNode,
+-                                   ctxt, xmlopt, flags) < 0)
++    if (nvramNode && varstoreNode) {
++        virReportError(VIR_ERR_XML_ERROR, "%s",
++                       _("Cannot have both <nvram> and <varstore>"));
+         return -1;
++    }
++
++    if (loaderNode || nvramNode) {
++        def->os.loader = virDomainLoaderDefNew();
++
++        if (virDomainLoaderDefParseXML(def->os.loader,
++                                       loaderNode, nvramNode, nvramSourceNode,
++                                       ctxt, xmlopt, flags) < 0)
++            return -1;
++    }
++
++    if (varstoreNode) {
++        def->os.varstore = virDomainVarstoreDefNew();
++
++        if (virDomainVarstoreDefParseXML(def->os.varstore, varstoreNode) < 0)
++            return -1;
++    }
+ 
+     return 0;
+ }
+@@ -28062,6 +28108,20 @@ virDomainLoaderDefFormat(virBuffer *buf,
+     return 0;
+ }
+ 
++static int
++virDomainVarstoreDefFormat(virBuffer *buf,
++                           virDomainVarstoreDef *varstore)
++{
++    g_auto(virBuffer) attrBuf = VIR_BUFFER_INITIALIZER;
++
++    virBufferEscapeString(&attrBuf, " template='%s'", varstore->template);
++    virBufferEscapeString(&attrBuf, " path='%s'", varstore->path);
++
++    virXMLFormatElementEmpty(buf, "varstore", &attrBuf, NULL);
++
++    return 0;
++}
++
+ static void
+ virDomainKeyWrapDefFormat(virBuffer *buf, virDomainKeyWrapDef *keywrap)
+ {
+@@ -29523,6 +29583,11 @@ virDomainDefFormatInternalSetRootName(virDomainDef *def,
+     if (def->os.loader &&
+         virDomainLoaderDefFormat(buf, def->os.loader, xmlopt, flags) < 0)
+         return -1;
++
++    if (def->os.varstore &&
++        virDomainVarstoreDefFormat(buf, def->os.varstore) < 0)
++        return -1;
++
+     virBufferEscapeString(buf, "<kernel>%s</kernel>\n",
+                           def->os.kernel);
+     virBufferEscapeString(buf, "<initrd>%s</initrd>\n",
+diff --git a/src/conf/domain_conf.h b/src/conf/domain_conf.h
+index 69a8e79c6d..ead3b07475 100644
+--- a/src/conf/domain_conf.h
++++ b/src/conf/domain_conf.h
+@@ -2420,6 +2420,14 @@ struct _virDomainLoaderDef {
+ virDomainLoaderDef *virDomainLoaderDefNew(void);
+ void virDomainLoaderDefFree(virDomainLoaderDef *loader);
+ 
++struct _virDomainVarstoreDef {
++    char *path;
++    char *template;
++};
++
++virDomainVarstoreDef *virDomainVarstoreDefNew(void);
++void virDomainVarstoreDefFree(virDomainVarstoreDef *varstore);
++
+ typedef enum {
+     VIR_DOMAIN_IOAPIC_NONE = 0,
+     VIR_DOMAIN_IOAPIC_QEMU,
+@@ -2573,6 +2581,7 @@ struct _virDomainOSDef {
+     size_t nacpiTables;
+     virDomainOSACPITableDef **acpiTables;
+     virDomainLoaderDef *loader;
++    virDomainVarstoreDef *varstore;
+     char *bootloader;
+     char *bootloaderArgs;
+     int smbios_mode;
+diff --git a/src/conf/schemas/domaincommon.rng b/src/conf/schemas/domaincommon.rng
+index 92f82c8fbf..7215db3fc1 100644
+--- a/src/conf/schemas/domaincommon.rng
++++ b/src/conf/schemas/domaincommon.rng
+@@ -349,7 +349,10 @@
+             </element>
+           </optional>
+           <optional>
+-            <ref name="osnvram"/>
++            <choice>
++              <ref name="osnvram"/>
++              <ref name="osvarstore"/>
++            </choice>
+           </optional>
+           <optional>
+             <ref name="osbootkernel"/>
+@@ -456,6 +459,23 @@
+     </element>
+   </define>
+ 
++  <define name="osvarstore">
++    <element name="varstore">
++      <interleave>
++        <optional>
++          <attribute name="template">
++            <ref name="absFilePath"/>
++          </attribute>
++        </optional>
++        <optional>
++          <attribute name="path">
++            <ref name="absFilePath"/>
++          </attribute>
++        </optional>
++      </interleave>
++    </element>
++  </define>
++
+   <define name="osexe">
+     <element name="os">
+       <interleave>
+diff --git a/src/conf/virconftypes.h b/src/conf/virconftypes.h
+index 6e2573035a..0596791a4d 100644
+--- a/src/conf/virconftypes.h
++++ b/src/conf/virconftypes.h
+@@ -164,6 +164,8 @@ typedef struct _virDomainLeaseDef virDomainLeaseDef;
+ 
+ typedef struct _virDomainLoaderDef virDomainLoaderDef;
+ 
++typedef struct _virDomainVarstoreDef virDomainVarstoreDef;
++
+ typedef struct _virDomainMemballoonDef virDomainMemballoonDef;
+ 
+ typedef struct _virDomainMemoryDef virDomainMemoryDef;
+diff --git a/src/libvirt_private.syms b/src/libvirt_private.syms
+index effe44fe57..1308fa2e51 100644
+--- a/src/libvirt_private.syms
++++ b/src/libvirt_private.syms
+@@ -718,6 +718,8 @@ virDomainTPMProfileRemoveDisabledTypeToString;
+ virDomainTPMVersionTypeFromString;
+ virDomainTPMVersionTypeToString;
+ virDomainUSBDeviceDefForeach;
++virDomainVarstoreDefFree;
++virDomainVarstoreDefNew;
+ virDomainVideoDefaultRAM;
+ virDomainVideoDefClear;
+ virDomainVideoDefFree;
+-- 
+2.53.0

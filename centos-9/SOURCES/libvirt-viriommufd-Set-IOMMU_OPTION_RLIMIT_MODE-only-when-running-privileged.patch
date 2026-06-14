@@ -1,0 +1,79 @@
+From 32ff11b8bbc74b61f5ff531f9fb5c83f1a4da343 Mon Sep 17 00:00:00 2001
+Message-ID: <32ff11b8bbc74b61f5ff531f9fb5c83f1a4da343.1780571166.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Fri, 13 Mar 2026 10:50:36 +0100
+Subject: [PATCH] viriommufd: Set IOMMU_OPTION_RLIMIT_MODE only when running
+ privileged
+
+If libvirt daemon is running unprivileged it will fail so we should not
+even try to set it.
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Jiri Denemark <jdenemar@redhat.com>
+(cherry picked from commit 293bb59e75f4b4c975bbeccb1bb8b39b6f439a35)
+
+Resolves: https://redhat.atlassian.net/browse/RHEL-156803
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/qemu/qemu_process.c | 2 +-
+ src/util/viriommufd.c   | 6 +++---
+ src/util/viriommufd.h   | 2 +-
+ 3 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/src/qemu/qemu_process.c b/src/qemu/qemu_process.c
+index 0a69063a4b..9b8b378b1f 100644
+--- a/src/qemu/qemu_process.c
++++ b/src/qemu/qemu_process.c
+@@ -7695,7 +7695,7 @@ qemuProcessOpenIommuFd(virDomainObj *vm)
+ 
+     VIR_DEBUG("Opening IOMMU FD for domain %s", vm->def->name);
+ 
+-    if ((iommufd = virIOMMUFDOpenDevice()) < 0)
++    if ((iommufd = virIOMMUFDOpenDevice(priv->driver->privileged)) < 0)
+         return -1;
+ 
+     if (qemuSecuritySetImageFDLabel(priv->driver->securityManager, vm->def, iommufd) < 0)
+diff --git a/src/util/viriommufd.c b/src/util/viriommufd.c
+index b62d59241d..82920923a2 100644
+--- a/src/util/viriommufd.c
++++ b/src/util/viriommufd.c
+@@ -80,14 +80,14 @@ virIOMMUFDSetRLimitMode(int fd, bool processAccounting)
+ }
+ 
+ int
+-virIOMMUFDOpenDevice(void)
++virIOMMUFDOpenDevice(bool privileged)
+ {
+     int fd = -1;
+ 
+     if ((fd = open(VIR_IOMMU_DEV_PATH, O_RDWR | O_CLOEXEC)) < 0)
+         virReportSystemError(errno, "%s", _("cannot open IOMMUFD device"));
+ 
+-    if (virIOMMUFDSetRLimitMode(fd, true) < 0) {
++    if (privileged && virIOMMUFDSetRLimitMode(fd, true) < 0) {
+         VIR_FORCE_CLOSE(fd);
+         return -1;
+     }
+@@ -98,7 +98,7 @@ virIOMMUFDOpenDevice(void)
+ #else
+ 
+ int
+-virIOMMUFDOpenDevice(void)
++virIOMMUFDOpenDevice(bool privileged G_GNUC_UNUSED)
+ {
+     virReportError(VIR_ERR_NO_SUPPORT, "%s",
+                    _("IOMMUFD is not supported on this platform"));
+diff --git a/src/util/viriommufd.h b/src/util/viriommufd.h
+index 223f44eb5c..7bad5c7472 100644
+--- a/src/util/viriommufd.h
++++ b/src/util/viriommufd.h
+@@ -22,6 +22,6 @@
+ 
+ #define VIR_IOMMU_DEV_PATH "/dev/iommu"
+ 
+-int virIOMMUFDOpenDevice(void);
++int virIOMMUFDOpenDevice(bool privileged);
+ 
+ bool virIOMMUFDSupported(void);
+-- 
+2.54.0

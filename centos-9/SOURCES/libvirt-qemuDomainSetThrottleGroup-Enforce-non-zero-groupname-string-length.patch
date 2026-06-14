@@ -1,0 +1,38 @@
+From 9b395b3de68aacda18bbb40f8bfba8f85087aec1 Mon Sep 17 00:00:00 2001
+Message-ID: <9b395b3de68aacda18bbb40f8bfba8f85087aec1.1769699807.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Fri, 16 Jan 2026 16:36:50 +0100
+Subject: [PATCH] qemuDomainSetThrottleGroup: Enforce non-zero 'groupname'
+ string length
+
+Having a name of 0 characters makes no sense. Reject it.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit abcdc9511b1c78df7dcdee9f01c6d55651d3a424)
+
+https://issues.redhat.com/browse/RHEL-141820 [rhel-10.2]
+https://issues.redhat.com/browse/RHEL-144010 [rhel-9.8]
+---
+ src/qemu/qemu_driver.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/src/qemu/qemu_driver.c b/src/qemu/qemu_driver.c
+index f2e024dae3..194017a29a 100644
+--- a/src/qemu/qemu_driver.c
++++ b/src/qemu/qemu_driver.c
+@@ -20345,6 +20345,12 @@ qemuDomainSetThrottleGroup(virDomainPtr dom,
+     virCheckFlags(VIR_DOMAIN_AFFECT_LIVE |
+                   VIR_DOMAIN_AFFECT_CONFIG, -1);
+ 
++    if (strlen(groupname) == 0) {
++        virReportError(VIR_ERR_INVALID_ARG, "%s",
++                       _("'groupname' parameter string must have non-zero length"));
++        return -1;
++    }
++
+     if (qemuDomainValidateBlockIoTune(params, nparams) < 0)
+         return -1;
+ 
+-- 
+2.52.0

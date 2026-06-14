@@ -1,0 +1,65 @@
+From b69d8a93d56c991e8d25059d241f845258008239 Mon Sep 17 00:00:00 2001
+Message-ID: <b69d8a93d56c991e8d25059d241f845258008239.1772815312.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Mon, 24 Nov 2025 18:59:03 +0100
+Subject: [PATCH] qemu_firmware: Set templateFormat for custom paths
+
+If an NVRAM template is used, its format should be set too.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 3e1c110a4d409a32d2407df0e2c77e24d50b7d32)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/qemu/qemu_firmware.c                                     | 5 +++++
+ ...ware-manual-efi-loader-path-nonstandard.x86_64-latest.xml | 2 +-
+ ...e-manual-efi-nvram-template-nonstandard.x86_64-latest.xml | 2 +-
+ 3 files changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/src/qemu/qemu_firmware.c b/src/qemu/qemu_firmware.c
+index 9b6c14701f..2b16d66818 100644
+--- a/src/qemu/qemu_firmware.c
++++ b/src/qemu/qemu_firmware.c
+@@ -1623,6 +1623,11 @@ qemuFirmwareFillDomainCustom(virDomainDef *def)
+     if (!loader->format)
+         loader->format = VIR_STORAGE_FILE_RAW;
+ 
++    if (loader->nvramTemplate &&
++        !loader->nvramTemplateFormat) {
++        loader->nvramTemplateFormat = loader->format;
++    }
++
+     return;
+ }
+ 
+diff --git a/tests/qemuxmlconfdata/firmware-manual-efi-loader-path-nonstandard.x86_64-latest.xml b/tests/qemuxmlconfdata/firmware-manual-efi-loader-path-nonstandard.x86_64-latest.xml
+index c17834b5e6..7baf6ebd40 100644
+--- a/tests/qemuxmlconfdata/firmware-manual-efi-loader-path-nonstandard.x86_64-latest.xml
++++ b/tests/qemuxmlconfdata/firmware-manual-efi-loader-path-nonstandard.x86_64-latest.xml
+@@ -7,7 +7,7 @@
+   <os>
+     <type arch='x86_64' machine='pc-q35-10.0'>hvm</type>
+     <loader readonly='yes' type='pflash' format='raw'>/path/to/OVMF_CODE.fd</loader>
+-    <nvram template='/path/to/OVMF_VARS.fd' format='raw'>/var/lib/libvirt/qemu/nvram/guest_VARS.fd</nvram>
++    <nvram template='/path/to/OVMF_VARS.fd' templateFormat='raw' format='raw'>/var/lib/libvirt/qemu/nvram/guest_VARS.fd</nvram>
+     <boot dev='hd'/>
+   </os>
+   <features>
+diff --git a/tests/qemuxmlconfdata/firmware-manual-efi-nvram-template-nonstandard.x86_64-latest.xml b/tests/qemuxmlconfdata/firmware-manual-efi-nvram-template-nonstandard.x86_64-latest.xml
+index cbadd0f0c8..beb146d35a 100644
+--- a/tests/qemuxmlconfdata/firmware-manual-efi-nvram-template-nonstandard.x86_64-latest.xml
++++ b/tests/qemuxmlconfdata/firmware-manual-efi-nvram-template-nonstandard.x86_64-latest.xml
+@@ -7,7 +7,7 @@
+   <os>
+     <type arch='x86_64' machine='pc-q35-10.0'>hvm</type>
+     <loader readonly='yes' type='pflash' format='raw'>/usr/share/edk2/ovmf/OVMF_CODE.fd</loader>
+-    <nvram template='/path/to/OVMF_VARS.fd' format='raw'>/var/lib/libvirt/qemu/nvram/guest_VARS.fd</nvram>
++    <nvram template='/path/to/OVMF_VARS.fd' templateFormat='raw' format='raw'>/var/lib/libvirt/qemu/nvram/guest_VARS.fd</nvram>
+     <boot dev='hd'/>
+   </os>
+   <features>
+-- 
+2.53.0

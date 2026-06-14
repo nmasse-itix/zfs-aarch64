@@ -1,0 +1,336 @@
+From 01ce19df7986fe190ce212fa05f2caed799cc50f Mon Sep 17 00:00:00 2001
+Message-ID: <01ce19df7986fe190ce212fa05f2caed799cc50f.1770383182.git.jdenemar@redhat.com>
+From: Nathan Chen <nathanc@nvidia.com>
+Date: Fri, 30 Jan 2026 10:59:17 -0800
+Subject: [PATCH] qemu: Update Cgroup, namespace, and seclabel for iommufd
+
+When launching a qemu VM with the iommufd feature enabled for VFIO
+hostdevs:
+- Do not allow cgroup, namespace, and seclabel access to VFIO
+paths (/dev/vfio/vfio and /dev/vfio/<iommugroup>)
+- Allow access to iommufd paths (/dev/iommu and
+/dev/vfio/devices/vfio*) for AppArmor, SELinux, and DAC
+
+Signed-off-by: Nathan Chen <nathanc@nvidia.com>
+Reviewed-by: Pavel Hrdina <phrdina@redhat.com>
+(cherry picked from commit 7d2f91f9cb572ab95d0916bdd1a46dd198874529)
+
+Resolves: https://issues.redhat.com/browse/RHEL-74202
+Resolves: https://issues.redhat.com/browse/RHEL-126346
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/qemu/qemu_cgroup.c           |  3 ++
+ src/qemu/qemu_namespace.c        |  3 ++
+ src/security/security_apparmor.c | 28 ++++++++++++------
+ src/security/security_dac.c      | 49 +++++++++++++++++++++++++-------
+ src/security/security_selinux.c  | 47 +++++++++++++++++++++++-------
+ src/security/virt-aa-helper.c    | 32 ++++++++++++++++-----
+ 6 files changed, 127 insertions(+), 35 deletions(-)
+
+diff --git a/src/qemu/qemu_cgroup.c b/src/qemu/qemu_cgroup.c
+index 7dadef0739..6148990f19 100644
+--- a/src/qemu/qemu_cgroup.c
++++ b/src/qemu/qemu_cgroup.c
+@@ -479,6 +479,9 @@ qemuSetupHostdevCgroup(virDomainObj *vm,
+     g_autofree char *path = NULL;
+     int perms;
+ 
++    if (dev->source.subsys.u.pci.driver.iommufd == VIR_TRISTATE_BOOL_YES)
++        return 0;
++
+     if (!virCgroupHasController(priv->cgroup, VIR_CGROUP_CONTROLLER_DEVICES))
+         return 0;
+ 
+diff --git a/src/qemu/qemu_namespace.c b/src/qemu/qemu_namespace.c
+index c689cc3e40..fb0734193d 100644
+--- a/src/qemu/qemu_namespace.c
++++ b/src/qemu/qemu_namespace.c
+@@ -345,6 +345,9 @@ qemuDomainSetupHostdev(virDomainObj *vm,
+ {
+     g_autofree char *path = NULL;
+ 
++    if (hostdev->source.subsys.u.pci.driver.iommufd == VIR_TRISTATE_BOOL_YES)
++        return 0;
++
+     if (qemuDomainGetHostdevPath(hostdev, &path, NULL) < 0)
+         return -1;
+ 
+diff --git a/src/security/security_apparmor.c b/src/security/security_apparmor.c
+index 68ac39611f..934acfb461 100644
+--- a/src/security/security_apparmor.c
++++ b/src/security/security_apparmor.c
+@@ -45,6 +45,7 @@
+ #include "virstring.h"
+ #include "virscsi.h"
+ #include "virmdev.h"
++#include "viriommufd.h"
+ 
+ #define VIR_FROM_THIS VIR_FROM_SECURITY
+ 
+@@ -841,25 +842,36 @@ AppArmorSetSecurityHostdevLabel(virSecurityManager *mgr,
+     }
+ 
+     case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_PCI: {
+-        virPCIDevice *pci =
++        g_autoptr(virPCIDevice) pci =
+             virPCIDeviceNew(&pcisrc->addr);
+ 
+         if (!pci)
+             goto done;
+ 
+         if (pcisrc->driver.name == VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_VFIO) {
+-            char *vfioGroupDev = virPCIDeviceGetIOMMUGroupDev(pci);
++            if (dev->source.subsys.u.pci.driver.iommufd != VIR_TRISTATE_BOOL_YES) {
++                char *vfioGroupDev = virPCIDeviceGetIOMMUGroupDev(pci);
+ 
+-            if (!vfioGroupDev) {
+-                virPCIDeviceFree(pci);
+-                goto done;
++                if (!vfioGroupDev) {
++                    goto done;
++                }
++                ret = AppArmorSetSecurityPCILabel(pci, vfioGroupDev, ptr);
++                VIR_FREE(vfioGroupDev);
++            } else {
++                g_autofree char *vfiofdDev = NULL;
++
++                if (virPCIDeviceGetVfioPath(&dev->source.subsys.u.pci.addr, &vfiofdDev) < 0)
++                    goto done;
++
++                ret = AppArmorSetSecurityPCILabel(pci, vfiofdDev, ptr);
++                if (ret < 0)
++                    goto done;
++
++                ret = AppArmorSetSecurityPCILabel(pci, VIR_IOMMU_DEV_PATH, ptr);
+             }
+-            ret = AppArmorSetSecurityPCILabel(pci, vfioGroupDev, ptr);
+-            VIR_FREE(vfioGroupDev);
+         } else {
+             ret = virPCIDeviceFileIterate(pci, AppArmorSetSecurityPCILabel, ptr);
+         }
+-        virPCIDeviceFree(pci);
+         break;
+     }
+ 
+diff --git a/src/security/security_dac.c b/src/security/security_dac.c
+index 2f788b872a..d0ed22db2d 100644
+--- a/src/security/security_dac.c
++++ b/src/security/security_dac.c
+@@ -41,6 +41,7 @@
+ #include "virscsivhost.h"
+ #include "virstring.h"
+ #include "virutil.h"
++#include "viriommufd.h"
+ 
+ #define VIR_FROM_THIS VIR_FROM_SECURITY
+ 
+@@ -1282,14 +1283,27 @@ virSecurityDACSetHostdevLabel(virSecurityManager *mgr,
+             return -1;
+ 
+         if (pcisrc->driver.name == VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_VFIO) {
+-            g_autofree char *vfioGroupDev = virPCIDeviceGetIOMMUGroupDev(pci);
++            if (dev->source.subsys.u.pci.driver.iommufd != VIR_TRISTATE_BOOL_YES) {
++                g_autofree char *vfioGroupDev = virPCIDeviceGetIOMMUGroupDev(pci);
+ 
+-            if (!vfioGroupDev)
+-                return -1;
++                if (!vfioGroupDev)
++                    return -1;
+ 
+-            ret = virSecurityDACSetHostdevLabelHelper(vfioGroupDev,
+-                                                      false,
+-                                                      &cbdata);
++                ret = virSecurityDACSetHostdevLabelHelper(vfioGroupDev,
++                                                          false,
++                                                          &cbdata);
++            } else {
++                g_autofree char *vfiofdDev = NULL;
++
++                if (virPCIDeviceGetVfioPath(&dev->source.subsys.u.pci.addr, &vfiofdDev) < 0)
++                    return -1;
++
++                ret = virSecurityDACSetHostdevLabelHelper(vfiofdDev, false, &cbdata);
++                if (ret < 0)
++                    break;
++
++                ret = virSecurityDACSetHostdevLabelHelper(VIR_IOMMU_DEV_PATH, false, &cbdata);
++            }
+         } else {
+             ret = virPCIDeviceFileIterate(pci,
+                                           virSecurityDACSetPCILabel,
+@@ -1443,13 +1457,28 @@ virSecurityDACRestoreHostdevLabel(virSecurityManager *mgr,
+             return -1;
+ 
+         if (pcisrc->driver.name == VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_VFIO) {
+-            g_autofree char *vfioGroupDev = virPCIDeviceGetIOMMUGroupDev(pci);
++            if (dev->source.subsys.u.pci.driver.iommufd != VIR_TRISTATE_BOOL_YES) {
++                g_autofree char *vfioGroupDev = virPCIDeviceGetIOMMUGroupDev(pci);
+ 
+-            if (!vfioGroupDev)
+-                return -1;
++                if (!vfioGroupDev)
++                    return -1;
+ 
+-            ret = virSecurityDACRestoreFileLabelInternal(mgr, NULL,
++                ret = virSecurityDACRestoreFileLabelInternal(mgr, NULL,
+                                                          vfioGroupDev, false);
++            } else {
++                g_autofree char *vfiofdDev = NULL;
++
++                if (virPCIDeviceGetVfioPath(&dev->source.subsys.u.pci.addr, &vfiofdDev) < 0)
++                    return -1;
++
++                ret = virSecurityDACRestoreFileLabelInternal(mgr, NULL,
++                                                             vfiofdDev, false);
++                if (ret < 0)
++                    break;
++
++                ret = virSecurityDACRestoreFileLabelInternal(mgr, NULL,
++                                                             VIR_IOMMU_DEV_PATH, false);
++            }
+         } else {
+             ret = virPCIDeviceFileIterate(pci, virSecurityDACRestorePCILabel, mgr);
+         }
+diff --git a/src/security/security_selinux.c b/src/security/security_selinux.c
+index 2f3cc274a5..834383a7de 100644
+--- a/src/security/security_selinux.c
++++ b/src/security/security_selinux.c
+@@ -41,6 +41,7 @@
+ #include "virconf.h"
+ #include "virtpm.h"
+ #include "virstring.h"
++#include "viriommufd.h"
+ 
+ #define VIR_FROM_THIS VIR_FROM_SECURITY
+ 
+@@ -2256,14 +2257,27 @@ virSecuritySELinuxSetHostdevSubsysLabel(virSecurityManager *mgr,
+             return -1;
+ 
+         if (pcisrc->driver.name == VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_VFIO) {
+-            g_autofree char *vfioGroupDev = virPCIDeviceGetIOMMUGroupDev(pci);
++            if (dev->source.subsys.u.pci.driver.iommufd != VIR_TRISTATE_BOOL_YES) {
++                g_autofree char *vfioGroupDev = virPCIDeviceGetIOMMUGroupDev(pci);
+ 
+-            if (!vfioGroupDev)
+-                return -1;
++                if (!vfioGroupDev)
++                    return -1;
+ 
+-            ret = virSecuritySELinuxSetHostdevLabelHelper(vfioGroupDev,
+-                                                          false,
+-                                                          &data);
++                ret = virSecuritySELinuxSetHostdevLabelHelper(vfioGroupDev,
++                                                              false,
++                                                              &data);
++            } else {
++                g_autofree char *vfiofdDev = NULL;
++
++                if (virPCIDeviceGetVfioPath(&dev->source.subsys.u.pci.addr, &vfiofdDev) < 0)
++                    return -1;
++
++                ret = virSecuritySELinuxSetHostdevLabelHelper(vfiofdDev, false, &data);
++                if (ret)
++                    break;
++
++                ret = virSecuritySELinuxSetHostdevLabelHelper(VIR_IOMMU_DEV_PATH, false, &data);
++            }
+         } else {
+             ret = virPCIDeviceFileIterate(pci, virSecuritySELinuxSetPCILabel, &data);
+         }
+@@ -2491,12 +2505,25 @@ virSecuritySELinuxRestoreHostdevSubsysLabel(virSecurityManager *mgr,
+             return -1;
+ 
+         if (pcisrc->driver.name == VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_VFIO) {
+-            g_autofree char *vfioGroupDev = virPCIDeviceGetIOMMUGroupDev(pci);
++            if (dev->source.subsys.u.pci.driver.iommufd != VIR_TRISTATE_BOOL_YES) {
++                g_autofree char *vfioGroupDev = virPCIDeviceGetIOMMUGroupDev(pci);
+ 
+-            if (!vfioGroupDev)
+-                return -1;
++                if (!vfioGroupDev)
++                    return -1;
+ 
+-            ret = virSecuritySELinuxRestoreFileLabel(mgr, vfioGroupDev, false, false);
++                ret = virSecuritySELinuxRestoreFileLabel(mgr, vfioGroupDev, false, false);
++            } else {
++                g_autofree char *vfiofdDev = NULL;
++
++                if (virPCIDeviceGetVfioPath(&dev->source.subsys.u.pci.addr, &vfiofdDev) < 0)
++                    return -1;
++
++                ret = virSecuritySELinuxRestoreFileLabel(mgr, vfiofdDev, false, false);
++                if (ret < 0)
++                    break;
++
++                ret = virSecuritySELinuxRestoreFileLabel(mgr, VIR_IOMMU_DEV_PATH, false, false);
++            }
+         } else {
+             ret = virPCIDeviceFileIterate(pci, virSecuritySELinuxRestorePCILabel, mgr);
+         }
+diff --git a/src/security/virt-aa-helper.c b/src/security/virt-aa-helper.c
+index de0a826063..29e844c7ff 100644
+--- a/src/security/virt-aa-helper.c
++++ b/src/security/virt-aa-helper.c
+@@ -50,6 +50,7 @@
+ #include "virstring.h"
+ #include "virgettext.h"
+ #include "virhostdev.h"
++#include "viriommufd.h"
+ 
+ #define VIR_FROM_THIS VIR_FROM_SECURITY
+ 
+@@ -1114,8 +1115,9 @@ get_files(vahControl * ctl)
+ 
+             virDeviceHostdevPCIDriverName driverName = dev->source.subsys.u.pci.driver.name;
+ 
+-            if (driverName == VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_VFIO ||
+-                driverName == VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_DEFAULT) {
++            if ((driverName == VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_VFIO ||
++                driverName == VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_DEFAULT) &&
++                dev->source.subsys.u.pci.driver.iommufd != VIR_TRISTATE_BOOL_YES) {
+                 needsVfio = true;
+             }
+ 
+@@ -1385,9 +1387,18 @@ get_files(vahControl * ctl)
+         }
+     }
+ 
+-    if (ctl->newfile &&
+-        vah_add_file(&buf, ctl->newfile, "rwk") != 0) {
+-        return -1;
++    if (ctl->newfile) {
++        const char *perms = "rwk";
++
++        /* VFIO and iommufd devices need mmap permission */
++        if (STRPREFIX(ctl->newfile, "/dev/vfio/devices/vfio") ||
++            STREQ(ctl->newfile, VIR_IOMMU_DEV_PATH)) {
++            perms = "rwm";
++        }
++
++        if (vah_add_file(&buf, ctl->newfile, perms) != 0) {
++            return -1;
++        }
+     }
+ 
+     ctl->files = virBufferContentAndReset(&buf);
+@@ -1561,8 +1572,15 @@ main(int argc, char **argv)
+                 }
+         }
+         if (ctl->append && ctl->newfile) {
+-            if (vah_add_file(&buf, ctl->newfile, "rwk") != 0)
+-                goto cleanup;
++            const char *perms = "rwk";
++
++            if (STRPREFIX(ctl->newfile, "/dev/vfio/devices/vfio") ||
++                STREQ(ctl->newfile, VIR_IOMMU_DEV_PATH)) {
++                perms = "rwm";
++            }
++
++            if (vah_add_file(&buf, ctl->newfile, perms) != 0)
++                return -1;
+         } else {
+             if (ctl->def->virtType == VIR_DOMAIN_VIRT_QEMU ||
+                 ctl->def->virtType == VIR_DOMAIN_VIRT_KQEMU ||
+-- 
+2.52.0

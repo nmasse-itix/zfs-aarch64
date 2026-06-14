@@ -1,0 +1,113 @@
+From 2d5bf873ca8aad6e2e0a151a427bbfdb6d93c766 Mon Sep 17 00:00:00 2001
+Message-ID: <2d5bf873ca8aad6e2e0a151a427bbfdb6d93c766.1771423832.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Mon, 16 Feb 2026 16:53:57 +0100
+Subject: [PATCH] tests: properly mock VFIO and IOMMU checks
+
+Fixes: 63434db800b921e96fec424a667b7161af1f02de
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+(cherry picked from commit 75db232f90af2b2acd95266dd21290c967e3c625)
+
+Resolves: https://issues.redhat.com/browse/RHEL-138544
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/util/virutil.h                                  |  2 +-
+ tests/domaincapsdata/qemu_9.0.0.sparc.xml           |  5 +----
+ tests/domaincapsdata/qemu_9.2.0-hvf.aarch64+hvf.xml |  5 +----
+ tests/domaincapsmock.c                              | 10 ++++++++++
+ tests/domaincapstest.c                              |  8 --------
+ 5 files changed, 13 insertions(+), 17 deletions(-)
+
+diff --git a/src/util/virutil.h b/src/util/virutil.h
+index ca6fd95363..7e1705e7ce 100644
+--- a/src/util/virutil.h
++++ b/src/util/virutil.h
+@@ -141,7 +141,7 @@ unsigned long long virMemoryLimitTruncate(unsigned long long value);
+ bool virMemoryLimitIsSet(unsigned long long value);
+ unsigned long long virMemoryMaxValue(bool ulong) ATTRIBUTE_MOCKABLE;
+ 
+-bool virHostHasIOMMU(void);
++bool virHostHasIOMMU(void) ATTRIBUTE_MOCKABLE;
+ 
+ char *virHostGetDRMRenderNode(void) ATTRIBUTE_MOCKABLE;
+ 
+diff --git a/tests/domaincapsdata/qemu_9.0.0.sparc.xml b/tests/domaincapsdata/qemu_9.0.0.sparc.xml
+index 062e55718b..93d8d40c2c 100644
+--- a/tests/domaincapsdata/qemu_9.0.0.sparc.xml
++++ b/tests/domaincapsdata/qemu_9.0.0.sparc.xml
+@@ -86,10 +86,7 @@
+         <value>scsi</value>
+       </enum>
+       <enum name='capsType'/>
+-      <enum name='pciBackend'>
+-        <value>default</value>
+-        <value>vfio</value>
+-      </enum>
++      <enum name='pciBackend'/>
+       <enum name='iommufd'>
+         <value>no</value>
+       </enum>
+diff --git a/tests/domaincapsdata/qemu_9.2.0-hvf.aarch64+hvf.xml b/tests/domaincapsdata/qemu_9.2.0-hvf.aarch64+hvf.xml
+index db51e7b120..a65d9d36fd 100644
+--- a/tests/domaincapsdata/qemu_9.2.0-hvf.aarch64+hvf.xml
++++ b/tests/domaincapsdata/qemu_9.2.0-hvf.aarch64+hvf.xml
+@@ -147,10 +147,7 @@
+         <value>scsi</value>
+       </enum>
+       <enum name='capsType'/>
+-      <enum name='pciBackend'>
+-        <value>default</value>
+-        <value>vfio</value>
+-      </enum>
++      <enum name='pciBackend'/>
+       <enum name='iommufd'>
+         <value>no</value>
+       </enum>
+diff --git a/tests/domaincapsmock.c b/tests/domaincapsmock.c
+index 370ce35709..aa13deb324 100644
+--- a/tests/domaincapsmock.c
++++ b/tests/domaincapsmock.c
+@@ -21,6 +21,7 @@
+ #include "virhostmem.h"
+ #include "viriommufd.h"
+ #include "virmock.h"
++#include "virutil.h"
+ 
+ #if WITH_QEMU
+ # include "qemu/qemu_capabilities.h"
+@@ -91,5 +92,14 @@ virFileExists(const char *path)
+     if (STREQ(path, VIR_IOMMU_DEV_PATH))
+         return true;
+ 
++    if (STREQ(path, "/dev/vfio/vfio"))
++        return true;
++
+     return real_virFileExists(path);
+ }
++
++bool
++virHostHasIOMMU(void)
++{
++    return true;
++}
+diff --git a/tests/domaincapstest.c b/tests/domaincapstest.c
+index 71e181d179..5b2fc80f0a 100644
+--- a/tests/domaincapstest.c
++++ b/tests/domaincapstest.c
+@@ -104,14 +104,6 @@ fillQemuCaps(virDomainCaps *domCaps,
+                                   false) < 0)
+         return -1;
+ 
+-    /* The function above tries to query host's VFIO capabilities by calling
+-     * virHostdevHostSupportsPassthroughVFIO() which, however, can't be
+-     * successfully mocked as they are not exposed as internal APIs. Therefore,
+-     * instead of mocking set the expected values here by hand. */
+-    VIR_DOMAIN_CAPS_ENUM_SET(domCaps->hostdev.pciBackend,
+-                             VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_DEFAULT,
+-                             VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_VFIO);
+-
+     /* As of f05b6a918e28 we are expecting to see OVMF_CODE.fd file which
+      * may not exists everywhere. */
+     while (loader->values.nvalues)
+-- 
+2.53.0

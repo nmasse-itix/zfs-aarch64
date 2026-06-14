@@ -1,0 +1,98 @@
+From 1aa7206312b153f5209a5c161b4345e65a762c26 Mon Sep 17 00:00:00 2001
+Message-ID: <1aa7206312b153f5209a5c161b4345e65a762c26.1770714339.git.jdenemar@redhat.com>
+From: Michal Privoznik <mprivozn@redhat.com>
+Date: Tue, 20 Jan 2026 16:19:00 +0100
+Subject: [PATCH] src: Use device alias when ifname is unset in
+ virDomainInterfaceAddresses()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The virDomainInterfaceAddresses() API returns an array of
+_virDomainInterface structs which then describe IP addresses
+associated with given domain. The struct contains 'name' member
+which is documented deliberately vaguely: "interface name". This
+is because depending on the source of truth used (controlled by
+'source' argument) the name can be wildly different from the one
+in domain XML. Now, in case of source =
+VIR_DOMAIN_INTERFACE_ADDRESSES_SRC_ARP, the host's ARP table is
+parsed and matching interfaces are found by comparing MAC
+addresses. If it's a match then the 'name' is set to net->ifname
+(corresponds to /interface/target/@dev). But that is not always
+set and sometimes may be NULL (e.g. for hostdevs, usernet). We
+can't change the API (like we did for hwaddr in v1.2.14-rc1~105)
+because this is already released. So the next best thing to do is
+to put the interface alias in there.
+
+To be on a safe side, do the same change to the
+VIR_DOMAIN_INTERFACE_ADDRESSES_SRC_LEASE case.
+
+Resolves: https://issues.redhat.com/browse/RHEL-141496
+Signed-off-by: Michal Privoznik <mprivozn@redhat.com>
+Reviewed-by: Ján Tomko <jtomko@redhat.com>
+(cherry picked from commit 4009126f17a19ea2f512f1952f4ea32d231ade85)
+Resolves: https://issues.redhat.com/browse/RHEL-143933
+Signed-off-by: Michal Privoznik <mprivozn@redhat.com>
+---
+ src/conf/domain_conf.c | 16 ++++++++++++++--
+ src/libvirt-domain.c   |  2 ++
+ 2 files changed, 16 insertions(+), 2 deletions(-)
+
+diff --git a/src/conf/domain_conf.c b/src/conf/domain_conf.c
+index f950f7c75d..902c1188ef 100644
+--- a/src/conf/domain_conf.c
++++ b/src/conf/domain_conf.c
+@@ -15604,6 +15604,12 @@ virDomainNetDHCPInterfaces(virDomainDef *def,
+             goto error;
+ 
+         if (n_leases) {
++            const char *ifname = def->nets[i]->ifname;
++
++            if (!ifname) {
++                ifname = def->nets[i]->info.alias;
++            }
++
+             ifaces_ret = g_renew(virDomainInterfacePtr, ifaces_ret, ifaces_count + 1);
+             ifaces_ret[ifaces_count] = g_new0(virDomainInterface, 1);
+             iface = ifaces_ret[ifaces_count];
+@@ -15612,7 +15618,7 @@ virDomainNetDHCPInterfaces(virDomainDef *def,
+             /* Assuming each lease corresponds to a separate IP */
+             iface->naddrs = n_leases;
+             iface->addrs = g_new0(virDomainIPAddress, iface->naddrs);
+-            iface->name = g_strdup(def->nets[i]->ifname);
++            iface->name = g_strdup(ifname);
+             iface->hwaddr = g_strdup(macaddr);
+         }
+ 
+@@ -15666,9 +15672,15 @@ virDomainNetARPInterfaces(virDomainDef *def,
+             virArpTableEntry entry = table->t[j];
+ 
+             if (STREQ(entry.mac, macaddr)) {
++                const char *ifname = def->nets[i]->ifname;
++
++                if (!ifname) {
++                    ifname = def->nets[i]->info.alias;
++                }
++
+                 iface = g_new0(virDomainInterface, 1);
+ 
+-                iface->name = g_strdup(def->nets[i]->ifname);
++                iface->name = g_strdup(ifname);
+ 
+                 iface->hwaddr = g_strdup(macaddr);
+ 
+diff --git a/src/libvirt-domain.c b/src/libvirt-domain.c
+index 74c70a0a43..c7451fee05 100644
+--- a/src/libvirt-domain.c
++++ b/src/libvirt-domain.c
+@@ -12880,6 +12880,8 @@ virDomainFSInfoFree(virDomainFSInfoPtr info)
+  * Note that for some @source values some pieces of returned @ifaces
+  * might be unset (e.g. VIR_DOMAIN_INTERFACE_ADDRESSES_SRC_ARP does not
+  * set IP address prefix as ARP table does not have any notion of that).
++ * Moreover, it may happen that the interface doesn't have a name. In
++ * that case, @ifaces->name is set to the interface's device alias.
+  *
+  * @ifaces->name and @ifaces->hwaddr are never NULL.
+  *
+-- 
+2.53.0

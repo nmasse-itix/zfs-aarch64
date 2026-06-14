@@ -1,0 +1,330 @@
+From 15b1edcb2dca52b4d2276359c1eeaa97d66ac400 Mon Sep 17 00:00:00 2001
+Message-ID: <15b1edcb2dca52b4d2276359c1eeaa97d66ac400.1780571166.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Fri, 13 Mar 2026 16:59:01 +0100
+Subject: [PATCH] conf: Move and rename virStorageSourceFDTuple object
+
+Associating FD can be used by other parts of VM so rename it to generic
+virDomainFDTuple.
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Peter Krempa <pkrempa@redhat.com>
+(cherry picked from commit f89e3dbce809f64246a8fe5ef0d05a63a28a05c0)
+
+Resolves: https://redhat.atlassian.net/browse/RHEL-156803
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/conf/meson.build           |  1 +
+ src/conf/storage_source_conf.c | 42 ---------------------------
+ src/conf/storage_source_conf.h | 24 ++--------------
+ src/conf/virdomainfd.c         | 52 ++++++++++++++++++++++++++++++++++
+ src/conf/virdomainfd.h         | 27 ++++++++++++++++++
+ src/libvirt_private.syms       |  5 +++-
+ src/qemu/qemu_backup.c         |  2 +-
+ src/qemu/qemu_domain.c         |  2 +-
+ src/qemu/qemu_driver.c         |  6 ++--
+ tests/testutilsqemu.c          |  2 +-
+ 10 files changed, 92 insertions(+), 71 deletions(-)
+ create mode 100644 src/conf/virdomainfd.c
+ create mode 100644 src/conf/virdomainfd.h
+
+diff --git a/src/conf/meson.build b/src/conf/meson.build
+index 5116c23fe3..6f95b23cce 100644
+--- a/src/conf/meson.build
++++ b/src/conf/meson.build
+@@ -20,6 +20,7 @@ domain_conf_sources = [
+   'numa_conf.c',
+   'snapshot_conf.c',
+   'virdomaincheckpointobjlist.c',
++  'virdomainfd.c',
+   'virdomainjob.c',
+   'virdomainmomentobjlist.c',
+   'virdomainobjlist.c',
+diff --git a/src/conf/storage_source_conf.c b/src/conf/storage_source_conf.c
+index 24d4b0de6a..493b1411b3 100644
+--- a/src/conf/storage_source_conf.c
++++ b/src/conf/storage_source_conf.c
+@@ -1413,48 +1413,6 @@ virStorageSourceInitiatorClear(virStorageSourceInitiatorDef *initiator)
+     VIR_FREE(initiator->iqn);
+ }
+ 
+-G_DEFINE_TYPE(virStorageSourceFDTuple, vir_storage_source_fd_tuple, G_TYPE_OBJECT);
+-
+-static void
+-vir_storage_source_fd_tuple_init(virStorageSourceFDTuple *fdt G_GNUC_UNUSED)
+-{
+-}
+-
+-
+-static void
+-virStorageSourceFDTupleFinalize(GObject *object)
+-{
+-    virStorageSourceFDTuple *fdt = VIR_STORAGE_SOURCE_FD_TUPLE(object);
+-    size_t i;
+-
+-    if (!fdt)
+-        return;
+-
+-    for (i = 0; i < fdt->nfds; i++)
+-        VIR_FORCE_CLOSE(fdt->fds[i]);
+-
+-    g_free(fdt->fds);
+-    g_free(fdt->testfds);
+-    g_free(fdt->selinuxLabel);
+-    G_OBJECT_CLASS(vir_storage_source_fd_tuple_parent_class)->finalize(object);
+-}
+-
+-
+-static void
+-vir_storage_source_fd_tuple_class_init(virStorageSourceFDTupleClass *klass)
+-{
+-    GObjectClass *obj = G_OBJECT_CLASS(klass);
+-
+-    obj->finalize = virStorageSourceFDTupleFinalize;
+-}
+-
+-
+-virStorageSourceFDTuple *
+-virStorageSourceFDTupleNew(void)
+-{
+-    return g_object_new(vir_storage_source_fd_tuple_get_type(), NULL);
+-}
+-
+ 
+ /**
+  * virStorageSourceNetworkProtocolPathSplit:
+diff --git a/src/conf/storage_source_conf.h b/src/conf/storage_source_conf.h
+index 5a4b088eeb..b47313bae5 100644
+--- a/src/conf/storage_source_conf.h
++++ b/src/conf/storage_source_conf.h
+@@ -24,6 +24,7 @@
+ #include "storage_encryption_conf.h"
+ #include "virbitmap.h"
+ #include "virconftypes.h"
++#include "virdomainfd.h"
+ #include "virenum.h"
+ #include "virobject.h"
+ #include "virpci.h"
+@@ -268,27 +269,6 @@ struct _virStorageSourceSlice {
+ void
+ virStorageSourceSliceFree(virStorageSourceSlice *slice);
+ 
+-struct _virStorageSourceFDTuple {
+-    GObject parent;
+-    int *fds;
+-    size_t nfds;
+-    int *testfds; /* populated by tests to ensure stable FDs */
+-
+-    bool writable;
+-    bool tryRestoreLabel;
+-
+-    /* connection this FD tuple is associated with for auto-closing */
+-    virConnect *conn;
+-
+-    /* original selinux label when we relabel the image */
+-    char *selinuxLabel;
+-};
+-G_DECLARE_FINAL_TYPE(virStorageSourceFDTuple, vir_storage_source_fd_tuple, VIR, STORAGE_SOURCE_FD_TUPLE, GObject);
+-
+-virStorageSourceFDTuple *
+-virStorageSourceFDTupleNew(void);
+-
+-
+ typedef struct _virStorageSource virStorageSource;
+ 
+ /* Stores information related to a host resource.  In the case of backing
+@@ -441,7 +421,7 @@ struct _virStorageSource {
+      * one event for it */
+     bool thresholdEventWithIndex;
+ 
+-    virStorageSourceFDTuple *fdtuple;
++    virDomainFDTuple *fdtuple;
+ 
+     /* Setting 'seclabelSkipRemember' to true will cause the security driver to
+      * not remember the security label even if it otherwise were to be
+diff --git a/src/conf/virdomainfd.c b/src/conf/virdomainfd.c
+new file mode 100644
+index 0000000000..13c3161e6a
+--- /dev/null
++++ b/src/conf/virdomainfd.c
+@@ -0,0 +1,52 @@
++/*
++ * SPDX-License-Identifier: LGPL-2.1-or-later
++ */
++
++#include <config.h>
++
++#include "virdomainfd.h"
++
++#include "virfile.h"
++
++G_DEFINE_TYPE(virDomainFDTuple, vir_domain_fd_tuple, G_TYPE_OBJECT);
++
++
++static void
++vir_domain_fd_tuple_init(virDomainFDTuple *fdt G_GNUC_UNUSED)
++{
++}
++
++
++static void
++virDomainFDTupleFinalize(GObject *object)
++{
++    virDomainFDTuple *fdt = VIR_DOMAIN_FD_TUPLE(object);
++    size_t i;
++
++    if (!fdt)
++        return;
++
++    for (i = 0; i < fdt->nfds; i++)
++        VIR_FORCE_CLOSE(fdt->fds[i]);
++
++    g_free(fdt->fds);
++    g_free(fdt->testfds);
++    g_free(fdt->selinuxLabel);
++    G_OBJECT_CLASS(vir_domain_fd_tuple_parent_class)->finalize(object);
++}
++
++
++static void
++vir_domain_fd_tuple_class_init(virDomainFDTupleClass *klass)
++{
++    GObjectClass *obj = G_OBJECT_CLASS(klass);
++
++    obj->finalize = virDomainFDTupleFinalize;
++}
++
++
++virDomainFDTuple *
++virDomainFDTupleNew(void)
++{
++    return g_object_new(vir_domain_fd_tuple_get_type(), NULL);
++}
+diff --git a/src/conf/virdomainfd.h b/src/conf/virdomainfd.h
+new file mode 100644
+index 0000000000..0c0d475ed6
+--- /dev/null
++++ b/src/conf/virdomainfd.h
+@@ -0,0 +1,27 @@
++/*
++ * SPDX-License-Identifier: LGPL-2.1-or-later
++ */
++
++#pragma once
++
++#include "internal.h"
++
++struct _virDomainFDTuple {
++    GObject parent;
++    int *fds;
++    size_t nfds;
++    int *testfds; /* populated by tests to ensure stable FDs */
++
++    bool writable;
++    bool tryRestoreLabel;
++
++    /* connection this FD tuple is associated with for auto-closing */
++    virConnect *conn;
++
++    /* original selinux label when we relabel the image */
++    char *selinuxLabel;
++};
++G_DECLARE_FINAL_TYPE(virDomainFDTuple, vir_domain_fd_tuple, VIR, DOMAIN_FD_TUPLE, GObject);
++
++virDomainFDTuple *
++virDomainFDTupleNew(void);
+diff --git a/src/libvirt_private.syms b/src/libvirt_private.syms
+index effe44fe57..386e757d81 100644
+--- a/src/libvirt_private.syms
++++ b/src/libvirt_private.syms
+@@ -1177,7 +1177,6 @@ virStorageSourceChainHasManagedPR;
+ virStorageSourceChainHasNVMe;
+ virStorageSourceClear;
+ virStorageSourceCopy;
+-virStorageSourceFDTupleNew;
+ virStorageSourceGetActualType;
+ virStorageSourceGetSecurityLabelDef;
+ virStorageSourceHasBacking;
+@@ -1230,6 +1229,10 @@ virDomainCheckpointUpdateRelations;
+ virDomainListCheckpoints;
+ 
+ 
++# conf/virdomainfd.h
++virDomainFDTupleNew;
++
++
+ #conf/virdomainjob.h
+ virDomainAgentJobTypeToString;
+ virDomainAsyncJobTypeFromString;
+diff --git a/src/qemu/qemu_backup.c b/src/qemu/qemu_backup.c
+index c3566bcd57..eebf6cdc06 100644
+--- a/src/qemu/qemu_backup.c
++++ b/src/qemu/qemu_backup.c
+@@ -876,7 +876,7 @@ qemuBackupBegin(virDomainObj *vm,
+     priv->backup = g_steal_pointer(&def);
+ 
+     if (pull && priv->backup->server->fdgroup) {
+-        virStorageSourceFDTuple *fdt = NULL;
++        virDomainFDTuple *fdt = NULL;
+         VIR_AUTOCLOSE fdcopy = -1;
+ 
+         if (!(fdt = virHashLookup(priv->fds, priv->backup->server->fdgroup))) {
+diff --git a/src/qemu/qemu_domain.c b/src/qemu/qemu_domain.c
+index ccbfc8bac7..5c9f4831fd 100644
+--- a/src/qemu/qemu_domain.c
++++ b/src/qemu/qemu_domain.c
+@@ -9835,7 +9835,7 @@ qemuDomainPrepareStorageSourceFDs(virStorageSource *src,
+ {
+     qemuDomainStorageSourcePrivate *srcpriv = NULL;
+     virStorageType actualType = virStorageSourceGetActualType(src);
+-    virStorageSourceFDTuple *fdt = NULL;
++    virDomainFDTuple *fdt = NULL;
+     size_t i;
+ 
+     if (actualType != VIR_STORAGE_TYPE_FILE &&
+diff --git a/src/qemu/qemu_driver.c b/src/qemu/qemu_driver.c
+index ecd19663ce..8db9cbb6a2 100644
+--- a/src/qemu/qemu_driver.c
++++ b/src/qemu/qemu_driver.c
+@@ -20241,7 +20241,7 @@ qemuDomainFDHashCloseConnect(virDomainObj *vm,
+                              virConnectPtr conn)
+ {
+     qemuDomainObjPrivate *priv = QEMU_DOMAIN_PRIVATE(vm);
+-    virStorageSourceFDTuple *data;
++    virDomainFDTuple *data;
+     GHashTableIter htitr;
+ 
+     if (!priv->fds)
+@@ -20265,7 +20265,7 @@ qemuDomainFDAssociate(virDomainPtr domain,
+ {
+     virDomainObj *vm = NULL;
+     qemuDomainObjPrivate *priv;
+-    g_autoptr(virStorageSourceFDTuple) new = NULL;
++    g_autoptr(virDomainFDTuple) new = NULL;
+     size_t i;
+     int ret = -1;
+ 
+@@ -20283,7 +20283,7 @@ qemuDomainFDAssociate(virDomainPtr domain,
+ 
+     priv = vm->privateData;
+ 
+-    new = virStorageSourceFDTupleNew();
++    new = virDomainFDTupleNew();
+     new->nfds = nfds;
+     new->fds = g_new0(int, new->nfds);
+     for (i = 0; i < new->nfds; i++) {
+diff --git a/tests/testutilsqemu.c b/tests/testutilsqemu.c
+index 78ec521266..fc51e0e3df 100644
+--- a/tests/testutilsqemu.c
++++ b/tests/testutilsqemu.c
+@@ -713,7 +713,7 @@ testQemuInfoSetArgs(testQemuInfo *info,
+             break;
+ 
+         case ARG_FD_GROUP: {
+-            virStorageSourceFDTuple *new = virStorageSourceFDTupleNew();
++            virDomainFDTuple *new = virDomainFDTupleNew();
+             const char *fdname = va_arg(argptr, char *);
+             VIR_AUTOCLOSE fakefd = open("/dev/zero", O_RDWR);
+             bool writable = va_arg(argptr, int);
+-- 
+2.54.0

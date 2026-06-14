@@ -1,0 +1,79 @@
+From 66f478cd56f2f8fbd3bca3b229a8fcafe29bbee0 Mon Sep 17 00:00:00 2001
+Message-ID: <66f478cd56f2f8fbd3bca3b229a8fcafe29bbee0.1771423659.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Sat, 14 Feb 2026 17:54:57 +0100
+Subject: [PATCH] qemu: Save IOMMUFD state into status XML
+
+We need to track if iommufd object was added to the VM when we add
+hotplug support.
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit b21b6dcc72f1853f103f3cfbe1ebbcfbf128b458)
+
+Resolves: https://issues.redhat.com/browse/RHEL-150351
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/qemu/qemu_command.c | 2 ++
+ src/qemu/qemu_domain.c  | 6 ++++++
+ src/qemu/qemu_domain.h  | 1 +
+ 3 files changed, 9 insertions(+)
+
+diff --git a/src/qemu/qemu_command.c b/src/qemu/qemu_command.c
+index d11d16e533..cca5fed285 100644
+--- a/src/qemu/qemu_command.c
++++ b/src/qemu/qemu_command.c
+@@ -5359,6 +5359,8 @@ qemuBuildIOMMUFDCommandLine(virCommand *cmd,
+     if (qemuBuildObjectCommandlineFromJSON(cmd, props) < 0)
+         return -1;
+ 
++    priv->iommufdState = true;
++
+     return 0;
+ }
+ 
+diff --git a/src/qemu/qemu_domain.c b/src/qemu/qemu_domain.c
+index ada9d3431c..ccbfc8bac7 100644
+--- a/src/qemu/qemu_domain.c
++++ b/src/qemu/qemu_domain.c
+@@ -1976,6 +1976,7 @@ qemuDomainObjPrivateDataClear(qemuDomainObjPrivate *priv)
+     priv->migrationRecoverSetup = false;
+ 
+     g_clear_pointer(&priv->iommufd, qemuFDPassDirectFree);
++    priv->iommufdState = false;
+ 
+     g_clear_pointer(&priv->memoryBackingDir, g_free);
+ }
+@@ -2844,6 +2845,9 @@ qemuDomainObjPrivateXMLFormat(virBuffer *buf,
+                           priv->preMigrationMemlock);
+     }
+ 
++    if (priv->iommufdState)
++        virBufferAddLit(buf, "<iommufd/>\n");
++
+     return 0;
+ }
+ 
+@@ -3582,6 +3586,8 @@ qemuDomainObjPrivateXMLParse(xmlXPathContextPtr ctxt,
+         return -1;
+     }
+ 
++    priv->iommufdState = virXPathBoolean("boolean(./iommufd)", ctxt) == 1;
++
+     return 0;
+ }
+ 
+diff --git a/src/qemu/qemu_domain.h b/src/qemu/qemu_domain.h
+index 8aa94fc25b..62c5252b9f 100644
+--- a/src/qemu/qemu_domain.h
++++ b/src/qemu/qemu_domain.h
+@@ -265,6 +265,7 @@ struct _qemuDomainObjPrivate {
+     GHashTable *fds;
+ 
+     qemuFDPassDirect *iommufd;
++    bool iommufdState; /* true if --object iommufd was added */
+ 
+     char *memoryBackingDir;
+ };
+-- 
+2.53.0

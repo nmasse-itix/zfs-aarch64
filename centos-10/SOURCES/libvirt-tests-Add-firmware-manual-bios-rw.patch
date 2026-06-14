@@ -1,0 +1,138 @@
+From a0e5f0e040148a999fcd37e4fed50b7c6896702f Mon Sep 17 00:00:00 2001
+Message-ID: <a0e5f0e040148a999fcd37e4fed50b7c6896702f.1772815312.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Fri, 12 Dec 2025 16:15:34 +0100
+Subject: [PATCH] tests: Add firmware-manual-bios-rw
+
+This test case demonstrates a flaw in the XML validation process.
+
+ROM images are by definition read-only, so attempting to use one
+as read/write should have resulted in the domain XML being
+rejected.
+
+The issue will be addressed in an upcoming commit.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 26035762a96d77b8c78fa56a3a62a45ae4914597)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ ...firmware-manual-bios-rw.x86_64-latest.args | 32 +++++++++++++++++++
+ .../firmware-manual-bios-rw.x86_64-latest.xml | 28 ++++++++++++++++
+ .../firmware-manual-bios-rw.xml               | 15 +++++++++
+ tests/qemuxmlconftest.c                       |  1 +
+ 4 files changed, 76 insertions(+)
+ create mode 100644 tests/qemuxmlconfdata/firmware-manual-bios-rw.x86_64-latest.args
+ create mode 100644 tests/qemuxmlconfdata/firmware-manual-bios-rw.x86_64-latest.xml
+ create mode 100644 tests/qemuxmlconfdata/firmware-manual-bios-rw.xml
+
+diff --git a/tests/qemuxmlconfdata/firmware-manual-bios-rw.x86_64-latest.args b/tests/qemuxmlconfdata/firmware-manual-bios-rw.x86_64-latest.args
+new file mode 100644
+index 0000000000..969c7ad68c
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-manual-bios-rw.x86_64-latest.args
+@@ -0,0 +1,32 @@
++LC_ALL=C \
++PATH=/bin \
++HOME=/var/lib/libvirt/qemu/domain--1-guest \
++USER=test \
++LOGNAME=test \
++XDG_DATA_HOME=/var/lib/libvirt/qemu/domain--1-guest/.local/share \
++XDG_CACHE_HOME=/var/lib/libvirt/qemu/domain--1-guest/.cache \
++XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-guest/.config \
++/usr/bin/qemu-system-x86_64 \
++-name guest=guest,debug-threads=on \
++-S \
++-object '{"qom-type":"secret","id":"masterKey0","format":"raw","file":"/var/lib/libvirt/qemu/domain--1-guest/master-key.aes"}' \
++-machine pc-i440fx-10.0,usb=off,dump-guest-core=off,memory-backend=pc.ram,acpi=off \
++-accel tcg \
++-cpu qemu64 \
++-bios /usr/share/seabios/bios.bin \
++-m size=1048576k \
++-object '{"qom-type":"memory-backend-ram","id":"pc.ram","size":1073741824}' \
++-overcommit mem-lock=off \
++-smp 1,sockets=1,cores=1,threads=1 \
++-uuid 63840878-0deb-4095-97e6-fc444d9bc9fa \
++-display none \
++-no-user-config \
++-nodefaults \
++-chardev socket,id=charmonitor,fd=1729,server=on,wait=off \
++-mon chardev=charmonitor,id=monitor,mode=control \
++-rtc base=utc \
++-no-shutdown \
++-boot strict=on \
++-audiodev '{"id":"audio1","driver":"none"}' \
++-sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
++-msg timestamp=on
+diff --git a/tests/qemuxmlconfdata/firmware-manual-bios-rw.x86_64-latest.xml b/tests/qemuxmlconfdata/firmware-manual-bios-rw.x86_64-latest.xml
+new file mode 100644
+index 0000000000..65bb8493c9
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-manual-bios-rw.x86_64-latest.xml
+@@ -0,0 +1,28 @@
++<domain type='qemu'>
++  <name>guest</name>
++  <uuid>63840878-0deb-4095-97e6-fc444d9bc9fa</uuid>
++  <memory unit='KiB'>1048576</memory>
++  <currentMemory unit='KiB'>1048576</currentMemory>
++  <vcpu placement='static'>1</vcpu>
++  <os>
++    <type arch='x86_64' machine='pc-i440fx-10.0'>hvm</type>
++    <loader readonly='no' type='rom' format='raw'>/usr/share/seabios/bios.bin</loader>
++    <boot dev='hd'/>
++  </os>
++  <cpu mode='custom' match='exact' check='none'>
++    <model fallback='forbid'>qemu64</model>
++  </cpu>
++  <clock offset='utc'/>
++  <on_poweroff>destroy</on_poweroff>
++  <on_reboot>restart</on_reboot>
++  <on_crash>destroy</on_crash>
++  <devices>
++    <emulator>/usr/bin/qemu-system-x86_64</emulator>
++    <controller type='usb' index='0' model='none'/>
++    <controller type='pci' index='0' model='pci-root'/>
++    <input type='mouse' bus='ps2'/>
++    <input type='keyboard' bus='ps2'/>
++    <audio id='1' type='none'/>
++    <memballoon model='none'/>
++  </devices>
++</domain>
+diff --git a/tests/qemuxmlconfdata/firmware-manual-bios-rw.xml b/tests/qemuxmlconfdata/firmware-manual-bios-rw.xml
+new file mode 100644
+index 0000000000..b12aa67d1a
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-manual-bios-rw.xml
+@@ -0,0 +1,15 @@
++<domain type='qemu'>
++  <name>guest</name>
++  <uuid>63840878-0deb-4095-97e6-fc444d9bc9fa</uuid>
++  <memory unit='KiB'>1048576</memory>
++  <vcpu placement='static'>1</vcpu>
++  <os>
++    <type arch='x86_64' machine='pc-i440fx-10.0'>hvm</type>
++    <loader readonly='no'>/usr/share/seabios/bios.bin</loader>
++  </os>
++  <devices>
++   <emulator>/usr/bin/qemu-system-x86_64</emulator>
++    <controller type='usb' model='none'/>
++    <memballoon model='none'/>
++  </devices>
++</domain>
+diff --git a/tests/qemuxmlconftest.c b/tests/qemuxmlconftest.c
+index c20db43cec..ba33267d4e 100644
+--- a/tests/qemuxmlconftest.c
++++ b/tests/qemuxmlconftest.c
+@@ -1576,6 +1576,7 @@ mymain(void)
+     DO_TEST_CAPS_LATEST("firmware-manual-bios");
+     DO_TEST_CAPS_LATEST("firmware-manual-bios-stateless");
+     DO_TEST_CAPS_LATEST_PARSE_ERROR("firmware-manual-bios-not-stateless");
++    DO_TEST_CAPS_LATEST("firmware-manual-bios-rw");
+     DO_TEST_CAPS_LATEST("firmware-manual-efi");
+     DO_TEST_CAPS_LATEST("firmware-manual-efi-features");
+     DO_TEST_CAPS_LATEST_ABI_UPDATE_PARSE_ERROR("firmware-manual-efi-features");
+-- 
+2.53.0

@@ -1,0 +1,175 @@
+From 4930e34b488c6253e8cbb5ceb2988864f7b981a0 Mon Sep 17 00:00:00 2001
+Message-ID: <4930e34b488c6253e8cbb5ceb2988864f7b981a0.1770203323.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Tue, 27 Jan 2026 22:49:09 +0100
+Subject: [PATCH] qemublocktest: Iterate all nodenames in
+ 'testQemuDetectBitmaps'
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Rather than looking for 30 specific nodenames (via a loop) iterate
+everything in the hash table (in a sorted order). This simplifies the
+code and provides more test outputs on previously-ignored nodenames.
+
+The listing of internal snapshots in the output was also missing a
+newline, which would now cause problems with multiple images reproted.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Ján Tomko <jtomko@redhat.com>
+(cherry picked from commit 71643c197e86a3adc792c0b2a378a245ae6c5756)
+
+https://issues.redhat.com/browse/RHEL-145769 [rhel-10.2]
+https://issues.redhat.com/browse/RHEL-145770 [rhel-9.8]
+---
+ tests/qemublocktest.c                         | 24 +++++++------------
+ tests/qemublocktestdata/bitmap/basic.out      |  1 +
+ tests/qemublocktestdata/bitmap/empty.out      |  1 +
+ .../bitmap/snapshots-internal.out             |  7 ++++++
+ tests/qemublocktestdata/bitmap/snapshots.out  |  5 ++++
+ tests/qemublocktestdata/bitmap/synthetic.out  |  5 ++++
+ 6 files changed, 28 insertions(+), 15 deletions(-)
+
+diff --git a/tests/qemublocktest.c b/tests/qemublocktest.c
+index 47746207cc..51d9268cdd 100644
+--- a/tests/qemublocktest.c
++++ b/tests/qemublocktest.c
+@@ -575,17 +575,15 @@ testQemuImageCreate(const void *opaque)
+ 
+ static const char *bitmapDetectPrefix = "qemublocktestdata/bitmap/";
+ 
+-static void
+-testQemuDetectBitmapsWorker(GHashTable *nodedata,
++static int
++testQemuDetectBitmapsWorker(void *payload,
+                             const char *nodename,
+-                            virBuffer *buf)
++                            void *opaque)
+ {
+-    qemuBlockNamedNodeData *data;
++    qemuBlockNamedNodeData *data = payload;
++    virBuffer *buf = opaque;
+     size_t i;
+ 
+-    if (!(data = virHashLookup(nodedata, nodename)))
+-        return;
+-
+     virBufferAsprintf(buf, "%s:\n", nodename);
+     if (data->qcow2v2)
+         virBufferAddLit(buf, " qcow2 v2\n");
+@@ -617,9 +615,12 @@ testQemuDetectBitmapsWorker(GHashTable *nodedata,
+ 
+             virBufferAsprintf(buf, " '%s'%s", (const char *) n->key, vms);
+         }
++
++        virBufferAddLit(buf, "\n");
+     }
+ 
+     virBufferAdjustIndent(buf, -1);
++    return 0;
+ }
+ 
+ 
+@@ -632,7 +633,6 @@ testQemuDetectBitmaps(const void *opaque)
+     g_autofree char *actual = NULL;
+     g_autofree char *expectpath = NULL;
+     g_auto(virBuffer) buf = VIR_BUFFER_INITIALIZER;
+-    size_t i;
+ 
+     expectpath = g_strdup_printf("%s/%s%s.out", abs_srcdir,
+                                  bitmapDetectPrefix, name);
+@@ -646,13 +646,7 @@ testQemuDetectBitmaps(const void *opaque)
+         return -1;
+     }
+ 
+-    /* we detect for the first 30 nodenames for simplicity */
+-    for (i = 0; i < 30; i++) {
+-        g_autofree char *nodename = g_strdup_printf("libvirt-%zu-format", i);
+-
+-        testQemuDetectBitmapsWorker(nodedata, nodename, &buf);
+-    }
+-
++    virHashForEachSorted(nodedata, testQemuDetectBitmapsWorker, &buf);
+     actual = virBufferContentAndReset(&buf);
+ 
+     return virTestCompareToFile(actual, expectpath);
+diff --git a/tests/qemublocktestdata/bitmap/basic.out b/tests/qemublocktestdata/bitmap/basic.out
+index 5c4c35b3f0..b96ffe3d39 100644
+--- a/tests/qemublocktestdata/bitmap/basic.out
++++ b/tests/qemublocktestdata/bitmap/basic.out
+@@ -4,3 +4,4 @@ libvirt-1-format:
+         c: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
+         b: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
+         a: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
++libvirt-1-storage:
+diff --git a/tests/qemublocktestdata/bitmap/empty.out b/tests/qemublocktestdata/bitmap/empty.out
+index 3787cbd354..c9a5be4f07 100644
+--- a/tests/qemublocktestdata/bitmap/empty.out
++++ b/tests/qemublocktestdata/bitmap/empty.out
+@@ -1 +1,2 @@
+ libvirt-1-format:
++libvirt-1-storage:
+diff --git a/tests/qemublocktestdata/bitmap/snapshots-internal.out b/tests/qemublocktestdata/bitmap/snapshots-internal.out
+index dbb3cfded4..cf7bde96a5 100644
+--- a/tests/qemublocktestdata/bitmap/snapshots-internal.out
++++ b/tests/qemublocktestdata/bitmap/snapshots-internal.out
+@@ -1,2 +1,9 @@
+ libvirt-1-format:
+  internal snapshots: '1727868651'(*) '1727872064'(*)
++libvirt-1-storage:
++libvirt-2-storage:
++libvirt-pflash0-format:
++libvirt-pflash0-storage:
++libvirt-pflash1-format:
++ internal snapshots: '1727868651' '1727872064'
++libvirt-pflash1-storage:
+diff --git a/tests/qemublocktestdata/bitmap/snapshots.out b/tests/qemublocktestdata/bitmap/snapshots.out
+index 24ca27e4d8..29c586be7e 100644
+--- a/tests/qemublocktestdata/bitmap/snapshots.out
++++ b/tests/qemublocktestdata/bitmap/snapshots.out
+@@ -4,16 +4,21 @@ libvirt-1-format:
+         b: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
+         c: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
+   current: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
++libvirt-1-storage:
+ libvirt-2-format:
+         c: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
+         b: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
+         a: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
+         d: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
++libvirt-2-storage:
+ libvirt-3-format:
+         a: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
+         b: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
+         c: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
++libvirt-3-storage:
+ libvirt-4-format:
+         a: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
++libvirt-4-storage:
+ libvirt-5-format:
+         a: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
++libvirt-5-storage:
+diff --git a/tests/qemublocktestdata/bitmap/synthetic.out b/tests/qemublocktestdata/bitmap/synthetic.out
+index 45423903a0..2f4ae2b217 100644
+--- a/tests/qemublocktestdata/bitmap/synthetic.out
++++ b/tests/qemublocktestdata/bitmap/synthetic.out
+@@ -6,12 +6,17 @@ libvirt-1-format:
+  top-inactive: record:0 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
+  top-transient: record:1 busy:0 persist:0 inconsist:0 gran:65536 dirty:0
+  top-transient-inactive: record:0 busy:0 persist:0 inconsist:0 gran:65536 dirty:0
++libvirt-1-storage:
+ libvirt-2-format:
+         d: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
++libvirt-2-storage:
+ libvirt-3-format:
+         b: record:1 busy:0 persist:0 inconsist:0 gran:65536 dirty:0
+         c: record:0 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
+         d: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
++libvirt-3-storage:
+ libvirt-4-format:
++libvirt-4-storage:
+ libvirt-5-format:
+         a: record:1 busy:0 persist:1 inconsist:0 gran:65536 dirty:0
++libvirt-5-storage:
+-- 
+2.52.0

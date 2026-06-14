@@ -1,0 +1,38 @@
+From 05df8c7309ca3c7db2f5a3c4eb1d07a48aaab486 Mon Sep 17 00:00:00 2001
+Message-ID: <05df8c7309ca3c7db2f5a3c4eb1d07a48aaab486.1771423832.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Tue, 17 Feb 2026 08:38:07 +0100
+Subject: [PATCH] iommufd: fix FD leak in case of error
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Reported-by: coverity
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Ján Tomko <jtomko@redhat.com>
+(cherry picked from commit f37e14119c257281eab4fd1fed1b1018fe4f63b1)
+
+Resolves: https://issues.redhat.com/browse/RHEL-150353
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/util/viriommufd.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/src/util/viriommufd.c b/src/util/viriommufd.c
+index 1f3353eab4..b62d59241d 100644
+--- a/src/util/viriommufd.c
++++ b/src/util/viriommufd.c
+@@ -87,8 +87,10 @@ virIOMMUFDOpenDevice(void)
+     if ((fd = open(VIR_IOMMU_DEV_PATH, O_RDWR | O_CLOEXEC)) < 0)
+         virReportSystemError(errno, "%s", _("cannot open IOMMUFD device"));
+ 
+-    if (virIOMMUFDSetRLimitMode(fd, true) < 0)
++    if (virIOMMUFDSetRLimitMode(fd, true) < 0) {
++        VIR_FORCE_CLOSE(fd);
+         return -1;
++    }
+ 
+     return fd;
+ }
+-- 
+2.53.0

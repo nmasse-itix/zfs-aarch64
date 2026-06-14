@@ -1,0 +1,97 @@
+From 7d39e57db8479f4c481636c8c41311f3eabc935f Mon Sep 17 00:00:00 2001
+Message-ID: <7d39e57db8479f4c481636c8c41311f3eabc935f.1769699749.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Mon, 26 Jan 2026 16:49:50 +0100
+Subject: [PATCH] qemuSnapshotUpdateBackingStore: Retry as curent user if
+ qemu-img fails
+
+The code calls 'qemu-img rebase' to fix the backing store references.
+The 'qemu-img' process here is run as the 'qemu' user or whatever the
+defaults and domain XML resolve to. Since this, in certain cases, works
+also on images which are not part of the backing chain and in privileged
+deployments thus can be owned by 'root:root' the update may fail
+(silently).
+
+To preserver root-squash deployments but fix also the above case, retry
+the operation on failure as current user.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Pavel Hrdina <phrdina@redhat.com>
+(cherry picked from commit 6bb982178b40768f37c5177f317e73562733530f)
+
+ https://issues.redhat.com/browse/RHEL-144089 [rhel-10.2]
+ https://issues.redhat.com/browse/RHEL-144090 [rhel-9.8]
+---
+ src/qemu/qemu_snapshot.c | 53 ++++++++++++++++++++++++++++------------
+ 1 file changed, 38 insertions(+), 15 deletions(-)
+
+diff --git a/src/qemu/qemu_snapshot.c b/src/qemu/qemu_snapshot.c
+index c23add5103..e30ade9dc8 100644
+--- a/src/qemu/qemu_snapshot.c
++++ b/src/qemu/qemu_snapshot.c
+@@ -3698,25 +3698,48 @@ qemuSnapshotUpdateBackingStore(qemuSnapshotDeleteExternalData *data)
+ 
+     for (cur = data->disksWithBacking; cur; cur = g_slist_next(cur)) {
+         struct _qemuSnapshotDisksWithBackingStoreData *backingData = cur->data;
+-        g_autoptr(virCommand) cmd = NULL;
++        /* Try to run the command first as the appropriate user based on the
++         * domain definition and config. If error is returned retry as current
++         * (possibly privileged) user for cases where seclabels were reset
++         * to the default */
++        g_autoptr(virCommand) cmd_user_qemu = NULL;
++        g_autoptr(virCommand) cmd_user_curr = NULL;
+ 
+-        if (!(cmd = virCommandNewArgList("qemu-img",
+-                                         "rebase",
+-                                         "-u",
+-                                         "-F",
+-                                         virStorageFileFormatTypeToString(data->parentDiskSrc->format),
+-                                         "-f",
+-                                         virStorageFileFormatTypeToString(backingData->diskSrc->format),
+-                                         "-b",
+-                                         data->parentDiskSrc->path,
+-                                         backingData->diskSrc->path,
+-                                         NULL)))
++        if (!(cmd_user_qemu = virCommandNewArgList("qemu-img",
++                                                   "rebase",
++                                                   "-u",
++                                                   "-F",
++                                                   virStorageFileFormatTypeToString(data->parentDiskSrc->format),
++                                                   "-f",
++                                                   virStorageFileFormatTypeToString(backingData->diskSrc->format),
++                                                   "-b",
++                                                   data->parentDiskSrc->path,
++                                                   backingData->diskSrc->path,
++                                                   NULL)))
+             continue;
+ 
+-        virCommandSetUID(cmd, backingData->uid);
+-        virCommandSetGID(cmd, backingData->gid);
++        virCommandSetUID(cmd_user_qemu, backingData->uid);
++        virCommandSetGID(cmd_user_qemu, backingData->gid);
+ 
+-        ignore_value(virCommandRun(cmd, NULL));
++        /* done on success */
++        if (virCommandRun(cmd_user_qemu, NULL) == 0)
++            continue;
++
++        /* retry as current user */
++        if (!(cmd_user_curr = virCommandNewArgList("qemu-img",
++                                                   "rebase",
++                                                   "-u",
++                                                   "-F",
++                                                   virStorageFileFormatTypeToString(data->parentDiskSrc->format),
++                                                   "-f",
++                                                   virStorageFileFormatTypeToString(backingData->diskSrc->format),
++                                                   "-b",
++                                                   data->parentDiskSrc->path,
++                                                   backingData->diskSrc->path,
++                                                   NULL)))
++            continue;
++
++        ignore_value(virCommandRun(cmd_user_curr, NULL));
+     }
+ }
+ 
+-- 
+2.52.0

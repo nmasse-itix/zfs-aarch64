@@ -1,0 +1,132 @@
+From f496b6095bf96eb8931b78054a272a5aaf70a2d9 Mon Sep 17 00:00:00 2001
+Message-ID: <f496b6095bf96eb8931b78054a272a5aaf70a2d9.1771336682.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Fri, 23 Jan 2026 17:18:14 +0100
+Subject: [PATCH] qemu: Setup disk latency histograms on startup/hotplug/update
+
+Setup the histograms on startup and hotplug of devices via
+'qemuProcessSetupDiskPropsRuntime' and facilitate update/reset/disable
+of histogram collection via 'qemuDomainChangeDiskLive'.
+
+The latter allows to use the update device API to either clear the bins
+or select new bin configuration or disable the histogram altogether
+without the need for a specific API.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 5787326541be4eafaa7ae3b4f866b3da793d44fe)
+
+https://issues.redhat.com/browse/RHEL-147866 [rhel-9.8]
+https://issues.redhat.com/browse/RHEL-131335 [rhel-10.2]
+---
+ src/qemu/qemu_domain.c  | 17 +++++++++++++++++
+ src/qemu/qemu_domain.h  |  3 +++
+ src/qemu/qemu_hotplug.c | 29 +++++++++++++++++++++++++++++
+ src/qemu/qemu_process.c | 10 ++++++++++
+ 4 files changed, 59 insertions(+)
+
+diff --git a/src/qemu/qemu_domain.c b/src/qemu/qemu_domain.c
+index 8e1ebe7799..bdab117e96 100644
+--- a/src/qemu/qemu_domain.c
++++ b/src/qemu/qemu_domain.c
+@@ -10463,6 +10463,23 @@ qemuDomainInitializePflashStorageSource(virDomainObj *vm,
+ }
+ 
+ 
++/**
++ * qemuDomainDiskHasLatencyHistogram:
++ * @disk: disk definition
++ *
++ * Returns whether @disk has any latency histogram settings configured.
++ */
++bool
++qemuDomainDiskHasLatencyHistogram(virDomainDiskDef *disk)
++{
++    return disk->histogram_boundaries ||
++           disk->histogram_boundaries_read ||
++           disk->histogram_boundaries_write ||
++           disk->histogram_boundaries_zone ||
++           disk->histogram_boundaries_flush;
++}
++
++
+ /**
+  * qemuDomainDiskBlockJobIsSupported:
+  *
+diff --git a/src/qemu/qemu_domain.h b/src/qemu/qemu_domain.h
+index 3361e97315..30ca67bf76 100644
+--- a/src/qemu/qemu_domain.h
++++ b/src/qemu/qemu_domain.h
+@@ -1078,6 +1078,9 @@ int
+ qemuDomainInitializePflashStorageSource(virDomainObj *vm,
+                                         virQEMUDriverConfig *cfg);
+ 
++bool
++qemuDomainDiskHasLatencyHistogram(virDomainDiskDef *disk);
++
+ bool
+ qemuDomainDiskBlockJobIsSupported(virDomainDiskDef *disk);
+ 
+diff --git a/src/qemu/qemu_hotplug.c b/src/qemu/qemu_hotplug.c
+index f2dc4469a3..9445599d2c 100644
+--- a/src/qemu/qemu_hotplug.c
++++ b/src/qemu/qemu_hotplug.c
+@@ -7310,6 +7310,35 @@ qemuDomainChangeDiskLive(virDomainObj *vm,
+         dev->data.disk->src = NULL;
+     }
+ 
++    if (qemuDomainDiskHasLatencyHistogram(disk) ||
++        qemuDomainDiskHasLatencyHistogram(orig_disk)) {
++        int rc;
++
++        qemuDomainObjEnterMonitor(vm);
++        rc = qemuMonitorBlockLatencyHistogramSet(qemuDomainGetMonitor(vm),
++                                                 QEMU_DOMAIN_DISK_PRIVATE(orig_disk)->qomName,
++                                                 disk->histogram_boundaries,
++                                                 disk->histogram_boundaries_read,
++                                                 disk->histogram_boundaries_write,
++                                                 disk->histogram_boundaries_zone,
++                                                 disk->histogram_boundaries_flush);
++        qemuDomainObjExitMonitor(vm);
++
++        if (rc < 0)
++            return -1;
++
++        g_clear_pointer(&orig_disk->histogram_boundaries, g_free);
++        g_clear_pointer(&orig_disk->histogram_boundaries_read, g_free);
++        g_clear_pointer(&orig_disk->histogram_boundaries_write, g_free);
++        g_clear_pointer(&orig_disk->histogram_boundaries_zone, g_free);
++        g_clear_pointer(&orig_disk->histogram_boundaries_flush, g_free);
++        orig_disk->histogram_boundaries = g_steal_pointer(&disk->histogram_boundaries);
++        orig_disk->histogram_boundaries_read = g_steal_pointer(&disk->histogram_boundaries_read);
++        orig_disk->histogram_boundaries_write = g_steal_pointer(&disk->histogram_boundaries_write);
++        orig_disk->histogram_boundaries_zone = g_steal_pointer(&disk->histogram_boundaries_zone);
++        orig_disk->histogram_boundaries_flush = g_steal_pointer(&disk->histogram_boundaries_flush);
++    }
++
+     /* in case when we aren't updating disk source we update startup policy here */
+     orig_disk->startupPolicy = dev->data.disk->startupPolicy;
+     orig_disk->snapshot = dev->data.disk->snapshot;
+diff --git a/src/qemu/qemu_process.c b/src/qemu/qemu_process.c
+index aadfaa92b0..37e688018c 100644
+--- a/src/qemu/qemu_process.c
++++ b/src/qemu/qemu_process.c
+@@ -7959,6 +7959,16 @@ qemuProcessSetupDiskPropsRuntime(qemuMonitor *mon,
+                                       &disk->blkdeviotune) < 0)
+         return -1;
+ 
++    if (qemuDomainDiskHasLatencyHistogram(disk) &&
++        qemuMonitorBlockLatencyHistogramSet(mon,
++                                            QEMU_DOMAIN_DISK_PRIVATE(disk)->qomName,
++                                            disk->histogram_boundaries,
++                                            disk->histogram_boundaries_read,
++                                            disk->histogram_boundaries_write,
++                                            disk->histogram_boundaries_zone,
++                                            disk->histogram_boundaries_flush) < 0)
++        return -1;
++
+     return 0;
+ }
+ 
+-- 
+2.53.0

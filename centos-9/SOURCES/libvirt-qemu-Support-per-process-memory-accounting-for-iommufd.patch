@@ -1,0 +1,211 @@
+From 282a5215343e081ff331d0d4b8f2d6474e47f5ad Mon Sep 17 00:00:00 2001
+Message-ID: <282a5215343e081ff331d0d4b8f2d6474e47f5ad.1770383236.git.jdenemar@redhat.com>
+From: Nathan Chen <nathanc@nvidia.com>
+Date: Fri, 30 Jan 2026 10:59:14 -0800
+Subject: [PATCH] qemu: Support per-process memory accounting for iommufd
+
+Implement the IOMMU_OPTION_RLIMIT_MODE
+ioctl to set per-process memory accounting for
+iommufd. This prevents ENOMEM errors from the
+default per-user memory accounting when multiple
+VMs under the libvirt-qemu user have their pinned
+memory summed and checked against a per-process
+RLIMIT_MEMLOCK limit.
+
+Signed-off-by: Nathan Chen <nathanc@nvidia.com>
+Reviewed-by: Pavel Hrdina <phrdina@redhat.com>
+(cherry picked from commit f91a07d0c8dd583928974e80bb13b54feb5aa908)
+
+Resolves: https://issues.redhat.com/browse/RHEL-126345
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ meson.build              |  1 +
+ po/POTFILES              |  1 +
+ src/libvirt_private.syms |  3 ++
+ src/util/meson.build     |  1 +
+ src/util/viriommufd.c    | 90 ++++++++++++++++++++++++++++++++++++++++
+ src/util/viriommufd.h    | 25 +++++++++++
+ 6 files changed, 121 insertions(+)
+ create mode 100644 src/util/viriommufd.c
+ create mode 100644 src/util/viriommufd.h
+
+diff --git a/meson.build b/meson.build
+index 6ac9d01952..28745e4e32 100644
+--- a/meson.build
++++ b/meson.build
+@@ -673,6 +673,7 @@ headers = [
+   'ifaddrs.h',
+   'libtasn1.h',
+   'linux/kvm.h',
++  'linux/iommufd.h',
+   'mntent.h',
+   'net/ethernet.h',
+   'net/if.h',
+diff --git a/po/POTFILES b/po/POTFILES
+index f0aad35c8c..c78d2b8000 100644
+--- a/po/POTFILES
++++ b/po/POTFILES
+@@ -303,6 +303,7 @@ src/util/virhostuptime.c
+ src/util/viridentity.c
+ src/util/virinhibitor.c
+ src/util/virinitctl.c
++src/util/viriommufd.c
+ src/util/viriscsi.c
+ src/util/virjson.c
+ src/util/virlease.c
+diff --git a/src/libvirt_private.syms b/src/libvirt_private.syms
+index 4e57e4a8f6..66261ed6cf 100644
+--- a/src/libvirt_private.syms
++++ b/src/libvirt_private.syms
+@@ -2652,6 +2652,9 @@ virInhibitorRelease;
+ virInitctlFifos;
+ virInitctlSetRunLevel;
+ 
++# util/viriommufd.h
++virIOMMUFDSetRLimitMode;
++
+ # util/viriscsi.h
+ virISCSIConnectionLogin;
+ virISCSIConnectionLogout;
+diff --git a/src/util/meson.build b/src/util/meson.build
+index 4950a795cc..9fb0aa0fe7 100644
+--- a/src/util/meson.build
++++ b/src/util/meson.build
+@@ -46,6 +46,7 @@ util_sources = [
+   'viridentity.c',
+   'virinhibitor.c',
+   'virinitctl.c',
++  'viriommufd.c',
+   'viriscsi.c',
+   'virjson.c',
+   'virkeycode.c',
+diff --git a/src/util/viriommufd.c b/src/util/viriommufd.c
+new file mode 100644
+index 0000000000..5af097683d
+--- /dev/null
++++ b/src/util/viriommufd.c
+@@ -0,0 +1,90 @@
++#include <config.h>
++
++#include "viriommufd.h"
++#include "virlog.h"
++#include "virerror.h"
++#include "virfile.h"
++
++#define VIR_FROM_THIS VIR_FROM_NONE
++
++VIR_LOG_INIT("util.iommufd");
++
++#ifdef __linux__
++
++# include <sys/ioctl.h>
++# include <linux/types.h>
++
++# ifdef HAVE_LINUX_IOMMUFD_H
++#  include <linux/iommufd.h>
++# endif
++
++# ifndef IOMMU_OPTION
++
++enum iommufd_option {
++    IOMMU_OPTION_RLIMIT_MODE = 0,
++    IOMMU_OPTION_HUGE_PAGES = 1,
++};
++
++enum iommufd_option_ops {
++    IOMMU_OPTION_OP_SET = 0,
++    IOMMU_OPTION_OP_GET = 1,
++};
++
++struct iommu_option {
++    __u32 size;
++    __u32 option_id;
++    __u16 op;
++    __u16 __reserved;
++    __u32 object_id;
++    __aligned_u64 val64;
++};
++
++#  define IOMMUFD_TYPE (';')
++#  define IOMMUFD_CMD_OPTION 0x87
++#  define IOMMU_OPTION _IO(IOMMUFD_TYPE, IOMMUFD_CMD_OPTION)
++
++# endif
++
++/**
++ * virIOMMUFDSetRLimitMode:
++ * @fd: iommufd file descriptor
++ * @processAccounting: true for per-process, false for per-user
++ *
++ * Set RLIMIT_MEMLOCK accounting mode for the iommufd.
++ *
++ * Returns: 0 on success, -1 on error
++ */
++int
++virIOMMUFDSetRLimitMode(int fd, bool processAccounting)
++{
++    struct iommu_option option = {
++        .size = sizeof(struct iommu_option),
++        .option_id = IOMMU_OPTION_RLIMIT_MODE,
++        .op = IOMMU_OPTION_OP_SET,
++        .__reserved = 0,
++        .object_id = 0,
++        .val64 = processAccounting ? 1 : 0,
++    };
++
++    if (ioctl(fd, IOMMU_OPTION, &option) < 0) {
++        virReportSystemError(errno, "%s",
++                             _("failed to set memory accounting for iommufd"));
++        return -1;
++    }
++
++    VIR_DEBUG("Set iommufd rlimit mode to %s-based accounting",
++              processAccounting ? "process" : "user");
++    return 0;
++}
++
++#else
++
++int virIOMMUFDSetRLimitMode(int fd G_GNUC_UNUSED,
++                            bool processAccounting G_GNUC_UNUSED)
++{
++    virReportError(VIR_ERR_NO_SUPPORT, "%s",
++                   _("IOMMUFD is not supported on this platform"));
++    return -1;
++}
++
++#endif
+diff --git a/src/util/viriommufd.h b/src/util/viriommufd.h
+new file mode 100644
+index 0000000000..ebecfe3633
+--- /dev/null
++++ b/src/util/viriommufd.h
+@@ -0,0 +1,25 @@
++/*
++ * viriommufd.h: iommufd helpers
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library.  If not, see
++ * <http://www.gnu.org/licenses/>.
++ */
++
++#pragma once
++
++#include "internal.h"
++
++#define VIR_IOMMU_DEV_PATH "/dev/iommu"
++
++int virIOMMUFDSetRLimitMode(int fd, bool processAccounting);
+-- 
+2.52.0

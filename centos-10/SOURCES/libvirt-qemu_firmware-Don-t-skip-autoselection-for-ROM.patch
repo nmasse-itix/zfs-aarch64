@@ -1,0 +1,64 @@
+From 598e238bae3ca9409997f4ddf0002f7dac820e96 Mon Sep 17 00:00:00 2001
+Message-ID: <598e238bae3ca9409997f4ddf0002f7dac820e96.1772815313.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Mon, 17 Nov 2025 15:47:30 +0100
+Subject: [PATCH] qemu_firmware: Don't skip autoselection for ROM
+
+It's possible to have firmware descriptors for builds intended to
+be loaded as ROM, as is the case for those loaded as pflash.
+There is no reason to skip firmware autoselection in those cases,
+and doing so prevents useful information from being filled in.
+
+After this change, the firmware-manual-efi-tdx test case is
+augmented with some additional information. Even more information
+will be filled in later, when we improve the matching logic.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 9a041e61ec00fa61e94858c699f00eba95b3f226)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/qemu/qemu_firmware.c                               | 10 ++++------
+ .../firmware-manual-efi-tdx.x86_64-latest+inteltdx.xml |  2 +-
+ 2 files changed, 5 insertions(+), 7 deletions(-)
+
+diff --git a/src/qemu/qemu_firmware.c b/src/qemu/qemu_firmware.c
+index 9ba5d899fa..7953b297bc 100644
+--- a/src/qemu/qemu_firmware.c
++++ b/src/qemu/qemu_firmware.c
+@@ -1913,13 +1913,11 @@ qemuFirmwareFillDomain(virQEMUDriver *driver,
+         return -1;
+     }
+ 
+-    /* If firmware autoselection is disabled and the loader is a ROM
+-     * instead of a PFLASH device, then we're using BIOS and we don't
+-     * need any information at all */
+-    if (!autoSelection &&
+-        (!loader || (loader && loader->type == VIR_DOMAIN_LOADER_TYPE_ROM))) {
++    /* If firmware autoselection is disabled and no information
++     * related to the loader was provided, then we're using the
++     * default built-in firmware and we can stop here */
++    if (!autoSelection && !loader)
+         return 0;
+-    }
+ 
+     /* Look for the information we need in firmware descriptors */
+     if ((ret = qemuFirmwareFillDomainModern(driver, def)) < 0)
+diff --git a/tests/qemuxmlconfdata/firmware-manual-efi-tdx.x86_64-latest+inteltdx.xml b/tests/qemuxmlconfdata/firmware-manual-efi-tdx.x86_64-latest+inteltdx.xml
+index 7428a3dfef..cdb92dcf1d 100644
+--- a/tests/qemuxmlconfdata/firmware-manual-efi-tdx.x86_64-latest+inteltdx.xml
++++ b/tests/qemuxmlconfdata/firmware-manual-efi-tdx.x86_64-latest+inteltdx.xml
+@@ -6,7 +6,7 @@
+   <vcpu placement='static'>1</vcpu>
+   <os>
+     <type arch='x86_64' machine='pc-q35-10.0'>hvm</type>
+-    <loader readonly='yes' type='rom'>/usr/share/edk2/ovmf/OVMF.inteltdx.secboot.fd</loader>
++    <loader readonly='yes' type='rom' format='raw'>/usr/share/edk2/ovmf/OVMF.inteltdx.secboot.fd</loader>
+     <boot dev='hd'/>
+   </os>
+   <features>
+-- 
+2.53.0

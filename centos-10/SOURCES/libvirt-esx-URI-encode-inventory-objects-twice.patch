@@ -1,0 +1,60 @@
+From 1ff41e00c1d0a280b22ba4f8bf4e86472570486a Mon Sep 17 00:00:00 2001
+Message-ID: <1ff41e00c1d0a280b22ba4f8bf4e86472570486a.1769699749.git.jdenemar@redhat.com>
+From: Michal Privoznik <mprivozn@redhat.com>
+Date: Tue, 6 Jan 2026 17:18:03 +0100
+Subject: [PATCH] esx: URI encode inventory objects twice
+
+While discouraged by a KB article to use special characters in
+inventory object names [1], ESX won't stop you. And thus users
+can end up with a datastore named "datastore2+", for instance.
+The datastore name (and datacenter path) are important when
+fetching/uploading a .vmx file (used in APIs like
+virDomainGetXMLDesc() or virDomainDefineXML()). And while we do
+URI encode both (dcPath and dsName), encoding them once is not
+enough. Cole Robinson discovered [2] that they need to be
+URI-encoded twice. Use newly introduced
+esxUtil_EscapeInventoryObject() helper to encode them twice.
+
+1: https://knowledge.broadcom.com/external/article/386368/vcenter-inventory-object-name-with-speci.html
+2: https://issues.redhat.com/browse/RHEL-133729#comment-28604072
+Resolves: https://issues.redhat.com/browse/RHEL-134127
+Signed-off-by: Michal Privoznik <mprivozn@redhat.com>
+Reviewed-by: Jiri Denemark <jdenemar@redhat.com>
+Reviewed-by: Richard W.M. Jones <rjones@redhat.com>
+(cherry picked from commit 6c9d2591c668732eb05cf17d27c9102ef3d40b39)
+Resolves: https://issues.redhat.com/browse/RHEL-140196
+Signed-off-by: Michal Privoznik <mprivozn@redhat.com>
+---
+ src/esx/esx_driver.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/src/esx/esx_driver.c b/src/esx/esx_driver.c
+index 40b7f793cd..010c62b8e8 100644
+--- a/src/esx/esx_driver.c
++++ b/src/esx/esx_driver.c
+@@ -2599,9 +2599,9 @@ esxDomainGetXMLDesc(virDomainPtr domain, unsigned int flags)
+                        "/folder/");
+     virBufferURIEncodeString(&buffer, directoryAndFileName);
+     virBufferAddLit(&buffer, "?dcPath=");
+-    virBufferURIEncodeString(&buffer, priv->primary->datacenterPath);
++    esxUtil_EscapeInventoryObject(&buffer, priv->primary->datacenterPath);
+     virBufferAddLit(&buffer, "&dsName=");
+-    virBufferURIEncodeString(&buffer, datastoreName);
++    esxUtil_EscapeInventoryObject(&buffer, datastoreName);
+ 
+     url = virBufferContentAndReset(&buffer);
+ 
+@@ -3035,9 +3035,9 @@ esxDomainDefineXMLFlags(virConnectPtr conn, const char *xml, unsigned int flags)
+ 
+     virBufferURIEncodeString(&buffer, escapedName);
+     virBufferAddLit(&buffer, ".vmx?dcPath=");
+-    virBufferURIEncodeString(&buffer, priv->primary->datacenterPath);
++    esxUtil_EscapeInventoryObject(&buffer, priv->primary->datacenterPath);
+     virBufferAddLit(&buffer, "&dsName=");
+-    virBufferURIEncodeString(&buffer, datastoreName);
++    esxUtil_EscapeInventoryObject(&buffer, datastoreName);
+ 
+     url = virBufferContentAndReset(&buffer);
+ 
+-- 
+2.52.0

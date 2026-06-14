@@ -1,0 +1,50 @@
+From e78a5a3559bee1bca42f8edde91e836b301876dc Mon Sep 17 00:00:00 2001
+Message-ID: <e78a5a3559bee1bca42f8edde91e836b301876dc.1769173967.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Thu, 11 Dec 2025 09:39:03 +0100
+Subject: [PATCH] util: json: Increase JSON nesting limit when parsing to 300
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The default in json-c is 32 which is too low to accomodate the 200
+snapshot layers we supported historically in the qemu driver (200 is
+picked based on the 256 layer limit in libxml).
+
+The response to 'query-block' is otherwise too low and we fail to start
+the VM when there's around 26 images in a backing chain.
+
+'json_tokener_new_ex' is supported since json-c 0.11 and we require at
+least 0.14.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Ján Tomko <jtomko@redhat.com>
+(cherry picked from commit b49d41b7e9eb983fdfbf70c91c2a27a995af3987)
+https://issues.redhat.com/browse/RHEL-135181
+---
+ src/util/virjson.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/src/util/virjson.c b/src/util/virjson.c
+index a799707c16..454bd657be 100644
+--- a/src/util/virjson.c
++++ b/src/util/virjson.c
+@@ -1466,7 +1466,15 @@ virJSONValueFromString(const char *jsonstring)
+ 
+     VIR_DEBUG("string=%s", jsonstring);
+ 
+-    tok = json_tokener_new();
++    /* When creating the tokener we need to specify the limit of the nesting
++     * depth of JSON objects. The default in json-c is 32. Since we need to
++     * support at least 200 layers of snapshots (the limit is based on a
++     * conservative take on the 256 layer nesting limit for XML in libxml), for
++     * which we have internal checks, we also need to set the JSON limit to
++     * be able to parse qemu responses for such a deeply nested snapshot list.
++     * '300' is picked a sa conservative buffer on top of the 200 layers plus
++     * some of the extra wrappers that qemu adds*/
++    tok = json_tokener_new_ex(300);
+     if (!tok) {
+         virReportError(VIR_ERR_INTERNAL_ERROR, "%s",
+                        _("failed to create JSON tokener"));
+-- 
+2.52.0

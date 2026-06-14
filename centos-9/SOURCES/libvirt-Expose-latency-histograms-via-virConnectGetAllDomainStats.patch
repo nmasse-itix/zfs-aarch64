@@ -1,0 +1,248 @@
+From d3031b230cc8300541a3ec39bf80b78d11ac15d6 Mon Sep 17 00:00:00 2001
+Message-ID: <d3031b230cc8300541a3ec39bf80b78d11ac15d6.1771336751.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Thu, 29 Jan 2026 18:10:26 +0100
+Subject: [PATCH] Expose latency histograms via 'virConnectGetAllDomainStats'
+
+Add documentation and constants for constructing the stats field names
+for latency histograms and expose them in the qemu driver:
+
+Example:
+
+  block.1.latency_histogram.read.bin.count=9
+  block.1.latency_histogram.read.bin.0.start=0
+  block.1.latency_histogram.read.bin.0.value=0
+  block.1.latency_histogram.read.bin.1.start=10
+  block.1.latency_histogram.read.bin.1.value=0
+  block.1.latency_histogram.read.bin.2.start=100
+  block.1.latency_histogram.read.bin.2.value=0
+  block.1.latency_histogram.read.bin.3.start=1000
+  block.1.latency_histogram.read.bin.3.value=1047
+  block.1.latency_histogram.read.bin.4.start=10000
+  block.1.latency_histogram.read.bin.4.value=2131
+  block.1.latency_histogram.read.bin.5.start=100000
+  block.1.latency_histogram.read.bin.5.value=0
+  block.1.latency_histogram.read.bin.6.start=1000000
+  block.1.latency_histogram.read.bin.6.value=0
+  block.1.latency_histogram.read.bin.7.start=10000000
+  block.1.latency_histogram.read.bin.7.value=0
+  block.1.latency_histogram.read.bin.8.start=100000000
+  block.1.latency_histogram.read.bin.8.value=0
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 237e49127a9390f054e33e689ba9db1587cdc9f1)
+
+https://issues.redhat.com/browse/RHEL-147866 [rhel-9.8]
+https://issues.redhat.com/browse/RHEL-131335 [rhel-10.2]
+---
+ docs/manpages/virsh.rst          |   7 ++
+ include/libvirt/libvirt-domain.h | 113 +++++++++++++++++++++++++++++++
+ src/qemu/qemu_driver.c           |  43 ++++++++++++
+ 3 files changed, 163 insertions(+)
+
+diff --git a/docs/manpages/virsh.rst b/docs/manpages/virsh.rst
+index a9d691824e..ff0cf1a715 100644
+--- a/docs/manpages/virsh.rst
++++ b/docs/manpages/virsh.rst
+@@ -2811,6 +2811,13 @@ Information listed includes:
+   pending write operations in the defined interval
+ * ``block.<num>.timed_group.<num>.zone_append_queue_depth_avg`` - average number
+   of pending zone append operations in the defined interval
++* ``block.<num>.latency_histogram.<type>.bin.count`` - number of bins in
++  latency histogram. <type> is one of ``read``, ``write``, ``zone_append``, or
++  ``flush``
++* ``block.<num>.latency_histogram.<type>.bin.<num>.start`` start boundary of
++  a latency histogram bin in nanoseconds of given operation duration
++* ``block.<num>.latency_histogram.<type>.bin.<num>.value`` current number of
++  events corresponding to the given bin and type
+ 
+ 
+ *--iothread* returns information about IOThreads on the running guest
+diff --git a/include/libvirt/libvirt-domain.h b/include/libvirt/libvirt-domain.h
+index 16fac6b085..8e62bd23d4 100644
+--- a/include/libvirt/libvirt-domain.h
++++ b/include/libvirt/libvirt-domain.h
+@@ -3815,6 +3815,119 @@ struct _virDomainStatsRecord {
+  */
+ # define VIR_DOMAIN_STATS_BLOCK_SUFFIX_TIMED_GROUP_SUFFIX_ZONE_APPEND_QUEUE_DEPTH_AVG ".zone_append_queue_depth_avg"
+ 
++/**
++ * VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_READ_PREFIX:
++ *
++ * The parameter name prefix to access 'read' latency histograms. Concatenate
++ * the prefix with either:
++ *  - VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_SUFFIX_BIN_COUNT
++ *    to get the number of bins in given histogram
++ *  - VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_SUFFIX_BIN_PREFIX and
++ *    entry number formatted as an unsigned integer and one of the latency
++ *    histogram suffix parameters to compelte a full bin parameter name
++ *
++ * Since: 12.1.0
++ */
++# define VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_READ_PREFIX ".latency_histogram.read."
++
++/**
++ * VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_WRITE_PREFIX:
++ *
++ * The parameter name prefix to access 'write' latency histograms. Concatenate
++ * the prefix with either:
++ *  - VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_SUFFIX_BIN_COUNT
++ *    to get the number of bins in given histogram
++ *  - VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_SUFFIX_BIN_PREFIX and
++ *    entry number formatted as an unsigned integer and one of the latency
++ *    histogram suffix parameters to compelte a full bin parameter name
++ *
++ * Since: 12.1.0
++ */
++# define VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_WRITE_PREFIX ".latency_histogram.write."
++
++/**
++ * VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_ZONE_APPEND_PREFIX:
++ *
++ * The parameter name prefix to access 'zone_append' latency histograms. Concatenate
++ * the prefix with either:
++ *  - VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_SUFFIX_BIN_COUNT
++ *    to get the number of bins in given histogram
++ *  - VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_SUFFIX_BIN_PREFIX and
++ *    entry number formatted as an unsigned integer and one of the latency
++ *    histogram suffix parameters to compelte a full bin parameter name
++ *
++ * Since: 12.1.0
++ */
++# define VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_ZONE_APPEND_PREFIX ".latency_histogram.zone_append."
++
++/**
++ * VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_FLUSH_PREFIX:
++ *
++ * The parameter name prefix to access 'flush' latency histograms. Concatenate
++ * the prefix with either:
++ *  - VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_SUFFIX_BIN_COUNT
++ *    to get the number of bins in given histogram
++ *  - VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_SUFFIX_BIN_PREFIX and
++ *    entry number formatted as an unsigned integer and one of the latency
++ *    histogram suffix parameters to compelte a full bin parameter name
++ *
++ * Since: 12.1.0
++ */
++# define VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_FLUSH_PREFIX ".latency_histogram.flush."
++
++/**
++ * VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_SUFFIX_BIN_COUNT:
++ *
++ * The parameter name suffix to access number of bins in one of the following
++ * latency histogram types:
++ *   - VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_READ_PREFIX
++ *   - VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_WRITE_PREFIX
++ *   - VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_ZONE_APPEND_PREFIX
++ *   - VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_FLUSH_PREFIX
++ *
++ * Number of bins in latency histogram as unsigned long long.
++ *
++ * Since: 12.1.0
++ */
++# define VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_SUFFIX_BIN_COUNT "bin.count"
++
++/**
++ * VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_SUFFIX_BIN_PREFIX:
++ *
++ * The parameter name suffix to access a latency histogram bin in one of the
++ * following latency histogram types:
++ *   - VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_READ_PREFIX
++ *   - VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_WRITE_PREFIX
++ *   - VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_ZONE_APPEND_PREFIX
++ *   - VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_FLUSH_PREFIX
++ *
++ * Concatenate with a bin number as unsigned int and one of the other field
++ * suffixes to access bin parameters.
++ *
++ * Since: 12.1.0
++ */
++# define VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_SUFFIX_BIN_PREFIX "bin."
++
++/**
++ * VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_SUFFIX_BIN_SUFFIX_START:
++ *
++ * Start of the current latency histogram bin in nanoseconds as unsigned long long.
++ *
++ * Since: 12.1.0
++ */
++# define VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_SUFFIX_BIN_SUFFIX_START ".start"
++
++/**
++ * VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_SUFFIX_BIN_SUFFIX_VALUE:
++ *
++ * Current value of the number of occurences of the latency within this bin
++ * as unsigned long long.
++ *
++ * Since: 12.1.0
++ */
++# define VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_SUFFIX_BIN_SUFFIX_VALUE ".value"
++
++
+ /**
+  * VIR_DOMAIN_STATS_PERF_CMT:
+  *
+diff --git a/src/qemu/qemu_driver.c b/src/qemu/qemu_driver.c
+index 08a547c546..f3e7410f9e 100644
+--- a/src/qemu/qemu_driver.c
++++ b/src/qemu/qemu_driver.c
+@@ -17597,6 +17597,36 @@ qemuDomainGetStatsBlockExportBackendStorage(const char *entryname,
+ }
+ 
+ 
++static void
++qemuDomainGetStatsBlockExportFrontendLatencyHistogram(struct qemuBlockStatsLatencyHistogram *h,
++                                                      size_t disk_idx,
++                                                      const char *prefix_hist,
++                                                      virTypedParamList *par)
++{
++    size_t i;
++
++    if (!h)
++        return;
++
++    virTypedParamListAddULLong(par, h->nbins,
++                               VIR_DOMAIN_STATS_BLOCK_PREFIX "%zu%s" VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_SUFFIX_BIN_COUNT,
++                               disk_idx, prefix_hist);
++
++    for (i = 0; i < h->nbins; i++) {
++        virTypedParamListAddULLong(par, h->bins[i].start,
++                                   VIR_DOMAIN_STATS_BLOCK_PREFIX "%zu%s"
++                                   VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_SUFFIX_BIN_PREFIX "%zu"
++                                   VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_SUFFIX_BIN_SUFFIX_START,
++                                   disk_idx, prefix_hist, i);
++        virTypedParamListAddULLong(par, h->bins[i].value,
++                                   VIR_DOMAIN_STATS_BLOCK_PREFIX "%zu%s"
++                                   VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_SUFFIX_BIN_PREFIX "%zu"
++                                   VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_SUFFIX_BIN_SUFFIX_VALUE,
++                                   disk_idx, prefix_hist, i);
++    }
++}
++
++
+ static void
+ qemuDomainGetStatsBlockExportFrontend(const char *frontendname,
+                                       GHashTable *stats,
+@@ -17721,6 +17751,19 @@ qemuDomainGetStatsBlockExportFrontend(const char *frontendname,
+                                        idx, i);
+         }
+     }
++
++    qemuDomainGetStatsBlockExportFrontendLatencyHistogram(en->histogram_read, idx,
++                                                          VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_READ_PREFIX,
++                                                          par);
++    qemuDomainGetStatsBlockExportFrontendLatencyHistogram(en->histogram_write, idx,
++                                                          VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_WRITE_PREFIX,
++                                                          par);
++    qemuDomainGetStatsBlockExportFrontendLatencyHistogram(en->histogram_zone, idx,
++                                                          VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_ZONE_APPEND_PREFIX,
++                                                          par);
++    qemuDomainGetStatsBlockExportFrontendLatencyHistogram(en->histogram_flush, idx,
++                                                          VIR_DOMAIN_STATS_BLOCK_SUFFIX_LATENCY_HISTOGRAM_FLUSH_PREFIX,
++                                                          par);
+ }
+ 
+ 
+-- 
+2.53.0

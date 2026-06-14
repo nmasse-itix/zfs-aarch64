@@ -1,0 +1,33 @@
+From 4b9e4bf49a5891cae82bfbc4476b4046c8ee362d Mon Sep 17 00:00:00 2001
+Message-ID: <4b9e4bf49a5891cae82bfbc4476b4046c8ee362d.1772815313.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Mon, 17 Nov 2025 20:17:45 +0100
+Subject: [PATCH] qemu_firmware: ROM firmware is always in raw format
+
+By definition.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 1b78d647da26b101267eb86401ad0a7d722a773d)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/qemu/qemu_firmware.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/qemu/qemu_firmware.c b/src/qemu/qemu_firmware.c
+index 70ac88c373..9ba5d899fa 100644
+--- a/src/qemu/qemu_firmware.c
++++ b/src/qemu/qemu_firmware.c
+@@ -1470,6 +1470,7 @@ qemuFirmwareEnableFeaturesModern(virDomainDef *def,
+         loader = def->os.loader;
+ 
+         loader->type = VIR_DOMAIN_LOADER_TYPE_ROM;
++        loader->format = VIR_STORAGE_FILE_RAW;
+ 
+         VIR_FREE(loader->path);
+         loader->path = g_strdup(memory->filename);
+-- 
+2.53.0

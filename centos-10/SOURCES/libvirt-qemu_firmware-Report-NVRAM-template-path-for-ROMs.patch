@@ -1,0 +1,49 @@
+From f4180272d119d8267d81d50035b421b06fd3a75c Mon Sep 17 00:00:00 2001
+Message-ID: <f4180272d119d8267d81d50035b421b06fd3a75c.1772815313.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Mon, 17 Nov 2025 16:59:40 +0100
+Subject: [PATCH] qemu_firmware: Report NVRAM template path for ROMs
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This was not necessary until now since ROMs couldn't have an
+associate NVRAM template, and technically speaking they still
+can't; however, the varstore template serves essentialy the
+same purpose.
+
+The qemuFirmwareGetSupported() helper is used in two places:
+one is the code that is responsible for filling in domaincaps,
+where templates are ignored so this change has no impact on it;
+the other is the qemufirmware test program, where this value
+being reported is useful as it will allow us to confirm that
+the JSON firmware descriptors for uefi-vars enabled builds are
+parsed correctly.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+Reviewed-by: Daniel P. Berrangé <berrange@redhat.com>
+(cherry picked from commit a440ada2148951c4abb105d5d19f7b3583243325)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/qemu/qemu_firmware.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/qemu/qemu_firmware.c b/src/qemu/qemu_firmware.c
+index 7af3f32b85..72aae73dcb 100644
+--- a/src/qemu/qemu_firmware.c
++++ b/src/qemu/qemu_firmware.c
+@@ -2161,6 +2161,7 @@ qemuFirmwareGetSupported(const char *machine,
+ 
+         case QEMU_FIRMWARE_DEVICE_MEMORY:
+             fwpath = memory->filename;
++            nvrampath = memory->template;
+             break;
+ 
+         case QEMU_FIRMWARE_DEVICE_NONE:
+-- 
+2.53.0

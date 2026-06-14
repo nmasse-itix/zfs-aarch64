@@ -1,0 +1,54 @@
+From ca225465b1d7c3e931b319aad262a0c65d240cbc Mon Sep 17 00:00:00 2001
+Message-ID: <ca225465b1d7c3e931b319aad262a0c65d240cbc.1772815313.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Tue, 3 Feb 2026 18:47:04 +0100
+Subject: [PATCH] qemu_firmware: Use of NVRAM implies stateful firmware
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Currently we only look at the value for the stateless attribute
+itself when matching, but the <nvram> element being included in
+the input XML is likewise a clear sign that a stateless firmware
+build will not satisfy the user's requirements.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+Reviewed-by: Daniel P. Berrangé <berrange@redhat.com>
+(cherry picked from commit ffe37c698948b926bace57dc16106d3acb08c3ac)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/qemu/qemu_firmware.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/src/qemu/qemu_firmware.c b/src/qemu/qemu_firmware.c
+index 60cc92e46a..1851ed4a80 100644
+--- a/src/qemu/qemu_firmware.c
++++ b/src/qemu/qemu_firmware.c
+@@ -1288,13 +1288,19 @@ qemuFirmwareMatchDomain(const virDomainDef *def,
+         /* Explicit requests for either a stateless or stateful
+          * firmware should be fulfilled, but if no preference is
+          * provided either one is fine as long as the other match
+-         * criteria are satisfied */
++         * criteria are satisfied. NVRAM implies stateful */
+         if (loader &&
+             loader->stateless == VIR_TRISTATE_BOOL_NO &&
+             flash->mode == QEMU_FIRMWARE_FLASH_MODE_STATELESS) {
+             VIR_DEBUG("Discarding stateless loader");
+             return false;
+         }
++        if (loader &&
++            loader->nvram &&
++            flash->mode == QEMU_FIRMWARE_FLASH_MODE_STATELESS) {
++            VIR_DEBUG("Discarding stateless loader");
++            return false;
++        }
+         if (loader &&
+             loader->stateless == VIR_TRISTATE_BOOL_YES &&
+             flash->mode != QEMU_FIRMWARE_FLASH_MODE_STATELESS) {
+-- 
+2.53.0

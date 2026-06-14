@@ -1,0 +1,266 @@
+From c0d508913546c66014f4cad54779ff4ad1549d7a Mon Sep 17 00:00:00 2001
+Message-ID: <c0d508913546c66014f4cad54779ff4ad1549d7a.1780571166.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Mon, 16 Mar 2026 15:30:18 +0100
+Subject: [PATCH] tests: Add iommufd fdgroup test
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Peter Krempa <pkrempa@redhat.com>
+(cherry picked from commit 406b7fb0bd82251d94ce1fcb5fd7e35d51e1a1b7)
+
+Conflicts:
+    - tests/qemuxmlconftest.c
+        missing upstream commit 6d6da1cbac4f0194ca257c8ff8f5038a96791a62
+
+Resolves: https://redhat.atlassian.net/browse/RHEL-156803
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/qemu/qemu_process.c                       | 14 +++--
+ src/qemu/qemu_processpriv.h                   |  2 +
+ .../iommufd-q35-fd.x86_64-latest.args         | 41 +++++++++++++
+ .../iommufd-q35-fd.x86_64-latest.xml          | 60 +++++++++++++++++++
+ tests/qemuxmlconfdata/iommufd-q35-fd.xml      | 38 ++++++++++++
+ tests/qemuxmlconftest.c                       |  9 ++-
+ 6 files changed, 159 insertions(+), 5 deletions(-)
+ create mode 100644 tests/qemuxmlconfdata/iommufd-q35-fd.x86_64-latest.args
+ create mode 100644 tests/qemuxmlconfdata/iommufd-q35-fd.x86_64-latest.xml
+ create mode 100644 tests/qemuxmlconfdata/iommufd-q35-fd.xml
+
+diff --git a/src/qemu/qemu_process.c b/src/qemu/qemu_process.c
+index e4746374f6..b56e79ed1c 100644
+--- a/src/qemu/qemu_process.c
++++ b/src/qemu/qemu_process.c
+@@ -7712,9 +7712,11 @@ qemuProcessOpenIommuFd(virDomainObj *vm)
+  *
+  * Find passed FD via virDomainFDAssociate() API for the VM.
+  *
++ * Exported only to be used in tests.
++ *
+  * Returns: 0 on success, -1 on failure
+  */
+-static int
++int
+ qemuProcessGetPassedIommuFd(virDomainObj *vm)
+ {
+     qemuDomainObjPrivate *priv = vm->privateData;
+@@ -7734,10 +7736,14 @@ qemuProcessGetPassedIommuFd(virDomainObj *vm)
+         return -1;
+     }
+ 
+-    iommufd = dup(fdt->fds[0]);
++    if (fdt->testfds) {
++        iommufd = dup2(fdt->fds[0], fdt->testfds[0]);
++    } else {
++        iommufd = dup(fdt->fds[0]);
+ 
+-    if (qemuSecuritySetImageFDLabel(priv->driver->securityManager, vm->def, iommufd) < 0)
+-        return -1;
++        if (qemuSecuritySetImageFDLabel(priv->driver->securityManager, vm->def, iommufd) < 0)
++            return -1;
++    }
+ 
+     priv->iommufd = qemuFDPassDirectNew("iommufd", &iommufd);
+ 
+diff --git a/src/qemu/qemu_processpriv.h b/src/qemu/qemu_processpriv.h
+index 0ba5897f40..4bef5025b9 100644
+--- a/src/qemu/qemu_processpriv.h
++++ b/src/qemu/qemu_processpriv.h
+@@ -37,3 +37,5 @@ void qemuProcessHandleDeviceDeleted(qemuMonitor *mon,
+                                     const char *devAlias);
+ 
+ int qemuProcessQMPInitMonitor(qemuMonitor *mon);
++
++int qemuProcessGetPassedIommuFd(virDomainObj *vm);
+diff --git a/tests/qemuxmlconfdata/iommufd-q35-fd.x86_64-latest.args b/tests/qemuxmlconfdata/iommufd-q35-fd.x86_64-latest.args
+new file mode 100644
+index 0000000000..7df3d173f3
+--- /dev/null
++++ b/tests/qemuxmlconfdata/iommufd-q35-fd.x86_64-latest.args
+@@ -0,0 +1,41 @@
++LC_ALL=C \
++PATH=/bin \
++HOME=/var/lib/libvirt/qemu/domain--1-q35-test \
++USER=test \
++LOGNAME=test \
++XDG_DATA_HOME=/var/lib/libvirt/qemu/domain--1-q35-test/.local/share \
++XDG_CACHE_HOME=/var/lib/libvirt/qemu/domain--1-q35-test/.cache \
++XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-q35-test/.config \
++/usr/bin/qemu-system-x86_64 \
++-name guest=q35-test,debug-threads=on \
++-S \
++-object '{"qom-type":"secret","id":"masterKey0","format":"raw","file":"/var/lib/libvirt/qemu/domain--1-q35-test/master-key.aes"}' \
++-machine q35,usb=off,dump-guest-core=off,memory-backend=pc.ram,acpi=off \
++-accel tcg \
++-cpu qemu64 \
++-m size=2097152k \
++-object '{"qom-type":"memory-backend-ram","id":"pc.ram","size":2147483648}' \
++-overcommit mem-lock=off \
++-smp 2,sockets=2,cores=1,threads=1 \
++-uuid 11dbdcdd-4c3b-482b-8903-9bdb8c0a2774 \
++-display none \
++-no-user-config \
++-nodefaults \
++-chardev socket,id=charmonitor,fd=1729,server=on,wait=off \
++-mon chardev=charmonitor,id=monitor,mode=control \
++-rtc base=utc \
++-no-shutdown \
++-boot strict=on \
++-device '{"driver":"pcie-root-port","port":16,"chassis":1,"id":"pci.1","bus":"pcie.0","multifunction":true,"addr":"0x2"}' \
++-device '{"driver":"pcie-root-port","port":17,"chassis":2,"id":"pci.2","bus":"pcie.0","addr":"0x2.0x1"}' \
++-device '{"driver":"qemu-xhci","id":"usb","bus":"pci.1","addr":"0x0"}' \
++-blockdev '{"driver":"host_device","filename":"/dev/HostVG/QEMUGuest1","node-name":"libvirt-1-storage","read-only":false}' \
++-device '{"driver":"ide-hd","bus":"ide.0","drive":"libvirt-1-storage","id":"sata0-0-0","bootindex":1}' \
++-audiodev '{"id":"audio1","driver":"none"}' \
++-device '{"driver":"qxl-vga","id":"video0","max_outputs":1,"ram_size":67108864,"vram_size":33554432,"vram64_size_mb":0,"vgamem_mb":8,"bus":"pcie.0","addr":"0x1"}' \
++-global ICH9-LPC.noreboot=off \
++-watchdog-action reset \
++-object '{"qom-type":"iommufd","id":"iommufd0","fd":"20"}' \
++-device '{"driver":"vfio-pci","id":"hostdev0","iommufd":"iommufd0","fd":"0","bus":"pcie.0","addr":"0x3"}' \
++-sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
++-msg timestamp=on
+diff --git a/tests/qemuxmlconfdata/iommufd-q35-fd.x86_64-latest.xml b/tests/qemuxmlconfdata/iommufd-q35-fd.x86_64-latest.xml
+new file mode 100644
+index 0000000000..a6be49cbb3
+--- /dev/null
++++ b/tests/qemuxmlconfdata/iommufd-q35-fd.x86_64-latest.xml
+@@ -0,0 +1,60 @@
++<domain type='qemu'>
++  <name>q35-test</name>
++  <uuid>11dbdcdd-4c3b-482b-8903-9bdb8c0a2774</uuid>
++  <memory unit='KiB'>2097152</memory>
++  <currentMemory unit='KiB'>2097152</currentMemory>
++  <vcpu placement='static' cpuset='0-1'>2</vcpu>
++  <iommufd enabled='yes' fdgroup='iommu'/>
++  <os>
++    <type arch='x86_64' machine='q35'>hvm</type>
++    <boot dev='hd'/>
++  </os>
++  <cpu mode='custom' match='exact' check='none'>
++    <model fallback='forbid'>qemu64</model>
++  </cpu>
++  <clock offset='utc'/>
++  <on_poweroff>destroy</on_poweroff>
++  <on_reboot>restart</on_reboot>
++  <on_crash>destroy</on_crash>
++  <devices>
++    <emulator>/usr/bin/qemu-system-x86_64</emulator>
++    <disk type='block' device='disk'>
++      <driver name='qemu' type='raw'/>
++      <source dev='/dev/HostVG/QEMUGuest1'/>
++      <target dev='sda' bus='sata'/>
++      <address type='drive' controller='0' bus='0' target='0' unit='0'/>
++    </disk>
++    <controller type='pci' index='0' model='pcie-root'/>
++    <controller type='pci' index='1' model='pcie-root-port'>
++      <model name='pcie-root-port'/>
++      <target chassis='1' port='0x10'/>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0' multifunction='on'/>
++    </controller>
++    <controller type='pci' index='2' model='pcie-root-port'>
++      <model name='pcie-root-port'/>
++      <target chassis='2' port='0x11'/>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x1'/>
++    </controller>
++    <controller type='sata' index='0'>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x1f' function='0x2'/>
++    </controller>
++    <controller type='usb' index='0' model='qemu-xhci'>
++      <address type='pci' domain='0x0000' bus='0x01' slot='0x00' function='0x0'/>
++    </controller>
++    <input type='mouse' bus='ps2'/>
++    <input type='keyboard' bus='ps2'/>
++    <audio id='1' type='none'/>
++    <video>
++      <model type='qxl' ram='65536' vram='32768' vgamem='8192' heads='1' primary='yes'/>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x0'/>
++    </video>
++    <hostdev mode='subsystem' type='pci' managed='yes'>
++      <source>
++        <address domain='0x0000' bus='0x06' slot='0x12' function='0x5'/>
++      </source>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
++    </hostdev>
++    <watchdog model='itco' action='reset'/>
++    <memballoon model='none'/>
++  </devices>
++</domain>
+diff --git a/tests/qemuxmlconfdata/iommufd-q35-fd.xml b/tests/qemuxmlconfdata/iommufd-q35-fd.xml
+new file mode 100644
+index 0000000000..1cef31fffa
+--- /dev/null
++++ b/tests/qemuxmlconfdata/iommufd-q35-fd.xml
+@@ -0,0 +1,38 @@
++<domain type='qemu'>
++  <name>q35-test</name>
++  <uuid>11dbdcdd-4c3b-482b-8903-9bdb8c0a2774</uuid>
++  <memory unit='KiB'>2097152</memory>
++  <currentMemory unit='KiB'>2097152</currentMemory>
++  <vcpu placement='static' cpuset='0-1'>2</vcpu>
++  <iommufd enabled='yes' fdgroup='iommu'/>
++  <os>
++    <type arch='x86_64' machine='q35'>hvm</type>
++    <boot dev='hd'/>
++  </os>
++  <clock offset='utc'/>
++  <on_poweroff>destroy</on_poweroff>
++  <on_reboot>restart</on_reboot>
++  <on_crash>destroy</on_crash>
++  <devices>
++    <emulator>/usr/bin/qemu-system-x86_64</emulator>
++    <disk type='block' device='disk'>
++      <source dev='/dev/HostVG/QEMUGuest1'/>
++      <target dev='sda' bus='sata'/>
++      <address type='drive' controller='0' bus='0' target='0' unit='0'/>
++    </disk>
++    <controller type='pci' index='0' model='pcie-root'/>
++    <hostdev mode='subsystem' type='pci' managed='yes'>
++      <source>
++        <address domain='0x0000' bus='0x06' slot='0x12' function='0x5'/>
++      </source>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
++    </hostdev>
++    <controller type='sata' index='0'/>
++    <input type='mouse' bus='ps2'/>
++    <input type='keyboard' bus='ps2'/>
++    <video>
++      <model type='qxl' ram='65536' vram='32768' vgamem='8192' heads='1'/>
++    </video>
++    <memballoon model='none'/>
++  </devices>
++</domain>
+diff --git a/tests/qemuxmlconftest.c b/tests/qemuxmlconftest.c
+index aa877bf16a..29b7e1883c 100644
+--- a/tests/qemuxmlconftest.c
++++ b/tests/qemuxmlconftest.c
+@@ -30,6 +30,9 @@
+ # define LIBVIRT_QEMU_CAPSPRIV_H_ALLOW
+ # include "qemu/qemu_capspriv.h"
+ 
++# define LIBVIRT_QEMU_PROCESSPRIV_H_ALLOW
++# include "qemu/qemu_processpriv.h"
++
+ # include "testutilsqemu.h"
+ 
+ # define VIR_FROM_THIS VIR_FROM_QEMU
+@@ -408,7 +411,9 @@ testQemuPrepareHostdev(virDomainObj *vm)
+         }
+     }
+ 
+-    if (virDomainDefHasPCIHostdevWithIOMMUFD(vm->def)) {
++    if (vm->def->iommufd_fdgroup) {
++        ignore_value(qemuProcessGetPassedIommuFd(vm));
++    } else if (virDomainDefHasPCIHostdevWithIOMMUFD(vm->def)) {
+         int iommufd = 0;
+         priv->iommufd = qemuFDPassDirectNew("iommufd", &iommufd);
+     }
+@@ -3099,6 +3104,8 @@ mymain(void)
+ 
+     DO_TEST_CAPS_LATEST("iommufd");
+     DO_TEST_CAPS_LATEST("iommufd-q35");
++    DO_TEST_CAPS_ARCH_LATEST_FULL("iommufd-q35-fd", "x86_64",
++                                  ARG_FD_GROUP, "iommu", false, 1, 20);
+     DO_TEST_CAPS_ARCH_LATEST("iommufd-virt", "aarch64");
+     DO_TEST_CAPS_ARCH_LATEST("iommufd-virt-pci-bus-single", "aarch64");
+ 
+-- 
+2.54.0

@@ -1,0 +1,157 @@
+From 247090edf75839e13a23885a84cf090fbdd42228 Mon Sep 17 00:00:00 2001
+Message-ID: <247090edf75839e13a23885a84cf090fbdd42228.1772815312.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Fri, 19 Dec 2025 15:19:26 +0100
+Subject: [PATCH] domain_validate: Reject ROMs with format other than raw
+
+The combination doesn't make sense.
+
+After this change the firmware-auto-efi-format-loader-qcow2-rom
+test case starts failing, as it should have in the first place.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit c74adb33e4d97202e08a53119f463c54370e5816)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/conf/domain_validate.c                    | 10 +++++
+ ...format-loader-qcow2-rom.x86_64-latest.args | 34 ----------------
+ ...-format-loader-qcow2-rom.x86_64-latest.err |  1 +
+ ...-format-loader-qcow2-rom.x86_64-latest.xml | 39 -------------------
+ tests/qemuxmlconftest.c                       |  2 +-
+ 5 files changed, 12 insertions(+), 74 deletions(-)
+ delete mode 100644 tests/qemuxmlconfdata/firmware-auto-efi-format-loader-qcow2-rom.x86_64-latest.args
+ create mode 100644 tests/qemuxmlconfdata/firmware-auto-efi-format-loader-qcow2-rom.x86_64-latest.err
+ delete mode 100644 tests/qemuxmlconfdata/firmware-auto-efi-format-loader-qcow2-rom.x86_64-latest.xml
+
+diff --git a/src/conf/domain_validate.c b/src/conf/domain_validate.c
+index 93a54f8cc7..7346a61731 100644
+--- a/src/conf/domain_validate.c
++++ b/src/conf/domain_validate.c
+@@ -1811,6 +1811,16 @@ virDomainDefOSValidate(const virDomainDef *def,
+         }
+     }
+ 
++    if (loader->type == VIR_DOMAIN_LOADER_TYPE_ROM) {
++        if (loader->format &&
++            loader->format != VIR_STORAGE_FILE_RAW) {
++            virReportError(VIR_ERR_XML_DETAIL,
++                           _("Invalid format '%1$s' for ROM loader type"),
++                           virStorageFileFormatTypeToString(loader->format));
++            return -1;
++        }
++    }
++
+     if (def->os.shim && !def->os.kernel) {
+         virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
+                        _("shim only allowed with kernel option"));
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-format-loader-qcow2-rom.x86_64-latest.args b/tests/qemuxmlconfdata/firmware-auto-efi-format-loader-qcow2-rom.x86_64-latest.args
+deleted file mode 100644
+index 417084d45e..0000000000
+--- a/tests/qemuxmlconfdata/firmware-auto-efi-format-loader-qcow2-rom.x86_64-latest.args
++++ /dev/null
+@@ -1,34 +0,0 @@
+-LC_ALL=C \
+-PATH=/bin \
+-HOME=/var/lib/libvirt/qemu/domain--1-guest \
+-USER=test \
+-LOGNAME=test \
+-XDG_DATA_HOME=/var/lib/libvirt/qemu/domain--1-guest/.local/share \
+-XDG_CACHE_HOME=/var/lib/libvirt/qemu/domain--1-guest/.cache \
+-XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-guest/.config \
+-/usr/bin/qemu-system-x86_64 \
+--name guest=guest,debug-threads=on \
+--S \
+--object '{"qom-type":"secret","id":"masterKey0","format":"raw","file":"/var/lib/libvirt/qemu/domain--1-guest/master-key.aes"}' \
+--machine pc-q35-10.0,usb=off,dump-guest-core=off,memory-backend=pc.ram,acpi=on \
+--accel kvm \
+--cpu qemu64 \
+--bios /usr/share/edk2/ovmf/OVMF.inteltdx.secboot.fd \
+--m size=1048576k \
+--object '{"qom-type":"memory-backend-ram","id":"pc.ram","size":1073741824}' \
+--overcommit mem-lock=off \
+--smp 1,sockets=1,cores=1,threads=1 \
+--uuid 63840878-0deb-4095-97e6-fc444d9bc9fa \
+--display none \
+--no-user-config \
+--nodefaults \
+--chardev socket,id=charmonitor,fd=1729,server=on,wait=off \
+--mon chardev=charmonitor,id=monitor,mode=control \
+--rtc base=utc \
+--no-shutdown \
+--boot strict=on \
+--audiodev '{"id":"audio1","driver":"none"}' \
+--global ICH9-LPC.noreboot=off \
+--watchdog-action reset \
+--sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
+--msg timestamp=on
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-format-loader-qcow2-rom.x86_64-latest.err b/tests/qemuxmlconfdata/firmware-auto-efi-format-loader-qcow2-rom.x86_64-latest.err
+new file mode 100644
+index 0000000000..b7b1400f6a
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-auto-efi-format-loader-qcow2-rom.x86_64-latest.err
+@@ -0,0 +1 @@
++Invalid format 'qcow2' for ROM loader type
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-format-loader-qcow2-rom.x86_64-latest.xml b/tests/qemuxmlconfdata/firmware-auto-efi-format-loader-qcow2-rom.x86_64-latest.xml
+deleted file mode 100644
+index 862a50ddb4..0000000000
+--- a/tests/qemuxmlconfdata/firmware-auto-efi-format-loader-qcow2-rom.x86_64-latest.xml
++++ /dev/null
+@@ -1,39 +0,0 @@
+-<domain type='kvm'>
+-  <name>guest</name>
+-  <uuid>63840878-0deb-4095-97e6-fc444d9bc9fa</uuid>
+-  <memory unit='KiB'>1048576</memory>
+-  <currentMemory unit='KiB'>1048576</currentMemory>
+-  <vcpu placement='static'>1</vcpu>
+-  <os firmware='efi'>
+-    <type arch='x86_64' machine='pc-q35-10.0'>hvm</type>
+-    <firmware>
+-      <feature enabled='yes' name='enrolled-keys'/>
+-      <feature enabled='yes' name='secure-boot'/>
+-    </firmware>
+-    <loader type='rom' format='qcow2'>/usr/share/edk2/ovmf/OVMF.inteltdx.secboot.fd</loader>
+-    <boot dev='hd'/>
+-  </os>
+-  <features>
+-    <acpi/>
+-  </features>
+-  <cpu mode='custom' match='exact' check='none'>
+-    <model fallback='forbid'>qemu64</model>
+-  </cpu>
+-  <clock offset='utc'/>
+-  <on_poweroff>destroy</on_poweroff>
+-  <on_reboot>restart</on_reboot>
+-  <on_crash>destroy</on_crash>
+-  <devices>
+-    <emulator>/usr/bin/qemu-system-x86_64</emulator>
+-    <controller type='usb' index='0' model='none'/>
+-    <controller type='sata' index='0'>
+-      <address type='pci' domain='0x0000' bus='0x00' slot='0x1f' function='0x2'/>
+-    </controller>
+-    <controller type='pci' index='0' model='pcie-root'/>
+-    <input type='mouse' bus='ps2'/>
+-    <input type='keyboard' bus='ps2'/>
+-    <audio id='1' type='none'/>
+-    <watchdog model='itco' action='reset'/>
+-    <memballoon model='none'/>
+-  </devices>
+-</domain>
+diff --git a/tests/qemuxmlconftest.c b/tests/qemuxmlconftest.c
+index 0a4dab9fe0..3296f6f990 100644
+--- a/tests/qemuxmlconftest.c
++++ b/tests/qemuxmlconftest.c
+@@ -1650,7 +1650,7 @@ mymain(void)
+     DO_TEST_CAPS_LATEST("firmware-auto-efi-nvram-network-iscsi");
+ 
+     DO_TEST_CAPS_LATEST("firmware-auto-efi-format-loader-qcow2");
+-    DO_TEST_CAPS_LATEST("firmware-auto-efi-format-loader-qcow2-rom");
++    DO_TEST_CAPS_LATEST_PARSE_ERROR("firmware-auto-efi-format-loader-qcow2-rom");
+     DO_TEST_CAPS_LATEST("firmware-auto-efi-format-loader-qcow2-nvram-path");
+     DO_TEST_CAPS_LATEST("firmware-auto-efi-format-nvram-qcow2");
+     DO_TEST_CAPS_LATEST("firmware-auto-efi-format-nvram-qcow2-path");
+-- 
+2.53.0

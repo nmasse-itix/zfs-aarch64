@@ -1,0 +1,33 @@
+From 71ada452d793af287917d562e6b4326201fa48d2 Mon Sep 17 00:00:00 2001
+Message-ID: <71ada452d793af287917d562e6b4326201fa48d2.1771423832.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Sat, 14 Feb 2026 16:12:11 +0100
+Subject: [PATCH] qemu_domain: Add missing IOMMUFD cleanup
+
+If starting VM fails we would leak the FD for IOMMU device.
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 7c062bfc4f8c0ba853873e72d21dba77f6ca938f)
+
+Resolves: https://issues.redhat.com/browse/RHEL-150353
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/qemu/qemu_domain.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/qemu/qemu_domain.c b/src/qemu/qemu_domain.c
+index bdab117e96..64b01e524f 100644
+--- a/src/qemu/qemu_domain.c
++++ b/src/qemu/qemu_domain.c
+@@ -1975,6 +1975,8 @@ qemuDomainObjPrivateDataClear(qemuDomainObjPrivate *priv)
+ 
+     priv->migrationRecoverSetup = false;
+ 
++    VIR_FORCE_CLOSE(priv->iommufd);
++
+     g_clear_pointer(&priv->memoryBackingDir, g_free);
+ }
+ 
+-- 
+2.53.0

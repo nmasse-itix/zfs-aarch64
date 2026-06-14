@@ -1,0 +1,127 @@
+From d1421d7387a3a747d3476471d7c94b294cfb2748 Mon Sep 17 00:00:00 2001
+Message-ID: <d1421d7387a3a747d3476471d7c94b294cfb2748.1780571167.git.jdenemar@redhat.com>
+From: Jiri Denemark <jdenemar@redhat.com>
+Date: Mon, 25 May 2026 12:27:41 +0200
+Subject: [PATCH] util: Publish and mock virHostCPUGetMSRFromKVM
+
+The function will later be called when probing QEMU capabilities.
+
+Signed-off-by: Jiri Denemark <jdenemar@redhat.com>
+Reviewed-by: Peter Krempa <pkrempa@redhat.com>
+(cherry picked from commit 3184289356bd97daa75f77bec189e5ce152ba5e6)
+
+https://redhat.atlassian.net/browse/RHEL-177364
+
+Signed-off-by: Jiri Denemark <jdenemar@redhat.com>
+---
+ src/libvirt_private.syms |  1 +
+ src/util/virhostcpu.c    | 22 +++++++++++++++++++++-
+ src/util/virhostcpu.h    |  3 +++
+ tests/qemucpumock.c      | 22 ++++++++++++++++++++++
+ 4 files changed, 47 insertions(+), 1 deletion(-)
+
+diff --git a/src/libvirt_private.syms b/src/libvirt_private.syms
+index 1733286bad..3eca15f066 100644
+--- a/src/libvirt_private.syms
++++ b/src/libvirt_private.syms
+@@ -2586,6 +2586,7 @@ virHostCPUGetKVMMaxVCPUs;
+ virHostCPUGetMap;
+ virHostCPUGetMicrocodeVersion;
+ virHostCPUGetMSR;
++virHostCPUGetMSRFromKVM;
+ virHostCPUGetOnline;
+ virHostCPUGetOnlineBitmap;
+ virHostCPUGetPhysAddrSize;
+diff --git a/src/util/virhostcpu.c b/src/util/virhostcpu.c
+index 09395ddb04..a23a3f95e7 100644
+--- a/src/util/virhostcpu.c
++++ b/src/util/virhostcpu.c
+@@ -1329,7 +1329,18 @@ virHostCPUGetMicrocodeVersion(virArch hostArch G_GNUC_UNUSED)
+ 
+ #if WITH_LINUX_KVM_H && defined(KVM_GET_MSRS) && \
+     (defined(__i386__) || defined(__x86_64__))
+-static int
++/**
++ * virHostCPUGetMSRFromKVM:
++ * @index: MSR to read
++ * @result: where to store the content of the @index register
++ *
++ * Reads the 64b content of the specified register via KVM_GET_MSRS ioctl.
++ *
++ * Returns 0 on success,
++ *         1 when the MSR is not supported by the host CPU,
++ *        -1 on error.
++ */
++int
+ virHostCPUGetMSRFromKVM(unsigned long index,
+                         uint64_t *result)
+ {
+@@ -1566,6 +1577,15 @@ virHostCPUGetCPUID(void)
+     return NULL;
+ }
+ 
++int
++virHostCPUGetMSRFromKVM(unsigned long index G_GNUC_UNUSED,
++                        uint64_t *result G_GNUC_UNUSED)
++{
++    virReportSystemError(ENOSYS, "%s",
++                         _("Reading MSRs is not supported on this platform"));
++    return -1;
++}
++
+ int
+ virHostCPUGetMSR(unsigned long index G_GNUC_UNUSED,
+                  uint64_t *msr G_GNUC_UNUSED)
+diff --git a/src/util/virhostcpu.h b/src/util/virhostcpu.h
+index 289ae41439..24c7fdaf7c 100644
+--- a/src/util/virhostcpu.h
++++ b/src/util/virhostcpu.h
+@@ -80,6 +80,9 @@ int virHostCPUGetOnline(unsigned int cpu, bool *online);
+ unsigned int
+ virHostCPUGetMicrocodeVersion(virArch hostArch) ATTRIBUTE_MOCKABLE;
+ 
++int virHostCPUGetMSRFromKVM(unsigned long index,
++                            uint64_t *result) ATTRIBUTE_MOCKABLE;
++
+ int virHostCPUGetMSR(unsigned long index,
+                      uint64_t *msr);
+ 
+diff --git a/tests/qemucpumock.c b/tests/qemucpumock.c
+index 5a63308347..de1e79bfc1 100644
+--- a/tests/qemucpumock.c
++++ b/tests/qemucpumock.c
+@@ -23,6 +23,7 @@
+ #include "qemu/qemu_capspriv.h"
+ #include "testutilshostcpus.h"
+ #include "virarch.h"
++#include "util/virhostcpu.h"
+ 
+ 
+ virCPUDef *
+@@ -33,3 +34,24 @@ virQEMUCapsProbeHostCPU(virArch hostArch G_GNUC_UNUSED,
+ 
+     return testUtilsHostCpusGetDefForModel(model);
+ }
++
++
++int
++virHostCPUGetMSRFromKVM(unsigned long index,
++                        uint64_t *result)
++{
++    if (index == 0x10a) {
++        /* Return some arbitrary bits in arch-capabilities MSR */
++        *result =
++            0x00000001 | /* rdctl-no */
++            0x00000008 | /* skip-l1dfl-vmentry */
++            0x00000020 | /* mds-no */
++            0x00000040 | /* pschange-mc-no */
++            0x04000000 | /* gds-no */
++            0x08000000;  /* rfds-no */
++        return 0;
++    }
++
++    errno = ENOTSUP;
++    return -1;
++}
+-- 
+2.54.0

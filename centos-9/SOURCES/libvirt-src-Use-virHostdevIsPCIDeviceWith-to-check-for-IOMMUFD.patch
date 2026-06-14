@@ -1,0 +1,152 @@
+From 8442235a61de81d3572cc955a0b40969347fa6a1 Mon Sep 17 00:00:00 2001
+Message-ID: <8442235a61de81d3572cc955a0b40969347fa6a1.1780571166.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Fri, 13 Mar 2026 12:25:13 +0100
+Subject: [PATCH] src: Use virHostdevIsPCIDeviceWith* to check for IOMMUFD
+
+Use virHostdevIsPCIDeviceWithIOMMUFD where we need to check if hostdev
+is PCI device using IOMMUFD and virHostdevIsPCIDeviceWithoutIOMMUFD
+where we need to check if hostdev is PCI device not using IOMMUFD.
+
+Fixes: 7d2f91f9cb572ab95d0916bdd1a46dd198874529
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Peter Krempa <pkrempa@redhat.com>
+(cherry picked from commit c1d38e9428783730f063b59ad32f08d2e80aff9f)
+
+Resolves: https://redhat.atlassian.net/browse/RHEL-156803
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/qemu/qemu_cgroup.c           | 2 +-
+ src/qemu/qemu_command.c          | 2 +-
+ src/qemu/qemu_namespace.c        | 2 +-
+ src/qemu/qemu_validate.c         | 2 +-
+ src/security/security_apparmor.c | 2 +-
+ src/security/security_dac.c      | 4 ++--
+ src/security/security_selinux.c  | 4 ++--
+ src/security/virt-aa-helper.c    | 2 +-
+ 8 files changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/src/qemu/qemu_cgroup.c b/src/qemu/qemu_cgroup.c
+index 6148990f19..0e1815f571 100644
+--- a/src/qemu/qemu_cgroup.c
++++ b/src/qemu/qemu_cgroup.c
+@@ -479,7 +479,7 @@ qemuSetupHostdevCgroup(virDomainObj *vm,
+     g_autofree char *path = NULL;
+     int perms;
+ 
+-    if (dev->source.subsys.u.pci.driver.iommufd == VIR_TRISTATE_BOOL_YES)
++    if (virHostdevIsPCIDeviceWithIOMMUFD(dev))
+         return 0;
+ 
+     if (!virCgroupHasController(priv->cgroup, VIR_CGROUP_CONTROLLER_DEVICES))
+diff --git a/src/qemu/qemu_command.c b/src/qemu/qemu_command.c
+index db512f6757..23e799de3c 100644
+--- a/src/qemu/qemu_command.c
++++ b/src/qemu/qemu_command.c
+@@ -5259,7 +5259,7 @@ qemuBuildHostdevCommandLine(virCommand *cmd,
+             if (qemuCommandAddExtDevice(cmd, hostdev->info, def, qemuCaps) < 0)
+                 return -1;
+ 
+-            if (subsys->u.pci.driver.iommufd == VIR_TRISTATE_BOOL_YES) {
++            if (virHostdevIsPCIDeviceWithIOMMUFD(hostdev)) {
+                 qemuDomainHostdevPrivate *hostdevPriv = QEMU_DOMAIN_HOSTDEV_PRIVATE(hostdev);
+ 
+                 qemuFDPassDirectTransferCommand(hostdevPriv->vfioDeviceFd, cmd);
+diff --git a/src/qemu/qemu_namespace.c b/src/qemu/qemu_namespace.c
+index fb0734193d..4a063064f1 100644
+--- a/src/qemu/qemu_namespace.c
++++ b/src/qemu/qemu_namespace.c
+@@ -345,7 +345,7 @@ qemuDomainSetupHostdev(virDomainObj *vm,
+ {
+     g_autofree char *path = NULL;
+ 
+-    if (hostdev->source.subsys.u.pci.driver.iommufd == VIR_TRISTATE_BOOL_YES)
++    if (virHostdevIsPCIDeviceWithIOMMUFD(hostdev))
+         return 0;
+ 
+     if (qemuDomainGetHostdevPath(hostdev, &path, NULL) < 0)
+diff --git a/src/qemu/qemu_validate.c b/src/qemu/qemu_validate.c
+index 5c8c21335d..63c5f8e037 100644
+--- a/src/qemu/qemu_validate.c
++++ b/src/qemu/qemu_validate.c
+@@ -2722,7 +2722,7 @@ qemuValidateDomainDeviceDefHostdev(const virDomainHostdevDef *hostdev,
+                     return -1;
+                 }
+ 
+-                if (hostdev->source.subsys.u.pci.driver.iommufd == VIR_TRISTATE_BOOL_YES) {
++                if (virHostdevIsPCIDeviceWithIOMMUFD(hostdev)) {
+                     if (!virQEMUCapsGet(qemuCaps, QEMU_CAPS_OBJECT_IOMMUFD)) {
+                         virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
+                                        _("IOMMUFD is not supported by this version of qemu"));
+diff --git a/src/security/security_apparmor.c b/src/security/security_apparmor.c
+index 40f13ec1a5..e53486ee0c 100644
+--- a/src/security/security_apparmor.c
++++ b/src/security/security_apparmor.c
+@@ -847,7 +847,7 @@ AppArmorSetSecurityHostdevLabel(virSecurityManager *mgr,
+             return -1;
+ 
+         if (pcisrc->driver.name == VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_VFIO) {
+-            if (dev->source.subsys.u.pci.driver.iommufd != VIR_TRISTATE_BOOL_YES) {
++            if (virHostdevIsPCIDeviceWithoutIOMMUFD(dev)) {
+                 g_autofree char *vfioGroupDev = virPCIDeviceGetIOMMUGroupDev(pci);
+ 
+                 if (!vfioGroupDev)
+diff --git a/src/security/security_dac.c b/src/security/security_dac.c
+index d8cf117fc4..b891f6f121 100644
+--- a/src/security/security_dac.c
++++ b/src/security/security_dac.c
+@@ -1283,7 +1283,7 @@ virSecurityDACSetHostdevLabel(virSecurityManager *mgr,
+             return -1;
+ 
+         if (pcisrc->driver.name == VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_VFIO) {
+-            if (dev->source.subsys.u.pci.driver.iommufd != VIR_TRISTATE_BOOL_YES) {
++            if (virHostdevIsPCIDeviceWithoutIOMMUFD(dev)) {
+                 g_autofree char *vfioGroupDev = virPCIDeviceGetIOMMUGroupDev(pci);
+ 
+                 if (!vfioGroupDev)
+@@ -1454,7 +1454,7 @@ virSecurityDACRestoreHostdevLabel(virSecurityManager *mgr,
+             return -1;
+ 
+         if (pcisrc->driver.name == VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_VFIO) {
+-            if (dev->source.subsys.u.pci.driver.iommufd != VIR_TRISTATE_BOOL_YES) {
++            if (virHostdevIsPCIDeviceWithoutIOMMUFD(dev)) {
+                 g_autofree char *vfioGroupDev = virPCIDeviceGetIOMMUGroupDev(pci);
+ 
+                 if (!vfioGroupDev)
+diff --git a/src/security/security_selinux.c b/src/security/security_selinux.c
+index 0fa50630f7..2b801aecd5 100644
+--- a/src/security/security_selinux.c
++++ b/src/security/security_selinux.c
+@@ -2255,7 +2255,7 @@ virSecuritySELinuxSetHostdevSubsysLabel(virSecurityManager *mgr,
+             return -1;
+ 
+         if (pcisrc->driver.name == VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_VFIO) {
+-            if (dev->source.subsys.u.pci.driver.iommufd != VIR_TRISTATE_BOOL_YES) {
++            if (virHostdevIsPCIDeviceWithoutIOMMUFD(dev)) {
+                 g_autofree char *vfioGroupDev = virPCIDeviceGetIOMMUGroupDev(pci);
+ 
+                 if (!vfioGroupDev)
+@@ -2499,7 +2499,7 @@ virSecuritySELinuxRestoreHostdevSubsysLabel(virSecurityManager *mgr,
+             return -1;
+ 
+         if (pcisrc->driver.name == VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_VFIO) {
+-            if (dev->source.subsys.u.pci.driver.iommufd != VIR_TRISTATE_BOOL_YES) {
++            if (virHostdevIsPCIDeviceWithoutIOMMUFD(dev)) {
+                 g_autofree char *vfioGroupDev = virPCIDeviceGetIOMMUGroupDev(pci);
+ 
+                 if (!vfioGroupDev)
+diff --git a/src/security/virt-aa-helper.c b/src/security/virt-aa-helper.c
+index 29e844c7ff..af95a64c42 100644
+--- a/src/security/virt-aa-helper.c
++++ b/src/security/virt-aa-helper.c
+@@ -1117,7 +1117,7 @@ get_files(vahControl * ctl)
+ 
+             if ((driverName == VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_VFIO ||
+                 driverName == VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_DEFAULT) &&
+-                dev->source.subsys.u.pci.driver.iommufd != VIR_TRISTATE_BOOL_YES) {
++                virHostdevIsPCIDeviceWithoutIOMMUFD(dev)) {
+                 needsVfio = true;
+             }
+ 
+-- 
+2.54.0

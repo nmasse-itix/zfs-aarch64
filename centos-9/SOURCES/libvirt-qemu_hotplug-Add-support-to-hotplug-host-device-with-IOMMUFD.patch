@@ -1,0 +1,134 @@
+From 85d04af274dbda131798bbce63773f8b71639723 Mon Sep 17 00:00:00 2001
+Message-ID: <85d04af274dbda131798bbce63773f8b71639723.1771423832.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Sun, 15 Feb 2026 21:21:53 +0100
+Subject: [PATCH] qemu_hotplug: Add support to hotplug host device with IOMMUFD
+
+For first host device we need to add iommufd object as well.
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 5d16bef1a69500791be454239e3b9ac68ec53ace)
+
+Resolves: https://issues.redhat.com/browse/RHEL-150353
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/qemu/qemu_hotplug.c | 39 +++++++++++++++++++++++++++++++++++++++
+ src/qemu/qemu_process.c |  4 ++--
+ src/qemu/qemu_process.h |  3 +++
+ 3 files changed, 44 insertions(+), 2 deletions(-)
+
+diff --git a/src/qemu/qemu_hotplug.c b/src/qemu/qemu_hotplug.c
+index 10ad13a416..a455c2cd53 100644
+--- a/src/qemu/qemu_hotplug.c
++++ b/src/qemu/qemu_hotplug.c
+@@ -1561,13 +1561,16 @@ qemuDomainAttachHostPCIDevice(virQEMUDriver *driver,
+     virDomainDeviceDef dev = { VIR_DOMAIN_DEVICE_HOSTDEV,
+                                { .hostdev = hostdev } };
+     virDomainDeviceInfo *info = hostdev->info;
++    qemuDomainHostdevPrivate *hostdevPriv = QEMU_DOMAIN_HOSTDEV_PRIVATE(hostdev);
+     int ret;
+     g_autoptr(virJSONValue) devprops = NULL;
++    g_autoptr(virJSONValue) objprops = NULL;
+     bool releaseaddr = false;
+     bool teardowncgroup = false;
+     bool teardownlabel = false;
+     bool teardowndevice = false;
+     bool teardownmemlock = false;
++    bool removeiommufd = false;
+     g_autoptr(virQEMUDriverConfig) cfg = virQEMUDriverGetConfig(driver);
+     unsigned int flags = 0;
+ 
+@@ -1617,11 +1620,38 @@ qemuDomainAttachHostPCIDevice(virQEMUDriver *driver,
+         goto error;
+     }
+ 
++    if (virHostdevIsPCIDeviceWithIOMMUFD(hostdev)) {
++        if (qemuProcessOpenVfioDeviceFd(hostdev) < 0)
++            goto error;
++
++        if (!priv->iommufdState) {
++            if (qemuProcessOpenIommuFd(vm) < 0)
++                goto error;
++
++            if (!(objprops = qemuBuildIOMMUFDProps(priv->iommufd)))
++                goto error;
++        }
++    }
++
+     if (!(devprops = qemuBuildPCIHostdevDevProps(vm->def, hostdev)))
+         goto error;
+ 
+     qemuDomainObjEnterMonitor(vm);
+ 
++    if (objprops) {
++        if ((ret = qemuFDPassDirectTransferMonitor(priv->iommufd, priv->mon)) < 0)
++            goto exit_monitor;
++
++        if ((ret = qemuMonitorAddObject(priv->mon, &objprops, NULL)) < 0)
++            goto exit_monitor;
++
++        priv->iommufdState = true;
++        removeiommufd = true;
++    }
++
++    if ((ret = qemuFDPassDirectTransferMonitor(hostdevPriv->vfioDeviceFd, priv->mon)) < 0)
++        goto exit_monitor;
++
+     if ((ret = qemuDomainAttachExtensionDevice(priv->mon, hostdev->info)) < 0)
+         goto exit_monitor;
+ 
+@@ -1652,6 +1682,15 @@ qemuDomainAttachHostPCIDevice(virQEMUDriver *driver,
+     if (teardownmemlock && qemuDomainAdjustMaxMemLock(vm) < 0)
+         VIR_WARN("Unable to reset maximum locked memory on hotplug fail");
+ 
++    if (removeiommufd) {
++        qemuDomainObjEnterMonitor(vm);
++        ignore_value(qemuMonitorDelObject(priv->mon, "iommufd0", false));
++        qemuDomainObjExitMonitor(vm);
++    }
++
++    qemuFDPassDirectTransferMonitorRollback(hostdevPriv->vfioDeviceFd, priv->mon);
++    qemuFDPassDirectTransferMonitorRollback(priv->iommufd, priv->mon);
++
+     if (releaseaddr)
+         qemuDomainReleaseDeviceAddress(vm, info);
+ 
+diff --git a/src/qemu/qemu_process.c b/src/qemu/qemu_process.c
+index 59fff1aa19..1aff3a277b 100644
+--- a/src/qemu/qemu_process.c
++++ b/src/qemu/qemu_process.c
+@@ -7681,7 +7681,7 @@ qemuProcessPrepareHostBackendChardevHotplug(virDomainObj *vm,
+  *
+  * Returns: 0 on success, -1 on failure
+  */
+-static int
++int
+ qemuProcessOpenIommuFd(virDomainObj *vm)
+ {
+     qemuDomainObjPrivate *priv = vm->privateData;
+@@ -7705,7 +7705,7 @@ qemuProcessOpenIommuFd(virDomainObj *vm)
+  *
+  * Returns: 0 on success, -1 on failure
+  */
+-static int
++int
+ qemuProcessOpenVfioDeviceFd(virDomainHostdevDef *hostdev)
+ {
+     qemuDomainHostdevPrivate *hostdevPriv = QEMU_DOMAIN_HOSTDEV_PRIVATE(hostdev);
+diff --git a/src/qemu/qemu_process.h b/src/qemu/qemu_process.h
+index df78b00abb..1023b7cb25 100644
+--- a/src/qemu/qemu_process.h
++++ b/src/qemu/qemu_process.h
+@@ -134,6 +134,9 @@ int qemuProcessPrepareHostBackendChardevHotplug(virDomainObj *vm,
+                                                 virDomainDeviceDef *dev)
+     ATTRIBUTE_MOCKABLE;
+ 
++int qemuProcessOpenIommuFd(virDomainObj *vm);
++
++int qemuProcessOpenVfioDeviceFd(virDomainHostdevDef *hostdev);
+ 
+ int qemuProcessPrepareHost(virQEMUDriver *driver,
+                            virDomainObj *vm,
+-- 
+2.53.0

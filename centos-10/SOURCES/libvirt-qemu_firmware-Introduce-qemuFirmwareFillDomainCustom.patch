@@ -1,0 +1,80 @@
+From 139ffa47b64ade1e88dbe17ef049bd1303305a79 Mon Sep 17 00:00:00 2001
+Message-ID: <139ffa47b64ade1e88dbe17ef049bd1303305a79.1772815312.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Mon, 24 Nov 2025 18:53:14 +0100
+Subject: [PATCH] qemu_firmware: Introduce qemuFirmwareFillDomainCustom()
+
+Simple helper for the case where completely custom firmware paths
+are in use. It's quite trivial right now, but it will be expanded
+slightly in an upcoming commit.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 3acdcd2eb78a7cc8a17acc279dfbddf873dea1f8)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/qemu/qemu_firmware.c | 38 ++++++++++++++++++++++++++++++--------
+ 1 file changed, 30 insertions(+), 8 deletions(-)
+
+diff --git a/src/qemu/qemu_firmware.c b/src/qemu/qemu_firmware.c
+index 9dff3828a2..9b6c14701f 100644
+--- a/src/qemu/qemu_firmware.c
++++ b/src/qemu/qemu_firmware.c
+@@ -1601,6 +1601,32 @@ qemuFirmwareFetchParsedConfigs(bool privileged,
+ }
+ 
+ 
++/**
++ * qemuFirmwareFillDomainCustom:
++ * @def: domain definition
++ *
++ * Fill in whatever information we can when totally custom firmware
++ * paths are in use.
++ *
++ * Should only be used as a fallback in case looking at the firmware
++ * descriptors yielded no results, and neither did going through the
++ * legacy list of CODE:VARS pairs.
++ */
++static void
++qemuFirmwareFillDomainCustom(virDomainDef *def)
++{
++    virDomainLoaderDef *loader = def->os.loader;
++
++    if (!loader)
++        return;
++
++    if (!loader->format)
++        loader->format = VIR_STORAGE_FILE_RAW;
++
++    return;
++}
++
++
+ /**
+  * qemuFirmwareFillDomainLegacy:
+  * @driver: QEMU driver
+@@ -1890,15 +1916,11 @@ qemuFirmwareFillDomain(virQEMUDriver *driver,
+             if ((ret = qemuFirmwareFillDomainLegacy(driver, def)) < 0)
+                 return -1;
+ 
+-            /* If we've gotten this far without finding a match, it
+-             * means that we're dealing with a set of completely
+-             * custom paths. In that case, unless the user has
+-             * specified otherwise, we have to assume that they're in
+-             * raw format */
+             if (ret == 1) {
+-                if (loader && !loader->format) {
+-                    loader->format = VIR_STORAGE_FILE_RAW;
+-                }
++                /* If we've gotten this far without finding a match,
++                 * it means that we're dealing with a set of completely
++                 * custom paths. We can still fill in some information */
++                qemuFirmwareFillDomainCustom(def);
+             }
+         } else {
+             virReportError(VIR_ERR_OPERATION_FAILED,
+-- 
+2.53.0

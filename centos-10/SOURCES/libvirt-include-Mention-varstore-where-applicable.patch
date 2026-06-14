@@ -1,0 +1,69 @@
+From af33f07936bd97081a626499700a872c9cfdbecb Mon Sep 17 00:00:00 2001
+Message-ID: <af33f07936bd97081a626499700a872c9cfdbecb.1772815314.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Fri, 30 Jan 2026 18:34:40 +0100
+Subject: [PATCH] include: Mention varstore where applicable
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+We are not introducing additional API flags for varstore
+handling since that would require unnecessary churn in all
+libvirt-based apps, and the intent is the same: recreate
+the UEFI variable storage, be it NVRAM or varstore, from its
+template.
+
+In order to clarify that the existing flags affect varstore
+too, update their documentation.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+Reviewed-by: Daniel P. Berrangé <berrange@redhat.com>
+(cherry picked from commit 31e40b6229cd3bc1affaecdc577f1ec1dd85d54c)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ include/libvirt/libvirt-domain-snapshot.h | 2 +-
+ include/libvirt/libvirt-domain.h          | 4 ++--
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/include/libvirt/libvirt-domain-snapshot.h b/include/libvirt/libvirt-domain-snapshot.h
+index a11cd3f823..e14b661e37 100644
+--- a/include/libvirt/libvirt-domain-snapshot.h
++++ b/include/libvirt/libvirt-domain-snapshot.h
+@@ -217,7 +217,7 @@ typedef enum {
+     VIR_DOMAIN_SNAPSHOT_REVERT_RUNNING = 1 << 0, /* Run after revert (Since: 0.9.5) */
+     VIR_DOMAIN_SNAPSHOT_REVERT_PAUSED  = 1 << 1, /* Pause after revert (Since: 0.9.5) */
+     VIR_DOMAIN_SNAPSHOT_REVERT_FORCE   = 1 << 2, /* Allow risky reverts (Since: 0.9.7) */
+-    VIR_DOMAIN_SNAPSHOT_REVERT_RESET_NVRAM = 1 << 3, /* Re-initialize NVRAM from template (Since: 8.1.0) */
++    VIR_DOMAIN_SNAPSHOT_REVERT_RESET_NVRAM = 1 << 3, /* Re-initialize NVRAM/varstore from template (Since: 8.1.0) */
+ } virDomainSnapshotRevertFlags;
+ 
+ /* Revert the domain to a point-in-time snapshot.  The
+diff --git a/include/libvirt/libvirt-domain.h b/include/libvirt/libvirt-domain.h
+index 8e62bd23d4..221e22443e 100644
+--- a/include/libvirt/libvirt-domain.h
++++ b/include/libvirt/libvirt-domain.h
+@@ -371,7 +371,7 @@ typedef enum {
+     VIR_DOMAIN_START_BYPASS_CACHE = 1 << 2, /* Avoid file system cache pollution (Since: 0.9.4) */
+     VIR_DOMAIN_START_FORCE_BOOT   = 1 << 3, /* Boot, discarding any managed save (Since: 0.9.5) */
+     VIR_DOMAIN_START_VALIDATE     = 1 << 4, /* Validate the XML document against schema (Since: 1.2.12) */
+-    VIR_DOMAIN_START_RESET_NVRAM  = 1 << 5, /* Re-initialize NVRAM from template (Since: 8.1.0) */
++    VIR_DOMAIN_START_RESET_NVRAM  = 1 << 5, /* Re-initialize NVRAM/varstore from template (Since: 8.1.0) */
+ } virDomainCreateFlags;
+ 
+ 
+@@ -1652,7 +1652,7 @@ typedef enum {
+     VIR_DOMAIN_SAVE_BYPASS_CACHE = 1 << 0, /* Avoid file system cache pollution (Since: 0.9.4) */
+     VIR_DOMAIN_SAVE_RUNNING      = 1 << 1, /* Favor running over paused (Since: 0.9.5) */
+     VIR_DOMAIN_SAVE_PAUSED       = 1 << 2, /* Favor paused over running (Since: 0.9.5) */
+-    VIR_DOMAIN_SAVE_RESET_NVRAM  = 1 << 3, /* Re-initialize NVRAM from template (Since: 8.1.0) */
++    VIR_DOMAIN_SAVE_RESET_NVRAM  = 1 << 3, /* Re-initialize NVRAM/varstore from template (Since: 8.1.0) */
+ } virDomainSaveRestoreFlags;
+ 
+ int                     virDomainSave           (virDomainPtr domain,
+-- 
+2.53.0

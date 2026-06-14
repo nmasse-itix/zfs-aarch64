@@ -1,0 +1,1232 @@
+From 60206391727e48595c124d5254614ab7cd6656eb Mon Sep 17 00:00:00 2001
+Message-ID: <60206391727e48595c124d5254614ab7cd6656eb.1772815313.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Fri, 30 Jan 2026 17:45:08 +0100
+Subject: [PATCH] qemu: Fill in varstore element in domcaps
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The element should only be advertised as supported if the QEMU
+binary contains the necessary device and a suitable JSON firmware
+descriptor is found on the system. Right now the latter
+requirement is not satisfied, so it's marked as not supported
+across the board.
+
+The qemufirmware test is extended to cover the new attribute.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+Reviewed-by: Daniel P. Berrangé <berrange@redhat.com>
+(cherry picked from commit 500c010df26450ecf7459874d35c0796b19910ec)
+
+Conflicts:
+
+  * tests/domaincapsdata/qemu_10.1.0.s390x.xml
+    tests/domaincapsdata/qemu_10.2.0-virt.aarch64.xml
+    tests/domaincapsdata/qemu_10.2.0.aarch64.xml
+    tests/domaincapsdata/qemu_11.0.0-q35.x86_64.xml
+    tests/domaincapsdata/qemu_11.0.0-tcg.x86_64.xml
+    tests/domaincapsdata/qemu_11.0.0-virt.aarch64.xml
+    tests/domaincapsdata/qemu_11.0.0.aarch64.xml
+    tests/domaincapsdata/qemu_11.0.0.x86_64.xml
+
+    - Missing downstream
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ src/qemu/qemu_capabilities.c                  | 26 +++++++++++++++-
+ src/qemu/qemu_firmware.c                      |  6 ++++
+ src/qemu/qemu_firmware.h                      |  1 +
+ .../qemu_10.0.0-q35.x86_64+amdsev.xml         |  1 +
+ .../domaincapsdata/qemu_10.0.0-q35.x86_64.xml |  1 +
+ .../qemu_10.0.0-tcg.x86_64+amdsev.xml         |  1 +
+ .../domaincapsdata/qemu_10.0.0-tcg.x86_64.xml |  1 +
+ .../qemu_10.0.0-virt.aarch64.xml              |  1 +
+ tests/domaincapsdata/qemu_10.0.0.aarch64.xml  |  1 +
+ tests/domaincapsdata/qemu_10.0.0.ppc64.xml    |  1 +
+ tests/domaincapsdata/qemu_10.0.0.s390x.xml    |  1 +
+ .../qemu_10.0.0.x86_64+amdsev.xml             |  1 +
+ tests/domaincapsdata/qemu_10.0.0.x86_64.xml   |  1 +
+ .../qemu_10.1.0-q35.x86_64+inteltdx.xml       |  1 +
+ .../domaincapsdata/qemu_10.1.0-q35.x86_64.xml |  1 +
+ .../qemu_10.1.0-tcg.x86_64+inteltdx.xml       |  1 +
+ .../domaincapsdata/qemu_10.1.0-tcg.x86_64.xml |  1 +
+ .../qemu_10.1.0.x86_64+inteltdx.xml           |  1 +
+ tests/domaincapsdata/qemu_10.1.0.x86_64.xml   |  1 +
+ .../qemu_10.2.0-q35.x86_64+mshv.xml           |  1 +
+ .../domaincapsdata/qemu_10.2.0-q35.x86_64.xml |  1 +
+ .../qemu_10.2.0-tcg.x86_64+mshv.xml           |  1 +
+ .../domaincapsdata/qemu_10.2.0-tcg.x86_64.xml |  1 +
+ .../qemu_10.2.0.x86_64+mshv.xml               |  1 +
+ tests/domaincapsdata/qemu_10.2.0.x86_64.xml   |  1 +
+ .../domaincapsdata/qemu_6.2.0-q35.x86_64.xml  |  1 +
+ .../domaincapsdata/qemu_6.2.0-tcg.x86_64.xml  |  1 +
+ tests/domaincapsdata/qemu_6.2.0.ppc64.xml     |  1 +
+ tests/domaincapsdata/qemu_6.2.0.x86_64.xml    |  1 +
+ .../domaincapsdata/qemu_7.0.0-q35.x86_64.xml  |  1 +
+ .../domaincapsdata/qemu_7.0.0-tcg.x86_64.xml  |  1 +
+ tests/domaincapsdata/qemu_7.0.0.ppc64.xml     |  1 +
+ tests/domaincapsdata/qemu_7.0.0.x86_64.xml    |  1 +
+ .../domaincapsdata/qemu_7.1.0-q35.x86_64.xml  |  1 +
+ .../domaincapsdata/qemu_7.1.0-tcg.x86_64.xml  |  1 +
+ tests/domaincapsdata/qemu_7.1.0.ppc64.xml     |  1 +
+ tests/domaincapsdata/qemu_7.1.0.x86_64.xml    |  1 +
+ .../qemu_7.2.0-hvf.x86_64+hvf.xml             |  1 +
+ .../domaincapsdata/qemu_7.2.0-q35.x86_64.xml  |  1 +
+ .../qemu_7.2.0-tcg.x86_64+hvf.xml             |  1 +
+ .../domaincapsdata/qemu_7.2.0-tcg.x86_64.xml  |  1 +
+ tests/domaincapsdata/qemu_7.2.0.ppc.xml       |  1 +
+ tests/domaincapsdata/qemu_7.2.0.x86_64.xml    |  1 +
+ .../domaincapsdata/qemu_8.0.0-q35.x86_64.xml  |  1 +
+ .../domaincapsdata/qemu_8.0.0-tcg.x86_64.xml  |  1 +
+ tests/domaincapsdata/qemu_8.0.0.x86_64.xml    |  1 +
+ .../domaincapsdata/qemu_8.1.0-q35.x86_64.xml  |  1 +
+ .../domaincapsdata/qemu_8.1.0-tcg.x86_64.xml  |  1 +
+ tests/domaincapsdata/qemu_8.1.0.s390x.xml     |  1 +
+ tests/domaincapsdata/qemu_8.1.0.x86_64.xml    |  1 +
+ .../domaincapsdata/qemu_8.2.0-q35.x86_64.xml  |  1 +
+ .../qemu_8.2.0-tcg-virt.loongarch64.xml       |  1 +
+ .../domaincapsdata/qemu_8.2.0-tcg.x86_64.xml  |  1 +
+ .../qemu_8.2.0-virt.aarch64.xml               |  1 +
+ .../qemu_8.2.0-virt.loongarch64.xml           |  1 +
+ tests/domaincapsdata/qemu_8.2.0.aarch64.xml   |  1 +
+ tests/domaincapsdata/qemu_8.2.0.armv7l.xml    |  1 +
+ tests/domaincapsdata/qemu_8.2.0.s390x.xml     |  1 +
+ tests/domaincapsdata/qemu_8.2.0.x86_64.xml    |  1 +
+ .../domaincapsdata/qemu_9.0.0-q35.x86_64.xml  |  1 +
+ .../domaincapsdata/qemu_9.0.0-tcg.x86_64.xml  |  1 +
+ tests/domaincapsdata/qemu_9.0.0.sparc.xml     |  1 +
+ tests/domaincapsdata/qemu_9.0.0.x86_64.xml    |  1 +
+ .../domaincapsdata/qemu_9.1.0-q35.x86_64.xml  |  1 +
+ .../qemu_9.1.0-tcg-virt.riscv64.xml           |  1 +
+ .../domaincapsdata/qemu_9.1.0-tcg.x86_64.xml  |  1 +
+ .../qemu_9.1.0-virt.riscv64.xml               |  1 +
+ tests/domaincapsdata/qemu_9.1.0.s390x.xml     |  1 +
+ tests/domaincapsdata/qemu_9.1.0.x86_64.xml    |  1 +
+ .../qemu_9.2.0-hvf.aarch64+hvf.xml            |  1 +
+ .../qemu_9.2.0-q35.x86_64+amdsev.xml          |  1 +
+ .../domaincapsdata/qemu_9.2.0-q35.x86_64.xml  |  1 +
+ .../qemu_9.2.0-tcg.x86_64+amdsev.xml          |  1 +
+ .../domaincapsdata/qemu_9.2.0-tcg.x86_64.xml  |  1 +
+ tests/domaincapsdata/qemu_9.2.0.s390x.xml     |  1 +
+ .../qemu_9.2.0.x86_64+amdsev.xml              |  1 +
+ tests/domaincapsdata/qemu_9.2.0.x86_64.xml    |  1 +
+ tests/qemufirmwaretest.c                      | 31 +++++++++++++------
+ 78 files changed, 127 insertions(+), 11 deletions(-)
+
+diff --git a/src/qemu/qemu_capabilities.c b/src/qemu/qemu_capabilities.c
+index 8b20ca9312..a2cc9cd173 100644
+--- a/src/qemu/qemu_capabilities.c
++++ b/src/qemu/qemu_capabilities.c
+@@ -6516,8 +6516,26 @@ virQEMUCapsFillDomainLoaderCaps(virDomainCapsLoader *capsLoader,
+ }
+ 
+ 
++static int
++virQEMUCapsFillDomainVarstoreCaps(virDomainCapsVarstore *capsVarstore,
++                                  bool varstore,
++                                  virQEMUCaps *qemuCaps)
++{
++    /* varstore is advertised as supported only if firmware
++     * descriptors that use it exist and the QEMU binary has the
++     * necessary device compiled in */
++    if (varstore && virQEMUCapsGet(qemuCaps, QEMU_CAPS_DEVICE_UEFI_VARS))
++        capsVarstore->supported = VIR_TRISTATE_BOOL_YES;
++    else
++        capsVarstore->supported = VIR_TRISTATE_BOOL_NO;
++
++    return 0;
++}
++
++
+ static int
+ virQEMUCapsFillDomainOSCaps(virDomainCapsOS *os,
++                            virQEMUCaps *qemuCaps,
+                             const char *machine,
+                             virArch arch,
+                             bool privileged,
+@@ -6526,10 +6544,12 @@ virQEMUCapsFillDomainOSCaps(virDomainCapsOS *os,
+ {
+     virDomainCapsFirmwareFeatures *firmwareFeatures = &os->firmwareFeatures;
+     virDomainCapsLoader *capsLoader = &os->loader;
++    virDomainCapsVarstore *capsVarstore = &os->varstore;
+     uint64_t autoFirmwares = 0;
+     uint64_t featureSecureBoot = 0;
+     uint64_t featureEnrolledKeys = 0;
+     bool secure = false;
++    bool varstore = false;
+     virFirmware **firmwaresAlt = NULL;
+     size_t nfirmwaresAlt = 0;
+     int ret = -1;
+@@ -6539,7 +6559,7 @@ virQEMUCapsFillDomainOSCaps(virDomainCapsOS *os,
+ 
+     if (qemuFirmwareGetSupported(machine, arch, privileged, &autoFirmwares,
+                                  &featureSecureBoot, &featureEnrolledKeys,
+-                                 &secure,
++                                 &secure, &varstore,
+                                  &firmwaresAlt, &nfirmwaresAlt) < 0)
+         return -1;
+ 
+@@ -6566,6 +6586,9 @@ virQEMUCapsFillDomainOSCaps(virDomainCapsOS *os,
+                                         firmwaresAlt ? nfirmwaresAlt : nfirmwares) < 0)
+         goto cleanup;
+ 
++    if (virQEMUCapsFillDomainVarstoreCaps(capsVarstore, varstore, qemuCaps) < 0)
++        goto cleanup;
++
+     ret = 0;
+  cleanup:
+     virFirmwareFreeList(firmwaresAlt, nfirmwaresAlt);
+@@ -7287,6 +7310,7 @@ virQEMUCapsFillDomainCaps(virQEMUDriverConfig *cfg,
+     }
+ 
+     if (virQEMUCapsFillDomainOSCaps(os,
++                                    qemuCaps,
+                                     domCaps->machine,
+                                     domCaps->arch,
+                                     privileged,
+diff --git a/src/qemu/qemu_firmware.c b/src/qemu/qemu_firmware.c
+index 72aae73dcb..60cc92e46a 100644
+--- a/src/qemu/qemu_firmware.c
++++ b/src/qemu/qemu_firmware.c
+@@ -2033,6 +2033,7 @@ qemuFirmwareFillDomain(virQEMUDriver *driver,
+  * @featureSecureBoot: bitmap of virTristateBool values for secure-boot feature
+  * @featureEnrolledKeys: bitmap of virTristateBool values for enrolled-keys feature
+  * @secure: true if at least one secure boot enabled FW was found
++ * @varstore: true if at least one FW using varstore was found
+  * @fws: (optional) list of found firmwares
+  * @nfws: (optional) number of members in @fws
+  *
+@@ -2064,6 +2065,7 @@ qemuFirmwareGetSupported(const char *machine,
+                          uint64_t *featureSecureBoot,
+                          uint64_t *featureEnrolledKeys,
+                          bool *secure,
++                         bool *varstore,
+                          virFirmware ***fws,
+                          size_t *nfws)
+ {
+@@ -2075,6 +2077,7 @@ qemuFirmwareGetSupported(const char *machine,
+     *featureSecureBoot = VIR_TRISTATE_BOOL_ABSENT;
+     *featureEnrolledKeys = VIR_TRISTATE_BOOL_ABSENT;
+     *secure = false;
++    *varstore = false;
+ 
+     if (fws) {
+         *fws = NULL;
+@@ -2162,6 +2165,9 @@ qemuFirmwareGetSupported(const char *machine,
+         case QEMU_FIRMWARE_DEVICE_MEMORY:
+             fwpath = memory->filename;
+             nvrampath = memory->template;
++
++            if (memory->template)
++                *varstore = true;
+             break;
+ 
+         case QEMU_FIRMWARE_DEVICE_NONE:
+diff --git a/src/qemu/qemu_firmware.h b/src/qemu/qemu_firmware.h
+index 6789ec83f7..bcd3801da8 100644
+--- a/src/qemu/qemu_firmware.h
++++ b/src/qemu/qemu_firmware.h
+@@ -55,6 +55,7 @@ qemuFirmwareGetSupported(const char *machine,
+                          uint64_t *featureSecureBoot,
+                          uint64_t *featureEnrolledKeys,
+                          bool *secure,
++                         bool *varstore,
+                          virFirmware ***fws,
+                          size_t *nfws);
+ 
+diff --git a/tests/domaincapsdata/qemu_10.0.0-q35.x86_64+amdsev.xml b/tests/domaincapsdata/qemu_10.0.0-q35.x86_64+amdsev.xml
+index b68767d7b3..1fff8c7fc7 100644
+--- a/tests/domaincapsdata/qemu_10.0.0-q35.x86_64+amdsev.xml
++++ b/tests/domaincapsdata/qemu_10.0.0-q35.x86_64+amdsev.xml
+@@ -36,6 +36,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_10.0.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_10.0.0-q35.x86_64.xml
+index 70da32ccf1..6c26e5b422 100644
+--- a/tests/domaincapsdata/qemu_10.0.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.0.0-q35.x86_64.xml
+@@ -36,6 +36,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64+amdsev.xml b/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64+amdsev.xml
+index 6d2723f950..fb031b916e 100644
+--- a/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64+amdsev.xml
++++ b/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64+amdsev.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='no'/>
+diff --git a/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64.xml
+index cbddffef6b..8a5348d2a8 100644
+--- a/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='no'/>
+diff --git a/tests/domaincapsdata/qemu_10.0.0-virt.aarch64.xml b/tests/domaincapsdata/qemu_10.0.0-virt.aarch64.xml
+index bacd5665ad..97064ea009 100644
+--- a/tests/domaincapsdata/qemu_10.0.0-virt.aarch64.xml
++++ b/tests/domaincapsdata/qemu_10.0.0-virt.aarch64.xml
+@@ -32,6 +32,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_10.0.0.aarch64.xml b/tests/domaincapsdata/qemu_10.0.0.aarch64.xml
+index bacd5665ad..97064ea009 100644
+--- a/tests/domaincapsdata/qemu_10.0.0.aarch64.xml
++++ b/tests/domaincapsdata/qemu_10.0.0.aarch64.xml
+@@ -32,6 +32,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_10.0.0.ppc64.xml b/tests/domaincapsdata/qemu_10.0.0.ppc64.xml
+index a913d20b3e..8082fb9556 100644
+--- a/tests/domaincapsdata/qemu_10.0.0.ppc64.xml
++++ b/tests/domaincapsdata/qemu_10.0.0.ppc64.xml
+@@ -26,6 +26,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_10.0.0.s390x.xml b/tests/domaincapsdata/qemu_10.0.0.s390x.xml
+index 22a4bee3fd..ca741192ba 100644
+--- a/tests/domaincapsdata/qemu_10.0.0.s390x.xml
++++ b/tests/domaincapsdata/qemu_10.0.0.s390x.xml
+@@ -26,6 +26,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_10.0.0.x86_64+amdsev.xml b/tests/domaincapsdata/qemu_10.0.0.x86_64+amdsev.xml
+index 7227638020..6a4ea003f7 100644
+--- a/tests/domaincapsdata/qemu_10.0.0.x86_64+amdsev.xml
++++ b/tests/domaincapsdata/qemu_10.0.0.x86_64+amdsev.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_10.0.0.x86_64.xml b/tests/domaincapsdata/qemu_10.0.0.x86_64.xml
+index 38edf287f4..f12dd845ba 100644
+--- a/tests/domaincapsdata/qemu_10.0.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.0.0.x86_64.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_10.1.0-q35.x86_64+inteltdx.xml b/tests/domaincapsdata/qemu_10.1.0-q35.x86_64+inteltdx.xml
+index 77b13100b8..3105469bdc 100644
+--- a/tests/domaincapsdata/qemu_10.1.0-q35.x86_64+inteltdx.xml
++++ b/tests/domaincapsdata/qemu_10.1.0-q35.x86_64+inteltdx.xml
+@@ -36,6 +36,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_10.1.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_10.1.0-q35.x86_64.xml
+index c48ba4e218..e55d7d8ba6 100644
+--- a/tests/domaincapsdata/qemu_10.1.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.1.0-q35.x86_64.xml
+@@ -36,6 +36,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64+inteltdx.xml b/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64+inteltdx.xml
+index e2502f5746..ae6a2064d1 100644
+--- a/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64+inteltdx.xml
++++ b/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64+inteltdx.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='no'/>
+diff --git a/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64.xml
+index 50087d531f..b3c7bc60b5 100644
+--- a/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='no'/>
+diff --git a/tests/domaincapsdata/qemu_10.1.0.x86_64+inteltdx.xml b/tests/domaincapsdata/qemu_10.1.0.x86_64+inteltdx.xml
+index 478004b0fc..4cfbc814be 100644
+--- a/tests/domaincapsdata/qemu_10.1.0.x86_64+inteltdx.xml
++++ b/tests/domaincapsdata/qemu_10.1.0.x86_64+inteltdx.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_10.1.0.x86_64.xml b/tests/domaincapsdata/qemu_10.1.0.x86_64.xml
+index 8f7bff70f3..9cb65712a4 100644
+--- a/tests/domaincapsdata/qemu_10.1.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.1.0.x86_64.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_10.2.0-q35.x86_64+mshv.xml b/tests/domaincapsdata/qemu_10.2.0-q35.x86_64+mshv.xml
+index 313e7c24a4..43fe2bff93 100644
+--- a/tests/domaincapsdata/qemu_10.2.0-q35.x86_64+mshv.xml
++++ b/tests/domaincapsdata/qemu_10.2.0-q35.x86_64+mshv.xml
+@@ -35,6 +35,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_10.2.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_10.2.0-q35.x86_64.xml
+index d3630eb096..6327aa7043 100644
+--- a/tests/domaincapsdata/qemu_10.2.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.2.0-q35.x86_64.xml
+@@ -36,6 +36,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64+mshv.xml b/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64+mshv.xml
+index cc3427cef7..771ef3a0f6 100644
+--- a/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64+mshv.xml
++++ b/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64+mshv.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='no'/>
+diff --git a/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64.xml
+index 4c90f1d7be..f0e08907ff 100644
+--- a/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='no'/>
+diff --git a/tests/domaincapsdata/qemu_10.2.0.x86_64+mshv.xml b/tests/domaincapsdata/qemu_10.2.0.x86_64+mshv.xml
+index 84be18497b..87c35d229c 100644
+--- a/tests/domaincapsdata/qemu_10.2.0.x86_64+mshv.xml
++++ b/tests/domaincapsdata/qemu_10.2.0.x86_64+mshv.xml
+@@ -32,6 +32,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_10.2.0.x86_64.xml b/tests/domaincapsdata/qemu_10.2.0.x86_64.xml
+index fa2f5e8ebd..97bdd83260 100644
+--- a/tests/domaincapsdata/qemu_10.2.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.2.0.x86_64.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_6.2.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_6.2.0-q35.x86_64.xml
+index 4465574814..96dcc32019 100644
+--- a/tests/domaincapsdata/qemu_6.2.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_6.2.0-q35.x86_64.xml
+@@ -36,6 +36,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_6.2.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_6.2.0-tcg.x86_64.xml
+index ba9ad68ad2..a92050ad5b 100644
+--- a/tests/domaincapsdata/qemu_6.2.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_6.2.0-tcg.x86_64.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='no'/>
+diff --git a/tests/domaincapsdata/qemu_6.2.0.ppc64.xml b/tests/domaincapsdata/qemu_6.2.0.ppc64.xml
+index 9f3e6a7f3f..958d20e74c 100644
+--- a/tests/domaincapsdata/qemu_6.2.0.ppc64.xml
++++ b/tests/domaincapsdata/qemu_6.2.0.ppc64.xml
+@@ -26,6 +26,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_6.2.0.x86_64.xml b/tests/domaincapsdata/qemu_6.2.0.x86_64.xml
+index d804bd64ce..eb347adce9 100644
+--- a/tests/domaincapsdata/qemu_6.2.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_6.2.0.x86_64.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_7.0.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_7.0.0-q35.x86_64.xml
+index 40170cea50..0c3d00865e 100644
+--- a/tests/domaincapsdata/qemu_7.0.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.0.0-q35.x86_64.xml
+@@ -36,6 +36,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_7.0.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_7.0.0-tcg.x86_64.xml
+index 6f424760a8..6b5dff857b 100644
+--- a/tests/domaincapsdata/qemu_7.0.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.0.0-tcg.x86_64.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='no'/>
+diff --git a/tests/domaincapsdata/qemu_7.0.0.ppc64.xml b/tests/domaincapsdata/qemu_7.0.0.ppc64.xml
+index 604aa5e0ad..d6a6e75bec 100644
+--- a/tests/domaincapsdata/qemu_7.0.0.ppc64.xml
++++ b/tests/domaincapsdata/qemu_7.0.0.ppc64.xml
+@@ -26,6 +26,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_7.0.0.x86_64.xml b/tests/domaincapsdata/qemu_7.0.0.x86_64.xml
+index a67e929551..c568ae3d80 100644
+--- a/tests/domaincapsdata/qemu_7.0.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.0.0.x86_64.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_7.1.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_7.1.0-q35.x86_64.xml
+index 71c48d74dc..5e13f1f7fb 100644
+--- a/tests/domaincapsdata/qemu_7.1.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.1.0-q35.x86_64.xml
+@@ -36,6 +36,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_7.1.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_7.1.0-tcg.x86_64.xml
+index 682137ec8d..f9114422bd 100644
+--- a/tests/domaincapsdata/qemu_7.1.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.1.0-tcg.x86_64.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='no'/>
+diff --git a/tests/domaincapsdata/qemu_7.1.0.ppc64.xml b/tests/domaincapsdata/qemu_7.1.0.ppc64.xml
+index 399eeb3b18..0b3518a5a8 100644
+--- a/tests/domaincapsdata/qemu_7.1.0.ppc64.xml
++++ b/tests/domaincapsdata/qemu_7.1.0.ppc64.xml
+@@ -26,6 +26,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_7.1.0.x86_64.xml b/tests/domaincapsdata/qemu_7.1.0.x86_64.xml
+index 966abb1b0a..f574894ad0 100644
+--- a/tests/domaincapsdata/qemu_7.1.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.1.0.x86_64.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_7.2.0-hvf.x86_64+hvf.xml b/tests/domaincapsdata/qemu_7.2.0-hvf.x86_64+hvf.xml
+index c8d889287c..1fdde871f8 100644
+--- a/tests/domaincapsdata/qemu_7.2.0-hvf.x86_64+hvf.xml
++++ b/tests/domaincapsdata/qemu_7.2.0-hvf.x86_64+hvf.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_7.2.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_7.2.0-q35.x86_64.xml
+index 995ad7f220..b4c4153953 100644
+--- a/tests/domaincapsdata/qemu_7.2.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.2.0-q35.x86_64.xml
+@@ -36,6 +36,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64+hvf.xml b/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64+hvf.xml
+index 1bbd737021..989c3e274c 100644
+--- a/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64+hvf.xml
++++ b/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64+hvf.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='no'/>
+diff --git a/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64.xml
+index 1bbd737021..989c3e274c 100644
+--- a/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='no'/>
+diff --git a/tests/domaincapsdata/qemu_7.2.0.ppc.xml b/tests/domaincapsdata/qemu_7.2.0.ppc.xml
+index 223387444c..b4bdf3b651 100644
+--- a/tests/domaincapsdata/qemu_7.2.0.ppc.xml
++++ b/tests/domaincapsdata/qemu_7.2.0.ppc.xml
+@@ -25,6 +25,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_7.2.0.x86_64.xml b/tests/domaincapsdata/qemu_7.2.0.x86_64.xml
+index be0ee62910..6efa244ffa 100644
+--- a/tests/domaincapsdata/qemu_7.2.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.2.0.x86_64.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_8.0.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_8.0.0-q35.x86_64.xml
+index f225cf0a8e..70a3b9c7d7 100644
+--- a/tests/domaincapsdata/qemu_8.0.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.0.0-q35.x86_64.xml
+@@ -36,6 +36,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_8.0.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_8.0.0-tcg.x86_64.xml
+index e770746f74..0010cfa60e 100644
+--- a/tests/domaincapsdata/qemu_8.0.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.0.0-tcg.x86_64.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='no'/>
+diff --git a/tests/domaincapsdata/qemu_8.0.0.x86_64.xml b/tests/domaincapsdata/qemu_8.0.0.x86_64.xml
+index 4c8a36eeb0..ac8c8980e7 100644
+--- a/tests/domaincapsdata/qemu_8.0.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.0.0.x86_64.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_8.1.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_8.1.0-q35.x86_64.xml
+index 5d08abbe3b..e9d807828a 100644
+--- a/tests/domaincapsdata/qemu_8.1.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.1.0-q35.x86_64.xml
+@@ -36,6 +36,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_8.1.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_8.1.0-tcg.x86_64.xml
+index ea506799bf..e834e3eb82 100644
+--- a/tests/domaincapsdata/qemu_8.1.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.1.0-tcg.x86_64.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='no'/>
+diff --git a/tests/domaincapsdata/qemu_8.1.0.s390x.xml b/tests/domaincapsdata/qemu_8.1.0.s390x.xml
+index 4237262f31..37417ec648 100644
+--- a/tests/domaincapsdata/qemu_8.1.0.s390x.xml
++++ b/tests/domaincapsdata/qemu_8.1.0.s390x.xml
+@@ -26,6 +26,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_8.1.0.x86_64.xml b/tests/domaincapsdata/qemu_8.1.0.x86_64.xml
+index bab985379c..5de8bc1cd8 100644
+--- a/tests/domaincapsdata/qemu_8.1.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.1.0.x86_64.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_8.2.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_8.2.0-q35.x86_64.xml
+index c5c08d8fd1..a2f9591382 100644
+--- a/tests/domaincapsdata/qemu_8.2.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.2.0-q35.x86_64.xml
+@@ -36,6 +36,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_8.2.0-tcg-virt.loongarch64.xml b/tests/domaincapsdata/qemu_8.2.0-tcg-virt.loongarch64.xml
+index 6228916208..1625ddf4e0 100644
+--- a/tests/domaincapsdata/qemu_8.2.0-tcg-virt.loongarch64.xml
++++ b/tests/domaincapsdata/qemu_8.2.0-tcg-virt.loongarch64.xml
+@@ -32,6 +32,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='no'/>
+diff --git a/tests/domaincapsdata/qemu_8.2.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_8.2.0-tcg.x86_64.xml
+index da3121b8de..ac1c1b840e 100644
+--- a/tests/domaincapsdata/qemu_8.2.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.2.0-tcg.x86_64.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='no'/>
+diff --git a/tests/domaincapsdata/qemu_8.2.0-virt.aarch64.xml b/tests/domaincapsdata/qemu_8.2.0-virt.aarch64.xml
+index c1dceda12d..420fbedd72 100644
+--- a/tests/domaincapsdata/qemu_8.2.0-virt.aarch64.xml
++++ b/tests/domaincapsdata/qemu_8.2.0-virt.aarch64.xml
+@@ -32,6 +32,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_8.2.0-virt.loongarch64.xml b/tests/domaincapsdata/qemu_8.2.0-virt.loongarch64.xml
+index 8206dc0486..af75894ff1 100644
+--- a/tests/domaincapsdata/qemu_8.2.0-virt.loongarch64.xml
++++ b/tests/domaincapsdata/qemu_8.2.0-virt.loongarch64.xml
+@@ -32,6 +32,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_8.2.0.aarch64.xml b/tests/domaincapsdata/qemu_8.2.0.aarch64.xml
+index c1dceda12d..420fbedd72 100644
+--- a/tests/domaincapsdata/qemu_8.2.0.aarch64.xml
++++ b/tests/domaincapsdata/qemu_8.2.0.aarch64.xml
+@@ -32,6 +32,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_8.2.0.armv7l.xml b/tests/domaincapsdata/qemu_8.2.0.armv7l.xml
+index b64779c84a..a1ad0529e5 100644
+--- a/tests/domaincapsdata/qemu_8.2.0.armv7l.xml
++++ b/tests/domaincapsdata/qemu_8.2.0.armv7l.xml
+@@ -25,6 +25,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_8.2.0.s390x.xml b/tests/domaincapsdata/qemu_8.2.0.s390x.xml
+index 9f92c3c192..84be7cd967 100644
+--- a/tests/domaincapsdata/qemu_8.2.0.s390x.xml
++++ b/tests/domaincapsdata/qemu_8.2.0.s390x.xml
+@@ -26,6 +26,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_8.2.0.x86_64.xml b/tests/domaincapsdata/qemu_8.2.0.x86_64.xml
+index 83ea8565d8..e423689076 100644
+--- a/tests/domaincapsdata/qemu_8.2.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.2.0.x86_64.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_9.0.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_9.0.0-q35.x86_64.xml
+index a4521f150e..2851138ffe 100644
+--- a/tests/domaincapsdata/qemu_9.0.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.0.0-q35.x86_64.xml
+@@ -36,6 +36,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_9.0.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_9.0.0-tcg.x86_64.xml
+index 00d3e1b8d1..253bed40ed 100644
+--- a/tests/domaincapsdata/qemu_9.0.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.0.0-tcg.x86_64.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='no'/>
+diff --git a/tests/domaincapsdata/qemu_9.0.0.sparc.xml b/tests/domaincapsdata/qemu_9.0.0.sparc.xml
+index 7eb384d512..f999c8ed71 100644
+--- a/tests/domaincapsdata/qemu_9.0.0.sparc.xml
++++ b/tests/domaincapsdata/qemu_9.0.0.sparc.xml
+@@ -25,6 +25,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_9.0.0.x86_64.xml b/tests/domaincapsdata/qemu_9.0.0.x86_64.xml
+index d61070b968..2316859d5b 100644
+--- a/tests/domaincapsdata/qemu_9.0.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.0.0.x86_64.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_9.1.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_9.1.0-q35.x86_64.xml
+index 226aad41b2..1cf269504c 100644
+--- a/tests/domaincapsdata/qemu_9.1.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.1.0-q35.x86_64.xml
+@@ -36,6 +36,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_9.1.0-tcg-virt.riscv64.xml b/tests/domaincapsdata/qemu_9.1.0-tcg-virt.riscv64.xml
+index c32d4380aa..85dffd3455 100644
+--- a/tests/domaincapsdata/qemu_9.1.0-tcg-virt.riscv64.xml
++++ b/tests/domaincapsdata/qemu_9.1.0-tcg-virt.riscv64.xml
+@@ -32,6 +32,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='no'/>
+diff --git a/tests/domaincapsdata/qemu_9.1.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_9.1.0-tcg.x86_64.xml
+index d18c62d268..76b2707b9c 100644
+--- a/tests/domaincapsdata/qemu_9.1.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.1.0-tcg.x86_64.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='no'/>
+diff --git a/tests/domaincapsdata/qemu_9.1.0-virt.riscv64.xml b/tests/domaincapsdata/qemu_9.1.0-virt.riscv64.xml
+index 7a013e77c4..c052b8329b 100644
+--- a/tests/domaincapsdata/qemu_9.1.0-virt.riscv64.xml
++++ b/tests/domaincapsdata/qemu_9.1.0-virt.riscv64.xml
+@@ -31,6 +31,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_9.1.0.s390x.xml b/tests/domaincapsdata/qemu_9.1.0.s390x.xml
+index e26cab26f3..bc62fdfaa4 100644
+--- a/tests/domaincapsdata/qemu_9.1.0.s390x.xml
++++ b/tests/domaincapsdata/qemu_9.1.0.s390x.xml
+@@ -26,6 +26,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_9.1.0.x86_64.xml b/tests/domaincapsdata/qemu_9.1.0.x86_64.xml
+index a27712673a..baaa17f68d 100644
+--- a/tests/domaincapsdata/qemu_9.1.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.1.0.x86_64.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_9.2.0-hvf.aarch64+hvf.xml b/tests/domaincapsdata/qemu_9.2.0-hvf.aarch64+hvf.xml
+index 06bb829a2a..f998177636 100644
+--- a/tests/domaincapsdata/qemu_9.2.0-hvf.aarch64+hvf.xml
++++ b/tests/domaincapsdata/qemu_9.2.0-hvf.aarch64+hvf.xml
+@@ -32,6 +32,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_9.2.0-q35.x86_64+amdsev.xml b/tests/domaincapsdata/qemu_9.2.0-q35.x86_64+amdsev.xml
+index aac1d4d923..a21c69e416 100644
+--- a/tests/domaincapsdata/qemu_9.2.0-q35.x86_64+amdsev.xml
++++ b/tests/domaincapsdata/qemu_9.2.0-q35.x86_64+amdsev.xml
+@@ -36,6 +36,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_9.2.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_9.2.0-q35.x86_64.xml
+index ef6ee01d00..df0d995276 100644
+--- a/tests/domaincapsdata/qemu_9.2.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.2.0-q35.x86_64.xml
+@@ -36,6 +36,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64+amdsev.xml b/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64+amdsev.xml
+index 0ec1a9900d..2b860a23ca 100644
+--- a/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64+amdsev.xml
++++ b/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64+amdsev.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='no'/>
+diff --git a/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64.xml
+index c8a0da3d22..24113a3514 100644
+--- a/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='no'/>
+diff --git a/tests/domaincapsdata/qemu_9.2.0.s390x.xml b/tests/domaincapsdata/qemu_9.2.0.s390x.xml
+index e00d7efd99..bba9ce7558 100644
+--- a/tests/domaincapsdata/qemu_9.2.0.s390x.xml
++++ b/tests/domaincapsdata/qemu_9.2.0.s390x.xml
+@@ -26,6 +26,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_9.2.0.x86_64+amdsev.xml b/tests/domaincapsdata/qemu_9.2.0.x86_64+amdsev.xml
+index d6e3f8dc12..f12c89f40b 100644
+--- a/tests/domaincapsdata/qemu_9.2.0.x86_64+amdsev.xml
++++ b/tests/domaincapsdata/qemu_9.2.0.x86_64+amdsev.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_9.2.0.x86_64.xml b/tests/domaincapsdata/qemu_9.2.0.x86_64.xml
+index 89e081a0e1..529415bcb4 100644
+--- a/tests/domaincapsdata/qemu_9.2.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.2.0.x86_64.xml
+@@ -33,6 +33,7 @@
+         <value>no</value>
+       </enum>
+     </loader>
++    <varstore supported='no'/>
+   </os>
+   <cpu>
+     <mode name='host-passthrough' supported='yes'>
+diff --git a/tests/qemufirmwaretest.c b/tests/qemufirmwaretest.c
+index e09f50592b..ee585b67d2 100644
+--- a/tests/qemufirmwaretest.c
++++ b/tests/qemufirmwaretest.c
+@@ -143,6 +143,7 @@ struct supportedData {
+     const char *machine;
+     virArch arch;
+     bool secure;
++    bool varstore;
+     const char *fwlist;
+     unsigned int *interfaces;
+     size_t ninterfaces;
+@@ -158,6 +159,7 @@ testSupportedFW(const void *opaque)
+     uint64_t actualFeatureSecureBoot;
+     uint64_t actualFeatureEnrolledKeys;
+     bool actualSecure;
++    bool actualVarstore;
+     virFirmware **expFWs = NULL;
+     size_t nexpFWs = 0;
+     virFirmware **actFWs = NULL;
+@@ -187,7 +189,8 @@ testSupportedFW(const void *opaque)
+                                  &actualInterfaces,
+                                  &actualFeatureSecureBoot,
+                                  &actualFeatureEnrolledKeys,
+-                                 &actualSecure, &actFWs, &nactFWs) < 0) {
++                                 &actualSecure, &actualVarstore,
++                                 &actFWs, &nactFWs) < 0) {
+         fprintf(stderr, "Unable to get list of supported interfaces\n");
+         goto cleanup;
+     }
+@@ -208,6 +211,14 @@ testSupportedFW(const void *opaque)
+         goto cleanup;
+     }
+ 
++    if (actualVarstore != data->varstore) {
++        fprintf(stderr,
++                "Mismatch in varstore support. "
++                "Expected %d got %d\n",
++                data->varstore, actualVarstore);
++        goto cleanup;
++    }
++
+     for (i = 0; i < nactFWs; i++) {
+         virFirmware *actFW = actFWs[i];
+         virFirmware *expFW = NULL;
+@@ -295,26 +306,26 @@ mymain(void)
+     /* The @fwlist contains pairs of ${FW}:${NVRAM}. If there's
+      * no NVRAM expected pass literal "NULL" and test fixes that
+      * later. */
+-#define DO_SUPPORTED_TEST(machine, arch, secure, fwlist, ...) \
++#define DO_SUPPORTED_TEST(machine, arch, secure, varstore, fwlist, ...) \
+     do { \
+         unsigned int interfaces[] = {__VA_ARGS__}; \
+-        struct supportedData data = {machine, arch, secure, fwlist, \
++        struct supportedData data = {machine, arch, secure, varstore, fwlist, \
+                                      interfaces, G_N_ELEMENTS(interfaces)}; \
+         if (virTestRun("QEMU FW SUPPORTED " machine " " #arch, \
+                        testSupportedFW, &data) < 0) \
+             ret = -1; \
+     } while (0)
+ 
+-    DO_SUPPORTED_TEST("pc-i440fx-3.1", VIR_ARCH_X86_64, false,
++    DO_SUPPORTED_TEST("pc-i440fx-3.1", VIR_ARCH_X86_64, false, false,
+                       "/usr/share/seabios/bios-256k.bin:NULL:"
+                       "/usr/share/edk2/ovmf/OVMF_CODE_4M.qcow2:/usr/share/edk2/ovmf/OVMF_VARS_4M.qcow2:"
+                       "/usr/share/edk2/ovmf/OVMF_CODE.fd:/usr/share/edk2/ovmf/OVMF_VARS.fd",
+                       VIR_DOMAIN_OS_DEF_FIRMWARE_BIOS,
+                       VIR_DOMAIN_OS_DEF_FIRMWARE_EFI);
+-    DO_SUPPORTED_TEST("pc-i440fx-3.1", VIR_ARCH_I686, false,
++    DO_SUPPORTED_TEST("pc-i440fx-3.1", VIR_ARCH_I686, false, false,
+                       "/usr/share/seabios/bios-256k.bin:NULL",
+                       VIR_DOMAIN_OS_DEF_FIRMWARE_BIOS);
+-    DO_SUPPORTED_TEST("pc-q35-3.1", VIR_ARCH_X86_64, true,
++    DO_SUPPORTED_TEST("pc-q35-3.1", VIR_ARCH_X86_64, true, false,
+                       "/usr/share/seabios/bios-256k.bin:NULL:"
+                       "/usr/share/edk2/ovmf/OVMF_CODE_4M.secboot.qcow2:/usr/share/edk2/ovmf/OVMF_VARS_4M.secboot.qcow2:"
+                       "/usr/share/edk2/ovmf/OVMF_CODE.secboot.fd:/usr/share/edk2/ovmf/OVMF_VARS.secboot.fd:"
+@@ -327,19 +338,19 @@ mymain(void)
+                       "/usr/share/edk2/ovmf/OVMF.inteltdx.secboot.fd:NULL",
+                       VIR_DOMAIN_OS_DEF_FIRMWARE_BIOS,
+                       VIR_DOMAIN_OS_DEF_FIRMWARE_EFI);
+-    DO_SUPPORTED_TEST("pc-q35-3.1", VIR_ARCH_I686, false,
++    DO_SUPPORTED_TEST("pc-q35-3.1", VIR_ARCH_I686, false, false,
+                       "/usr/share/seabios/bios-256k.bin:NULL",
+                       VIR_DOMAIN_OS_DEF_FIRMWARE_BIOS);
+-    DO_SUPPORTED_TEST("microvm", VIR_ARCH_X86_64, false,
++    DO_SUPPORTED_TEST("microvm", VIR_ARCH_X86_64, false, false,
+                       "/usr/share/edk2/ovmf/MICROVM.fd:NULL",
+                       VIR_DOMAIN_OS_DEF_FIRMWARE_EFI);
+-    DO_SUPPORTED_TEST("virt-3.1", VIR_ARCH_AARCH64, false,
++    DO_SUPPORTED_TEST("virt-3.1", VIR_ARCH_AARCH64, false, false,
+                       "/usr/share/edk2/aarch64/QEMU_EFI-silent-pflash.qcow2:/usr/share/edk2/aarch64/vars-template-pflash.qcow2:"
+                       "/usr/share/edk2/aarch64/QEMU_EFI-silent-pflash.raw:/usr/share/edk2/aarch64/vars-template-pflash.raw:"
+                       "/usr/share/edk2/aarch64/QEMU_EFI-pflash.qcow2:/usr/share/edk2/aarch64/vars-template-pflash.qcow2:"
+                       "/usr/share/edk2/aarch64/QEMU_EFI-pflash.raw:/usr/share/edk2/aarch64/vars-template-pflash.raw",
+                       VIR_DOMAIN_OS_DEF_FIRMWARE_EFI);
+-    DO_SUPPORTED_TEST("virt", VIR_ARCH_RISCV64, false,
++    DO_SUPPORTED_TEST("virt", VIR_ARCH_RISCV64, false, false,
+                       "/usr/share/edk2/riscv/RISCV_VIRT_CODE.qcow2:/usr/share/edk2/riscv/RISCV_VIRT_VARS.qcow2",
+                       VIR_DOMAIN_OS_DEF_FIRMWARE_EFI);
+ 
+-- 
+2.53.0

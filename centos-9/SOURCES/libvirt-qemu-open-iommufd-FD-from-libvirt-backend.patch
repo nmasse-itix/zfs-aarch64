@@ -1,0 +1,174 @@
+From 0800b120a87585c1f1c3e95586738200a71b5370 Mon Sep 17 00:00:00 2001
+Message-ID: <0800b120a87585c1f1c3e95586738200a71b5370.1770383236.git.jdenemar@redhat.com>
+From: Nathan Chen <nathanc@nvidia.com>
+Date: Fri, 30 Jan 2026 10:59:16 -0800
+Subject: [PATCH] qemu: open iommufd FD from libvirt backend
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Open iommufd FD from libvirt backend without exposing
+these FDs to XML users, i.e. one per domain for
+/dev/iommu, and pass the FD to qemu command line. Set
+per-process memory accounting for iommufd instead of
+the default per-user memory accounting.
+
+Suggested-by: Ján Tomko <jtomko@redhat.com>
+Signed-off-by: Nathan Chen <nathanc@nvidia.com>
+Reviewed-by: Pavel Hrdina <phrdina@redhat.com>
+(cherry picked from commit 2f0999a161910e3992458902ce90d37f8b8f2642)
+
+Resolves: https://issues.redhat.com/browse/RHEL-126345
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/qemu/qemu_command.c | 13 +++++++++++--
+ src/qemu/qemu_domain.c  |  1 +
+ src/qemu/qemu_domain.h  |  2 ++
+ src/qemu/qemu_process.c | 43 +++++++++++++++++++++++++++++++++++++++++
+ 4 files changed, 57 insertions(+), 2 deletions(-)
+
+diff --git a/src/qemu/qemu_command.c b/src/qemu/qemu_command.c
+index a98b26aa8a..807529f670 100644
+--- a/src/qemu/qemu_command.c
++++ b/src/qemu/qemu_command.c
+@@ -5342,9 +5342,13 @@ qemuBuildHostdevCommandLine(virCommand *cmd,
+ 
+ static int
+ qemuBuildIOMMUFDCommandLine(virCommand *cmd,
+-                            const virDomainDef *def)
++                            const virDomainDef *def,
++                            virDomainObj *vm)
+ {
+     size_t i;
++    qemuDomainObjPrivate *priv = vm->privateData;
++    g_autofree char *fdstr = g_strdup_printf("%d", priv->iommufd);
++
+ 
+     for (i = 0; i < def->nhostdevs; i++) {
+         virDomainHostdevDef *hostdev = def->hostdevs[i];
+@@ -5363,8 +5367,13 @@ qemuBuildIOMMUFDCommandLine(virCommand *cmd,
+         if (subsys->u.pci.driver.iommufd != VIR_TRISTATE_BOOL_YES)
+             continue;
+ 
++        virCommandPassFD(cmd, priv->iommufd, VIR_COMMAND_PASS_FD_CLOSE_PARENT);
++
++        priv->iommufd = -1;
++
+         if (qemuMonitorCreateObjectProps(&props, "iommufd",
+                                          "iommufd0",
++                                         "S:fd", fdstr,
+                                          NULL) < 0)
+             return -1;
+ 
+@@ -10990,7 +10999,7 @@ qemuBuildCommandLine(virDomainObj *vm,
+     if (qemuBuildRedirdevCommandLine(cmd, def, qemuCaps) < 0)
+         return NULL;
+ 
+-    if (qemuBuildIOMMUFDCommandLine(cmd, def) < 0)
++    if (qemuBuildIOMMUFDCommandLine(cmd, def, vm) < 0)
+         return NULL;
+ 
+     if (qemuBuildHostdevCommandLine(cmd, def, qemuCaps) < 0)
+diff --git a/src/qemu/qemu_domain.c b/src/qemu/qemu_domain.c
+index 3366214677..8e1ebe7799 100644
+--- a/src/qemu/qemu_domain.c
++++ b/src/qemu/qemu_domain.c
+@@ -2042,6 +2042,7 @@ qemuDomainObjPrivateAlloc(void *opaque)
+     priv->blockjobs = virHashNew(virObjectUnref);
+     priv->fds = virHashNew(g_object_unref);
+ 
++    priv->iommufd = -1;
+     priv->pidMonitored = -1;
+ 
+     /* agent commands block by default, user can choose different behavior */
+diff --git a/src/qemu/qemu_domain.h b/src/qemu/qemu_domain.h
+index 88c8416aa4..3361e97315 100644
+--- a/src/qemu/qemu_domain.h
++++ b/src/qemu/qemu_domain.h
+@@ -264,6 +264,8 @@ struct _qemuDomainObjPrivate {
+     /* named file descriptor groups associated with the VM */
+     GHashTable *fds;
+ 
++    int iommufd;
++
+     char *memoryBackingDir;
+ };
+ 
+diff --git a/src/qemu/qemu_process.c b/src/qemu/qemu_process.c
+index 1ac57a6321..d8f0c78fd1 100644
+--- a/src/qemu/qemu_process.c
++++ b/src/qemu/qemu_process.c
+@@ -104,6 +104,7 @@
+ #include "backup_conf.h"
+ #include "storage_file_probe.h"
+ #include "virpci.h"
++#include "viriommufd.h"
+ 
+ #include "logging/log_manager.h"
+ #include "logging/log_protocol.h"
+@@ -7672,6 +7673,42 @@ qemuProcessPrepareHostBackendChardevHotplug(virDomainObj *vm,
+     return 0;
+ }
+ 
++/**
++ * qemuProcessOpenIommuFd:
++ * @vm: domain object
++ * @iommuFd: returned file descriptor
++ *
++ * Opens /dev/iommu file descriptor for the VM.
++ *
++ * Returns: FD on success, -1 on failure
++ */
++static int
++qemuProcessOpenIommuFd(virDomainObj *vm)
++{
++    int fd = -1;
++
++    VIR_DEBUG("Opening IOMMU FD for domain %s", vm->def->name);
++
++    if ((fd = open(VIR_IOMMU_DEV_PATH, O_RDWR | O_CLOEXEC)) < 0) {
++        if (errno == ENOENT) {
++            virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
++                           _("IOMMU FD support requires /dev/iommu device"));
++        } else {
++            virReportSystemError(errno, "%s",
++                                 _("cannot open /dev/iommu"));
++        }
++        return -1;
++    }
++
++    if (virIOMMUFDSetRLimitMode(fd, true) < 0) {
++        VIR_FORCE_CLOSE(fd);
++        return -1;
++    }
++
++    VIR_DEBUG("Opened IOMMU FD %d for domain %s", fd, vm->def->name);
++    return fd;
++}
++
+ /**
+  * qemuProcessOpenVfioDeviceFd:
+  * @hostdev: host device definition
+@@ -7726,6 +7763,7 @@ qemuProcessOpenVfioDeviceFd(virDomainHostdevDef *hostdev)
+ static int
+ qemuProcessOpenVfioFds(virDomainObj *vm)
+ {
++    qemuDomainObjPrivate *priv = vm->privateData;
+     size_t i;
+ 
+     /* Check if we have any hostdevs that need VFIO FDs */
+@@ -7741,6 +7779,11 @@ qemuProcessOpenVfioFds(virDomainObj *vm)
+             hostdevPriv->vfioDeviceFd = qemuProcessOpenVfioDeviceFd(hostdev);
+             if (hostdevPriv->vfioDeviceFd == -1)
+                  return -1;
++
++            /* Open IOMMU FD */
++            priv->iommufd = qemuProcessOpenIommuFd(vm);
++            if (priv->iommufd == -1)
++                return -1;
+         }
+     }
+ 
+-- 
+2.52.0

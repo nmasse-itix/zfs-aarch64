@@ -1,0 +1,196 @@
+From 9ec1c8fc52cd3150712f5ada134e070fbdabb7bb Mon Sep 17 00:00:00 2001
+Message-ID: <9ec1c8fc52cd3150712f5ada134e070fbdabb7bb.1780571166.git.jdenemar@redhat.com>
+From: Jiri Denemark <jdenemar@redhat.com>
+Date: Thu, 21 May 2026 12:36:48 +0200
+Subject: [PATCH] qemu: Move domain caps flags handling to
+ virQEMUCapsFillDomainCPUHostModel
+
+We will need to generate the capabilities in a different way based on
+the flags.
+
+Signed-off-by: Jiri Denemark <jdenemar@redhat.com>
+Reviewed-by: Peter Krempa <pkrempa@redhat.com>
+(cherry picked from commit b4d3572198848e6a2886352e1a48b46afa37bec1)
+
+https://redhat.atlassian.net/browse/RHEL-177364
+
+Signed-off-by: Jiri Denemark <jdenemar@redhat.com>
+---
+ src/qemu/qemu_capabilities.c | 34 ++++++++++++++++++++++++----------
+ src/qemu/qemu_capabilities.h |  3 ++-
+ src/qemu/qemu_conf.c         |  6 ++++--
+ src/qemu/qemu_conf.h         |  3 ++-
+ src/qemu/qemu_driver.c       | 15 ++-------------
+ tests/domaincapstest.c       |  2 +-
+ 6 files changed, 35 insertions(+), 28 deletions(-)
+
+diff --git a/src/qemu/qemu_capabilities.c b/src/qemu/qemu_capabilities.c
+index 0b32296cc8..c17b55420d 100644
+--- a/src/qemu/qemu_capabilities.c
++++ b/src/qemu/qemu_capabilities.c
+@@ -6584,14 +6584,26 @@ virQEMUCapsFillDomainCPUMaximum(virDomainCaps *domCaps)
+ 
+ static void
+ virQEMUCapsFillDomainCPUHostModel(virQEMUCaps *qemuCaps,
+-                                  virDomainCaps *domCaps)
++                                  virDomainCaps *domCaps,
++                                  unsigned int flags)
+ {
+-    virCPUDef *cpu = virQEMUCapsGetHostModel(qemuCaps, domCaps->virttype,
+-                                             VIR_QEMU_CAPS_HOST_CPU_REPORTED);
++    virQEMUCapsHostCPUType cpuType = VIR_QEMU_CAPS_HOST_CPU_REPORTED;
++    virCPUDef *cpu;
+ 
+-    domCaps->cpu.hostModel = virCPUDefCopy(cpu);
+-    domCaps->cpu.hostModel->addr = virQEMUCapsGetHostPhysAddr(qemuCaps,
+-                                                              domCaps->virttype);
++    cpu = virCPUDefCopy(virQEMUCapsGetHostModel(qemuCaps, domCaps->virttype,
++                                                cpuType));
++
++    cpu->addr = virQEMUCapsGetHostPhysAddr(qemuCaps, domCaps->virttype);
++
++    if (flags & VIR_CONNECT_GET_DOMAIN_CAPABILITIES_DISABLE_DEPRECATED_FEATURES) {
++        virQEMUCapsUpdateCPUDeprecatedFeatures(qemuCaps, domCaps->virttype,
++                                               cpu, VIR_CPU_FEATURE_DISABLE);
++    }
++
++    if (flags & VIR_CONNECT_GET_DOMAIN_CAPABILITIES_EXPAND_CPU_FEATURES)
++        virCPUExpandFeatures(domCaps->arch, cpu);
++
++    domCaps->cpu.hostModel = cpu;
+ }
+ 
+ 
+@@ -6616,7 +6628,8 @@ virQEMUCapsFillDomainCPUCustom(virQEMUCaps *qemuCaps,
+ static void
+ virQEMUCapsFillDomainCPUCaps(virQEMUCaps *qemuCaps,
+                              virArch hostarch,
+-                             virDomainCaps *domCaps)
++                             virDomainCaps *domCaps,
++                             unsigned int flags)
+ {
+     if (virQEMUCapsIsCPUModeSupported(qemuCaps, hostarch, domCaps->virttype,
+                                       VIR_CPU_MODE_HOST_PASSTHROUGH,
+@@ -6633,7 +6646,7 @@ virQEMUCapsFillDomainCPUCaps(virQEMUCaps *qemuCaps,
+     if (virQEMUCapsIsCPUModeSupported(qemuCaps, hostarch, domCaps->virttype,
+                                       VIR_CPU_MODE_HOST_MODEL,
+                                       domCaps->machine)) {
+-        virQEMUCapsFillDomainCPUHostModel(qemuCaps, domCaps);
++        virQEMUCapsFillDomainCPUHostModel(qemuCaps, domCaps, flags);
+     }
+ 
+     if (virQEMUCapsIsCPUModeSupported(qemuCaps, hostarch, domCaps->virttype,
+@@ -7263,7 +7276,8 @@ virQEMUCapsFillDomainCaps(virQEMUDriverConfig *cfg,
+                           virQEMUCaps *qemuCaps,
+                           virArch hostarch,
+                           virDomainCaps *domCaps,
+-                          bool privileged)
++                          bool privileged,
++                          unsigned int flags)
+ {
+     virDomainCapsOS *os = &domCaps->os;
+     virDomainCapsDeviceDisk *disk = &domCaps->disk;
+@@ -7305,7 +7319,7 @@ virQEMUCapsFillDomainCaps(virQEMUDriverConfig *cfg,
+                                     firmwares, nfirmwares) < 0)
+         return -1;
+ 
+-    virQEMUCapsFillDomainCPUCaps(qemuCaps, hostarch, domCaps);
++    virQEMUCapsFillDomainCPUCaps(qemuCaps, hostarch, domCaps, flags);
+     virQEMUCapsFillDomainMemoryBackingCaps(qemuCaps, memoryBacking);
+     virQEMUCapsFillDomainDeviceDiskCaps(qemuCaps, domCaps->machine, disk);
+     virQEMUCapsFillDomainDeviceGraphicsCaps(cfg, qemuCaps, graphics);
+diff --git a/src/qemu/qemu_capabilities.h b/src/qemu/qemu_capabilities.h
+index f7c8680f94..bc3ecbb89f 100644
+--- a/src/qemu/qemu_capabilities.h
++++ b/src/qemu/qemu_capabilities.h
+@@ -896,7 +896,8 @@ int virQEMUCapsFillDomainCaps(virQEMUDriverConfig *cfg,
+                               virQEMUCaps *qemuCaps,
+                               virArch hostarch,
+                               virDomainCaps *domCaps,
+-                              bool privileged);
++                              bool privileged,
++                              unsigned int flags);
+ 
+ void virQEMUCapsFillDomainMemoryBackingCaps(virQEMUCaps *qemuCaps,
+                                             virDomainCapsMemoryBacking *memoryBacking);
+diff --git a/src/qemu/qemu_conf.c b/src/qemu/qemu_conf.c
+index 242955200a..5e40635871 100644
+--- a/src/qemu/qemu_conf.c
++++ b/src/qemu/qemu_conf.c
+@@ -1708,7 +1708,8 @@ virQEMUDriverGetDomainCapabilities(virQEMUDriver *driver,
+                                    virQEMUCaps *qemuCaps,
+                                    const char *machine,
+                                    virArch arch,
+-                                   virDomainVirtType virttype)
++                                   virDomainVirtType virttype,
++                                   unsigned int flags)
+ {
+     g_autoptr(virQEMUDriverConfig) cfg = virQEMUDriverGetConfig(driver);
+     g_autoptr(virDomainCaps) domCaps = NULL;
+@@ -1742,7 +1743,8 @@ virQEMUDriverGetDomainCapabilities(virQEMUDriver *driver,
+                                   qemuCaps,
+                                   driver->hostarch,
+                                   domCaps,
+-                                  driver->privileged) < 0)
++                                  driver->privileged,
++                                  flags) < 0)
+         return NULL;
+ 
+     return g_steal_pointer(&domCaps);
+diff --git a/src/qemu/qemu_conf.h b/src/qemu/qemu_conf.h
+index edb65c99f4..36d7808e10 100644
+--- a/src/qemu/qemu_conf.h
++++ b/src/qemu/qemu_conf.h
+@@ -375,7 +375,8 @@ virQEMUDriverGetDomainCapabilities(virQEMUDriver *driver,
+                                    virQEMUCaps *qemuCaps,
+                                    const char *machine,
+                                    virArch arch,
+-                                   virDomainVirtType virttype);
++                                   virDomainVirtType virttype,
++                                   unsigned int flags);
+ 
+ int qemuDriverAllocateID(virQEMUDriver *driver);
+ virDomainXMLOption *virQEMUDriverCreateXMLConf(virQEMUDriver *driver,
+diff --git a/src/qemu/qemu_driver.c b/src/qemu/qemu_driver.c
+index 8db9cbb6a2..0a61f97666 100644
+--- a/src/qemu/qemu_driver.c
++++ b/src/qemu/qemu_driver.c
+@@ -16738,21 +16738,10 @@ qemuConnectGetDomainCapabilities(virConnectPtr conn,
+ 
+     if (!(domCaps = virQEMUDriverGetDomainCapabilities(driver,
+                                                        qemuCaps, machine,
+-                                                       arch, virttype)))
++                                                       arch, virttype,
++                                                       flags)))
+         return NULL;
+ 
+-    if (flags & VIR_CONNECT_GET_DOMAIN_CAPABILITIES_DISABLE_DEPRECATED_FEATURES) {
+-        virQEMUCapsUpdateCPUDeprecatedFeatures(qemuCaps, virttype,
+-                                               domCaps->cpu.hostModel,
+-                                               VIR_CPU_FEATURE_DISABLE);
+-    }
+-
+-    if (flags & VIR_CONNECT_GET_DOMAIN_CAPABILITIES_EXPAND_CPU_FEATURES) {
+-        virCPUDef *cpu = domCaps->cpu.hostModel;
+-        if (cpu && virCPUExpandFeatures(arch, cpu) < 0)
+-            return NULL;
+-    }
+-
+     return virDomainCapsFormat(domCaps);
+ }
+ 
+diff --git a/tests/domaincapstest.c b/tests/domaincapstest.c
+index 5b2fc80f0a..f2248c2435 100644
+--- a/tests/domaincapstest.c
++++ b/tests/domaincapstest.c
+@@ -101,7 +101,7 @@ fillQemuCaps(virDomainCaps *domCaps,
+ 
+     if (virQEMUCapsFillDomainCaps(cfg,
+                                   qemuCaps, domCaps->arch, domCaps,
+-                                  false) < 0)
++                                  false, 0) < 0)
+         return -1;
+ 
+     /* As of f05b6a918e28 we are expecting to see OVMF_CODE.fd file which
+-- 
+2.54.0

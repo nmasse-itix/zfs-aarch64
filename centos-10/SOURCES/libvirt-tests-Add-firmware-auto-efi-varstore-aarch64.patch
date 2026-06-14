@@ -1,0 +1,84 @@
+From 17c942ba2e0eb25bf92b949badb6cf7137bbdf79 Mon Sep 17 00:00:00 2001
+Message-ID: <17c942ba2e0eb25bf92b949badb6cf7137bbdf79.1772815313.git.jdenemar@redhat.com>
+From: Andrea Bolognani <abologna@redhat.com>
+Date: Thu, 22 Jan 2026 14:45:28 +0100
+Subject: [PATCH] tests: Add firmware-auto-efi-varstore-aarch64
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This test case demonstrates how to explicitly opt into using
+the uefi-vars device for an aarch64 guest.
+
+Normally the firmware autoselection process will pick a UEFI
+build that is loaded via pflash, but by including the <varstore>
+element in the input XML we can tell the QEMU driver that we
+want want the uefi-vars device to be used instead.
+
+Currently this results in an error, because the firmware
+autoselection algorithm doesn't yet know how to properly handle
+the scenario. A future commit will address this and make things
+work as expected.
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+Acked-by: Gerd Hoffmann <kraxel@redhat.com>
+Reviewed-by: Daniel P. Berrangé <berrange@redhat.com>
+(cherry picked from commit 0653a2eae2ef7751f2d4f3dae20ff55332a90cc7)
+
+https://issues.redhat.com/browse/RHEL-82645
+
+Signed-off-by: Andrea Bolognani <abologna@redhat.com>
+---
+ ...uto-efi-varstore-aarch64.aarch64-latest.err |  1 +
+ .../firmware-auto-efi-varstore-aarch64.xml     | 18 ++++++++++++++++++
+ tests/qemuxmlconftest.c                        |  1 +
+ 3 files changed, 20 insertions(+)
+ create mode 100644 tests/qemuxmlconfdata/firmware-auto-efi-varstore-aarch64.aarch64-latest.err
+ create mode 100644 tests/qemuxmlconfdata/firmware-auto-efi-varstore-aarch64.xml
+
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-varstore-aarch64.aarch64-latest.err b/tests/qemuxmlconfdata/firmware-auto-efi-varstore-aarch64.aarch64-latest.err
+new file mode 100644
+index 0000000000..b45d304221
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-auto-efi-varstore-aarch64.aarch64-latest.err
+@@ -0,0 +1 @@
++Only one of NVRAM/varstore can be used
+diff --git a/tests/qemuxmlconfdata/firmware-auto-efi-varstore-aarch64.xml b/tests/qemuxmlconfdata/firmware-auto-efi-varstore-aarch64.xml
+new file mode 100644
+index 0000000000..e403c60643
+--- /dev/null
++++ b/tests/qemuxmlconfdata/firmware-auto-efi-varstore-aarch64.xml
+@@ -0,0 +1,18 @@
++<domain type='kvm'>
++  <name>guest</name>
++  <uuid>63840878-0deb-4095-97e6-fc444d9bc9fa</uuid>
++  <memory unit='KiB'>1048576</memory>
++  <vcpu placement='static'>1</vcpu>
++  <os firmware='efi'>
++    <type arch='aarch64' machine='virt-8.2'>hvm</type>
++    <varstore/>
++  </os>
++  <features>
++    <acpi/>
++  </features>
++  <devices>
++    <emulator>/usr/bin/qemu-system-aarch64</emulator>
++    <controller type='usb' model='none'/>
++    <memballoon model='none'/>
++  </devices>
++</domain>
+diff --git a/tests/qemuxmlconftest.c b/tests/qemuxmlconftest.c
+index b82ba0f205..77a5a18384 100644
+--- a/tests/qemuxmlconftest.c
++++ b/tests/qemuxmlconftest.c
+@@ -1666,6 +1666,7 @@ mymain(void)
+     DO_TEST_CAPS_LATEST("firmware-auto-efi-nvram-network-nbd");
+     DO_TEST_CAPS_LATEST("firmware-auto-efi-nvram-network-iscsi");
+     DO_TEST_CAPS_LATEST_PARSE_ERROR("firmware-auto-efi-varstore-q35");
++    DO_TEST_CAPS_ARCH_LATEST_PARSE_ERROR("firmware-auto-efi-varstore-aarch64", "aarch64");
+ 
+     DO_TEST_CAPS_LATEST("firmware-auto-efi-format-loader-qcow2");
+     DO_TEST_CAPS_LATEST_PARSE_ERROR("firmware-auto-efi-format-loader-qcow2-rom");
+-- 
+2.53.0

@@ -1,0 +1,59 @@
+From dbaf42b6deae0149f88a3be8fbf52a5e94eb799d Mon Sep 17 00:00:00 2001
+Message-ID: <dbaf42b6deae0149f88a3be8fbf52a5e94eb799d.1780571166.git.jdenemar@redhat.com>
+From: Michal Privoznik <mprivozn@redhat.com>
+Date: Wed, 11 Feb 2026 10:16:34 +0100
+Subject: [PATCH] qemu: Wire up new hyperv host-model mode behavior
+
+Since some hyperv features might be already enabled/disabled when
+entering qemuProcessEnableDomainFeatures() only those which are
+not set in domain XML (i.e. are VIR_TRISTATE_SWITCH_ABSENT)
+should be modified. Furthermore, some features are not a simple
+on/off switch, but a number or a string even. Well, that doesn't
+matter really as the logic for setting them is the same: only set
+their value iff they are not already set.
+
+Resolves: https://issues.redhat.com/browse/RHEL-148219
+Signed-off-by: Michal Privoznik <mprivozn@redhat.com>
+Reviewed-by: Peter Krempa <pkrempa@redhat.com>
+(cherry picked from commit 11057abfd13f6aad15f9821235b66c68e6211af6)
+Resolves: https://issues.redhat.com/browse/RHEL-151688
+Signed-off-by: Michal Privoznik <mprivozn@redhat.com>
+---
+ src/qemu/qemu_process.c                                   | 8 +++++++-
+ .../qemuxmlconfdata/hyperv-host-model.x86_64-latest.args  | 2 +-
+ 2 files changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/src/qemu/qemu_process.c b/src/qemu/qemu_process.c
+index 1aff3a277b..29601683a0 100644
+--- a/src/qemu/qemu_process.c
++++ b/src/qemu/qemu_process.c
+@@ -6964,7 +6964,13 @@ qemuProcessEnableDomainFeatures(virDomainObj *vm)
+         if (!VIR_DOMAIN_CAPS_ENUM_IS_SET(hv->features, i))
+             continue;
+ 
+-        vm->def->hyperv.features[i] = VIR_TRISTATE_SWITCH_ON;
++        if (vm->def->hyperv.features[i] == VIR_TRISTATE_SWITCH_ABSENT) {
++            vm->def->hyperv.features[i] = VIR_TRISTATE_SWITCH_ON;
++        } else {
++            /* if the user provided already config for this we skip the
++             * auto-population code */
++            continue;
++        }
+ 
+         if (i == VIR_DOMAIN_HYPERV_SPINLOCKS) {
+             if (hv->spinlocks != 0) {
+diff --git a/tests/qemuxmlconfdata/hyperv-host-model.x86_64-latest.args b/tests/qemuxmlconfdata/hyperv-host-model.x86_64-latest.args
+index 58502ff51e..d1f2326da1 100644
+--- a/tests/qemuxmlconfdata/hyperv-host-model.x86_64-latest.args
++++ b/tests/qemuxmlconfdata/hyperv-host-model.x86_64-latest.args
+@@ -12,7 +12,7 @@ XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-QEMUGuest1/.config \
+ -object '{"qom-type":"secret","id":"masterKey0","format":"raw","file":"/var/lib/libvirt/qemu/domain--1-QEMUGuest1/master-key.aes"}' \
+ -machine pc,usb=off,dump-guest-core=off,memory-backend=pc.ram,acpi=on \
+ -accel tcg \
+--cpu 'qemu64,hv-time=on,hv-relaxed=on,hv-vapic=on,hv-spinlocks=0xfff,hv-vpindex=on,hv-runtime=on,hv-synic=on,hv-stimer=on,hv-stimer-direct=on,hv-reset=on,hv-vendor-id=Linux KVM Hv,hv-frequencies=on,hv-reenlightenment=on,hv-tlbflush=on,hv-tlbflush-direct=on,hv-tlbflush-ext=on,hv-ipi=on,hv-avic=on,hv-emsr-bitmap=on,hv-xmm-input=on' \
++-cpu 'qemu64,hv-time=on,hv-relaxed=on,hv-vapic=on,hv-spinlocks=0x2000,hv-vpindex=on,hv-runtime=on,hv-synic=on,hv-stimer=on,hv-stimer-direct=on,hv-reset=on,hv-vendor-id=Linux KVM Hv,hv-frequencies=on,hv-reenlightenment=on,hv-tlbflush=on,hv-tlbflush-direct=on,hv-tlbflush-ext=on,hv-ipi=on,hv-avic=on,hv-emsr-bitmap=on' \
+ -m size=219136k \
+ -object '{"qom-type":"memory-backend-ram","id":"pc.ram","size":224395264}' \
+ -overcommit mem-lock=off \
+-- 
+2.54.0

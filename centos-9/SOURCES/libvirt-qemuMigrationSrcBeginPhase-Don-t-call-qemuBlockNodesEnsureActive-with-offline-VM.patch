@@ -1,0 +1,46 @@
+From 3e6b8f45de2cef2a8f08f84d62915b3cbaa050de Mon Sep 17 00:00:00 2001
+Message-ID: <3e6b8f45de2cef2a8f08f84d62915b3cbaa050de.1780571166.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Wed, 18 Mar 2026 08:54:16 +0100
+Subject: [PATCH] qemuMigrationSrcBeginPhase: Don't call
+ 'qemuBlockNodesEnsureActive' with offline VM
+
+Commits 7b5566ce67b18a and f879d5f40385358 ( v11.8.0-92-gf879d5f403 )
+moved around code for re-activating block backends after migration.
+While previously it was done when migration failed now we do it when we
+need qemu to do some block operations.
+
+'qemuBlockNodesEnsureActive' is thus called also when 'VIR_MIGRATE_OFFLINE'
+is used. This doesn't cause failure similar to previous patch only due
+to a conincidence as 'qemuCaps' wasn't initialized yet and thus we
+assume that QEMU doesn't support 'blockdev-set-active' and skip all
+monitor code.
+
+Make the code more robust and explicit by calling
+'qemuBlockNodesEnsureActive' only on active VMs during migration.
+
+Fixes: 7b5566ce67b18a2bebe68fdb07e046f25185f8d3
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Jiri Denemark <jdenemar@redhat.com>
+(cherry picked from commit 4537c0b8708851136b8246b1869c6008a56240ae)
+https://redhat.atlassian.net/browse/RHEL-173433
+---
+ src/qemu/qemu_migration.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/qemu/qemu_migration.c b/src/qemu/qemu_migration.c
+index 1fd9b1dd55..2b3f464fa6 100644
+--- a/src/qemu/qemu_migration.c
++++ b/src/qemu/qemu_migration.c
+@@ -2868,7 +2868,8 @@ qemuMigrationSrcBeginPhase(virQEMUDriver *driver,
+          vm->newDef && !qemuDomainVcpuHotplugIsInOrder(vm->newDef)))
+         cookieFlags |= QEMU_MIGRATION_COOKIE_CPU_HOTPLUG;
+ 
+-    if (qemuBlockNodesEnsureActive(vm, vm->job->asyncJob) < 0)
++    if (virDomainObjIsActive(vm) &&
++        qemuBlockNodesEnsureActive(vm, vm->job->asyncJob) < 0)
+         return NULL;
+ 
+     return qemuMigrationSrcBeginXML(vm, xmlin,
+-- 
+2.54.0
