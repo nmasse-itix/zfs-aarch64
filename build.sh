@@ -15,10 +15,8 @@ GIT_REPOSITORY="https://github.com/nmasse-itix/zfs-aarch64.git"
 COPR_PROJECT="zfs-aarch64"
 COPR_USERNAME="$(copr-cli whoami)"
 
-dists=(centos-9 centos-10)
-for v in $(get_fedora_versions); do
-  dists+=("fedora-$v")
-done
+echo "Computing a list of currently maintained versions of Fedora and CentOS Stream..."
+dists=( $(get_all_remote_dists) )
 
 for dist in "${dists[@]}"; do
   copr_release="${dist//centos/epel}"
