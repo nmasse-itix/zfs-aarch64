@@ -1,0 +1,118 @@
+From b2037dd33febe910a6dad3521549b747322d37cb Mon Sep 17 00:00:00 2001
+Message-ID: <b2037dd33febe910a6dad3521549b747322d37cb.1780571166.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Mon, 2 Mar 2026 12:47:43 +0100
+Subject: [PATCH] security_apparmor: Use g_auto* in
+ AppArmorSetSecurityHostdevLabel
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Ján Tomko <jtomko@redhat.com>
+(cherry picked from commit 75f698c77f0705ae9793331eadb08fbbf89572f6)
+
+Resolves: https://redhat.atlassian.net/browse/RHEL-159902
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/security/security_apparmor.c | 20 ++++++--------------
+ 1 file changed, 6 insertions(+), 14 deletions(-)
+
+diff --git a/src/security/security_apparmor.c b/src/security/security_apparmor.c
+index 6c5da2a650..74c5b10063 100644
+--- a/src/security/security_apparmor.c
++++ b/src/security/security_apparmor.c
+@@ -799,7 +799,7 @@ AppArmorSetSecurityHostdevLabel(virSecurityManager *mgr,
+                                 virDomainHostdevDef *dev,
+                                 const char *vroot)
+ {
+-    struct SDPDOP *ptr;
++    g_autofree struct SDPDOP *ptr = NULL;
+     int ret = -1;
+     virSecurityLabelDef *secdef =
+         virDomainDefGetSecurityLabelDef(def, SECURITY_APPARMOR_NAME);
+@@ -831,13 +831,12 @@ AppArmorSetSecurityHostdevLabel(virSecurityManager *mgr,
+ 
+     switch (dev->source.subsys.type) {
+     case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_USB: {
+-        virUSBDevice *usb =
++        g_autoptr(virUSBDevice) usb =
+             virUSBDeviceNew(usbsrc->bus, usbsrc->device, vroot);
+         if (!usb)
+             goto done;
+ 
+         ret = virUSBDeviceFileIterate(usb, AppArmorSetSecurityUSBLabel, ptr);
+-        virUSBDeviceFree(usb);
+         break;
+     }
+ 
+@@ -850,13 +849,12 @@ AppArmorSetSecurityHostdevLabel(virSecurityManager *mgr,
+ 
+         if (pcisrc->driver.name == VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_VFIO) {
+             if (dev->source.subsys.u.pci.driver.iommufd != VIR_TRISTATE_BOOL_YES) {
+-                char *vfioGroupDev = virPCIDeviceGetIOMMUGroupDev(pci);
++                g_autofree char *vfioGroupDev = virPCIDeviceGetIOMMUGroupDev(pci);
+ 
+                 if (!vfioGroupDev) {
+                     goto done;
+                 }
+                 ret = AppArmorSetSecurityPCILabel(pci, vfioGroupDev, ptr);
+-                VIR_FREE(vfioGroupDev);
+             } else {
+                 g_autofree char *vfiofdDev = NULL;
+ 
+@@ -877,7 +875,7 @@ AppArmorSetSecurityHostdevLabel(virSecurityManager *mgr,
+ 
+     case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_SCSI: {
+         virDomainHostdevSubsysSCSIHost *scsihostsrc = &scsisrc->u.host;
+-        virSCSIDevice *scsi =
++        g_autoptr(virSCSIDevice) scsi =
+             virSCSIDeviceNew(NULL,
+                              scsihostsrc->adapter, scsihostsrc->bus,
+                              scsihostsrc->target, scsihostsrc->unit,
+@@ -887,13 +885,11 @@ AppArmorSetSecurityHostdevLabel(virSecurityManager *mgr,
+              goto done;
+ 
+         ret = virSCSIDeviceFileIterate(scsi, AppArmorSetSecuritySCSILabel, ptr);
+-        virSCSIDeviceFree(scsi);
+-
+         break;
+     }
+ 
+     case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_SCSI_HOST: {
+-        virSCSIVHostDevice *host = virSCSIVHostDeviceNew(hostsrc->wwpn);
++        g_autoptr(virSCSIVHostDevice) host = virSCSIVHostDeviceNew(hostsrc->wwpn);
+ 
+         if (!host)
+             goto done;
+@@ -901,19 +897,16 @@ AppArmorSetSecurityHostdevLabel(virSecurityManager *mgr,
+         ret = virSCSIVHostDeviceFileIterate(host,
+                                             AppArmorSetSecurityHostLabel,
+                                             ptr);
+-        virSCSIVHostDeviceFree(host);
+         break;
+     }
+ 
+     case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_MDEV: {
+-        char *vfiodev = NULL;
++        g_autofree char *vfiodev = NULL;
+ 
+         if (!(vfiodev = virMediatedDeviceGetIOMMUGroupDev(mdevsrc->uuidstr)))
+             goto done;
+ 
+         ret = AppArmorSetSecurityHostdevLabelHelper(vfiodev, ptr);
+-
+-        VIR_FREE(vfiodev);
+         break;
+     }
+ 
+@@ -923,7 +916,6 @@ AppArmorSetSecurityHostdevLabel(virSecurityManager *mgr,
+     }
+ 
+  done:
+-    VIR_FREE(ptr);
+     return ret;
+ }
+ 
+-- 
+2.54.0

@@ -12,8 +12,8 @@
 
 Name:           %{module}-dkms
 
-Version:        2.2.9
-Release:        3%{?dist}
+Version:        2.2.10
+Release:        1%{?dist}
 Summary:        Kernel module(s) (dkms)
 
 Group:          System Environment/Kernel

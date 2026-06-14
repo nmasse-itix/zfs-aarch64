@@ -1,0 +1,611 @@
+From ab58ab56b88b4a5fc4a2d5dc85b249220951ce36 Mon Sep 17 00:00:00 2001
+Message-ID: <ab58ab56b88b4a5fc4a2d5dc85b249220951ce36.1780571166.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Mon, 2 Mar 2026 12:46:00 +0100
+Subject: [PATCH] security: Cleanup hostdev label error logic
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Current code used mix of return, goto, break and setting ret variable.
+Simplify the logic to just return -1 on error.
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Ján Tomko <jtomko@redhat.com>
+(cherry picked from commit b7483e6558acbb0d80e2ff2c3648ca63cb7f41f9)
+
+Resolves: https://redhat.atlassian.net/browse/RHEL-159902
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/security/security_apparmor.c |  56 +++++++++--------
+ src/security/security_dac.c      | 103 ++++++++++++++++++-------------
+ src/security/security_selinux.c  |  87 ++++++++++++++------------
+ 3 files changed, 139 insertions(+), 107 deletions(-)
+
+diff --git a/src/security/security_apparmor.c b/src/security/security_apparmor.c
+index 74c5b10063..1c3496893c 100644
+--- a/src/security/security_apparmor.c
++++ b/src/security/security_apparmor.c
+@@ -800,7 +800,6 @@ AppArmorSetSecurityHostdevLabel(virSecurityManager *mgr,
+                                 const char *vroot)
+ {
+     g_autofree struct SDPDOP *ptr = NULL;
+-    int ret = -1;
+     virSecurityLabelDef *secdef =
+         virDomainDefGetSecurityLabelDef(def, SECURITY_APPARMOR_NAME);
+     virDomainHostdevSubsysUSB *usbsrc = &dev->source.subsys.u.usb;
+@@ -834,9 +833,10 @@ AppArmorSetSecurityHostdevLabel(virSecurityManager *mgr,
+         g_autoptr(virUSBDevice) usb =
+             virUSBDeviceNew(usbsrc->bus, usbsrc->device, vroot);
+         if (!usb)
+-            goto done;
++            return -1;
+ 
+-        ret = virUSBDeviceFileIterate(usb, AppArmorSetSecurityUSBLabel, ptr);
++        if (virUSBDeviceFileIterate(usb, AppArmorSetSecurityUSBLabel, ptr) < 0)
++            return -1;
+         break;
+     }
+ 
+@@ -845,30 +845,32 @@ AppArmorSetSecurityHostdevLabel(virSecurityManager *mgr,
+             virPCIDeviceNew(&pcisrc->addr);
+ 
+         if (!pci)
+-            goto done;
++            return -1;
+ 
+         if (pcisrc->driver.name == VIR_DEVICE_HOSTDEV_PCI_DRIVER_NAME_VFIO) {
+             if (dev->source.subsys.u.pci.driver.iommufd != VIR_TRISTATE_BOOL_YES) {
+                 g_autofree char *vfioGroupDev = virPCIDeviceGetIOMMUGroupDev(pci);
+ 
+-                if (!vfioGroupDev) {
+-                    goto done;
+-                }
+-                ret = AppArmorSetSecurityPCILabel(pci, vfioGroupDev, ptr);
++                if (!vfioGroupDev)
++                    return -1;
++
++                if (AppArmorSetSecurityPCILabel(pci, vfioGroupDev, ptr) < 0)
++                    return -1;
+             } else {
+                 g_autofree char *vfiofdDev = NULL;
+ 
+                 if (virPCIDeviceGetVfioPath(pci, &vfiofdDev) < 0)
+-                    goto done;
++                    return -1;
+ 
+-                ret = AppArmorSetSecurityPCILabel(pci, vfiofdDev, ptr);
+-                if (ret < 0)
+-                    goto done;
++                if (AppArmorSetSecurityPCILabel(pci, vfiofdDev, ptr) < 0)
++                    return -1;
+ 
+-                ret = AppArmorSetSecurityPCILabel(pci, VIR_IOMMU_DEV_PATH, ptr);
++                if (AppArmorSetSecurityPCILabel(pci, VIR_IOMMU_DEV_PATH, ptr) < 0)
++                    return -1;
+             }
+         } else {
+-            ret = virPCIDeviceFileIterate(pci, AppArmorSetSecurityPCILabel, ptr);
++            if (virPCIDeviceFileIterate(pci, AppArmorSetSecurityPCILabel, ptr) < 0)
++                return -1;
+         }
+         break;
+     }
+@@ -881,10 +883,11 @@ AppArmorSetSecurityHostdevLabel(virSecurityManager *mgr,
+                              scsihostsrc->target, scsihostsrc->unit,
+                              dev->readonly, dev->shareable);
+ 
+-         if (!scsi)
+-             goto done;
++        if (!scsi)
++            return -1;
+ 
+-        ret = virSCSIDeviceFileIterate(scsi, AppArmorSetSecuritySCSILabel, ptr);
++        if (virSCSIDeviceFileIterate(scsi, AppArmorSetSecuritySCSILabel, ptr) < 0)
++            return -1;
+         break;
+     }
+ 
+@@ -892,11 +895,13 @@ AppArmorSetSecurityHostdevLabel(virSecurityManager *mgr,
+         g_autoptr(virSCSIVHostDevice) host = virSCSIVHostDeviceNew(hostsrc->wwpn);
+ 
+         if (!host)
+-            goto done;
++            return -1;
+ 
+-        ret = virSCSIVHostDeviceFileIterate(host,
+-                                            AppArmorSetSecurityHostLabel,
+-                                            ptr);
++        if (virSCSIVHostDeviceFileIterate(host,
++                                          AppArmorSetSecurityHostLabel,
++                                          ptr) < 0) {
++            return -1;
++        }
+         break;
+     }
+ 
+@@ -904,19 +909,18 @@ AppArmorSetSecurityHostdevLabel(virSecurityManager *mgr,
+         g_autofree char *vfiodev = NULL;
+ 
+         if (!(vfiodev = virMediatedDeviceGetIOMMUGroupDev(mdevsrc->uuidstr)))
+-            goto done;
++            return -1;
+ 
+-        ret = AppArmorSetSecurityHostdevLabelHelper(vfiodev, ptr);
++        if (AppArmorSetSecurityHostdevLabelHelper(vfiodev, ptr) < 0)
++            return -1;
+         break;
+     }
+ 
+     case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_LAST:
+-        ret = 0;
+         break;
+     }
+ 
+- done:
+-    return ret;
++    return 0;
+ }
+ 
+ 
+diff --git a/src/security/security_dac.c b/src/security/security_dac.c
+index 704c8dbfec..2a4c7f6a3c 100644
+--- a/src/security/security_dac.c
++++ b/src/security/security_dac.c
+@@ -1234,7 +1234,6 @@ virSecurityDACSetHostdevLabel(virSecurityManager *mgr,
+     virDomainHostdevSubsysSCSI *scsisrc = &dev->source.subsys.u.scsi;
+     virDomainHostdevSubsysSCSIVHost *hostsrc = &dev->source.subsys.u.scsi_host;
+     virDomainHostdevSubsysMediatedDev *mdevsrc = &dev->source.subsys.u.mdev;
+-    int ret = -1;
+ 
+     if (!priv->dynamicOwnership)
+         return 0;
+@@ -1265,9 +1264,11 @@ virSecurityDACSetHostdevLabel(virSecurityManager *mgr,
+         if (!(usb = virUSBDeviceNew(usbsrc->bus, usbsrc->device, vroot)))
+             return -1;
+ 
+-        ret = virUSBDeviceFileIterate(usb,
+-                                      virSecurityDACSetUSBLabel,
+-                                      &cbdata);
++        if (virUSBDeviceFileIterate(usb,
++                                    virSecurityDACSetUSBLabel,
++                                    &cbdata) < 0) {
++            return -1;
++        }
+         break;
+     }
+ 
+@@ -1275,7 +1276,7 @@ virSecurityDACSetHostdevLabel(virSecurityManager *mgr,
+         g_autoptr(virPCIDevice) pci = NULL;
+ 
+         if (!virPCIDeviceExists(&pcisrc->addr))
+-            break;
++            return -1;
+ 
+         pci = virPCIDeviceNew(&pcisrc->addr);
+ 
+@@ -1289,25 +1290,29 @@ virSecurityDACSetHostdevLabel(virSecurityManager *mgr,
+                 if (!vfioGroupDev)
+                     return -1;
+ 
+-                ret = virSecurityDACSetHostdevLabelHelper(vfioGroupDev,
+-                                                          false,
+-                                                          &cbdata);
++                if (virSecurityDACSetHostdevLabelHelper(vfioGroupDev,
++                                                        false,
++                                                        &cbdata) < 0) {
++                    return -1;
++                }
+             } else {
+                 g_autofree char *vfiofdDev = NULL;
+ 
+                 if (virPCIDeviceGetVfioPath(pci, &vfiofdDev) < 0)
+                     return -1;
+ 
+-                ret = virSecurityDACSetHostdevLabelHelper(vfiofdDev, false, &cbdata);
+-                if (ret < 0)
+-                    break;
++                if (virSecurityDACSetHostdevLabelHelper(vfiofdDev, false, &cbdata) < 0)
++                    return -1;
+ 
+-                ret = virSecurityDACSetHostdevLabelHelper(VIR_IOMMU_DEV_PATH, false, &cbdata);
++                if (virSecurityDACSetHostdevLabelHelper(VIR_IOMMU_DEV_PATH, false, &cbdata) < 0)
++                    return -1;
+             }
+         } else {
+-            ret = virPCIDeviceFileIterate(pci,
+-                                          virSecurityDACSetPCILabel,
+-                                          &cbdata);
++            if (virPCIDeviceFileIterate(pci,
++                                        virSecurityDACSetPCILabel,
++                                        &cbdata) < 0) {
++                return -1;
++            }
+         }
+         break;
+     }
+@@ -1323,9 +1328,11 @@ virSecurityDACSetHostdevLabel(virSecurityManager *mgr,
+         if (!scsi)
+             return -1;
+ 
+-        ret = virSCSIDeviceFileIterate(scsi,
+-                                       virSecurityDACSetSCSILabel,
+-                                       &cbdata);
++        if (virSCSIDeviceFileIterate(scsi,
++                                     virSecurityDACSetSCSILabel,
++                                     &cbdata) < 0) {
++            return -1;
++        }
+         break;
+     }
+ 
+@@ -1335,9 +1342,11 @@ virSecurityDACSetHostdevLabel(virSecurityManager *mgr,
+         if (!host)
+             return -1;
+ 
+-        ret = virSCSIVHostDeviceFileIterate(host,
+-                                            virSecurityDACSetHostLabel,
+-                                            &cbdata);
++        if (virSCSIVHostDeviceFileIterate(host,
++                                          virSecurityDACSetHostLabel,
++                                          &cbdata) < 0) {
++            return -1;
++        }
+         break;
+     }
+ 
+@@ -1347,16 +1356,16 @@ virSecurityDACSetHostdevLabel(virSecurityManager *mgr,
+         if (!(vfiodev = virMediatedDeviceGetIOMMUGroupDev(mdevsrc->uuidstr)))
+             return -1;
+ 
+-        ret = virSecurityDACSetHostdevLabelHelper(vfiodev, false, &cbdata);
++        if (virSecurityDACSetHostdevLabelHelper(vfiodev, false, &cbdata) < 0)
++            return -1;
+         break;
+     }
+ 
+     case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_LAST:
+-        ret = 0;
+         break;
+     }
+ 
+-    return ret;
++    return 0;
+ }
+ 
+ 
+@@ -1414,7 +1423,6 @@ virSecurityDACRestoreHostdevLabel(virSecurityManager *mgr,
+     virDomainHostdevSubsysSCSI *scsisrc = &dev->source.subsys.u.scsi;
+     virDomainHostdevSubsysSCSIVHost *hostsrc = &dev->source.subsys.u.scsi_host;
+     virDomainHostdevSubsysMediatedDev *mdevsrc = &dev->source.subsys.u.mdev;
+-    int ret = -1;
+ 
+     secdef = virDomainDefGetSecurityLabelDef(def, SECURITY_DAC_NAME);
+ 
+@@ -1441,7 +1449,8 @@ virSecurityDACRestoreHostdevLabel(virSecurityManager *mgr,
+         if (!(usb = virUSBDeviceNew(usbsrc->bus, usbsrc->device, vroot)))
+             return -1;
+ 
+-        ret = virUSBDeviceFileIterate(usb, virSecurityDACRestoreUSBLabel, mgr);
++        if (virUSBDeviceFileIterate(usb, virSecurityDACRestoreUSBLabel, mgr) < 0)
++            return -1;
+         break;
+     }
+ 
+@@ -1449,7 +1458,7 @@ virSecurityDACRestoreHostdevLabel(virSecurityManager *mgr,
+         g_autoptr(virPCIDevice) pci = NULL;
+ 
+         if (!virPCIDeviceExists(&pcisrc->addr))
+-            break;
++            return -1;
+ 
+         pci = virPCIDeviceNew(&pcisrc->addr);
+ 
+@@ -1463,24 +1472,29 @@ virSecurityDACRestoreHostdevLabel(virSecurityManager *mgr,
+                 if (!vfioGroupDev)
+                     return -1;
+ 
+-                ret = virSecurityDACRestoreFileLabelInternal(mgr, NULL,
+-                                                         vfioGroupDev, false);
++                if (virSecurityDACRestoreFileLabelInternal(mgr, NULL,
++                                                           vfioGroupDev, false) < 0) {
++                    return -1;
++                }
+             } else {
+                 g_autofree char *vfiofdDev = NULL;
+ 
+                 if (virPCIDeviceGetVfioPath(pci, &vfiofdDev) < 0)
+                     return -1;
+ 
+-                ret = virSecurityDACRestoreFileLabelInternal(mgr, NULL,
+-                                                             vfiofdDev, false);
+-                if (ret < 0)
+-                    break;
++                if (virSecurityDACRestoreFileLabelInternal(mgr, NULL,
++                                                           vfiofdDev, false) < 0) {
++                    return -1;
++                }
+ 
+-                ret = virSecurityDACRestoreFileLabelInternal(mgr, NULL,
+-                                                             VIR_IOMMU_DEV_PATH, false);
++                if (virSecurityDACRestoreFileLabelInternal(mgr, NULL,
++                                                           VIR_IOMMU_DEV_PATH, false) < 0) {
++                    return -1;
++                }
+             }
+         } else {
+-            ret = virPCIDeviceFileIterate(pci, virSecurityDACRestorePCILabel, mgr);
++            if (virPCIDeviceFileIterate(pci, virSecurityDACRestorePCILabel, mgr) < 0)
++                return -1;
+         }
+         break;
+     }
+@@ -1496,7 +1510,8 @@ virSecurityDACRestoreHostdevLabel(virSecurityManager *mgr,
+         if (!scsi)
+             return -1;
+ 
+-        ret = virSCSIDeviceFileIterate(scsi, virSecurityDACRestoreSCSILabel, mgr);
++        if (virSCSIDeviceFileIterate(scsi, virSecurityDACRestoreSCSILabel, mgr) < 0)
++            return -1;
+         break;
+     }
+ 
+@@ -1506,9 +1521,11 @@ virSecurityDACRestoreHostdevLabel(virSecurityManager *mgr,
+         if (!host)
+             return -1;
+ 
+-        ret = virSCSIVHostDeviceFileIterate(host,
+-                                            virSecurityDACRestoreHostLabel,
+-                                            mgr);
++        if (virSCSIVHostDeviceFileIterate(host,
++                                          virSecurityDACRestoreHostLabel,
++                                          mgr) < 0) {
++            return -1;
++        }
+         break;
+     }
+ 
+@@ -1518,16 +1535,16 @@ virSecurityDACRestoreHostdevLabel(virSecurityManager *mgr,
+         if (!(vfiodev = virMediatedDeviceGetIOMMUGroupDev(mdevsrc->uuidstr)))
+             return -1;
+ 
+-        ret = virSecurityDACRestoreFileLabelInternal(mgr, NULL, vfiodev, false);
++        if (virSecurityDACRestoreFileLabelInternal(mgr, NULL, vfiodev, false) < 0)
++            return -1;
+         break;
+     }
+ 
+     case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_LAST:
+-        ret = 0;
+         break;
+     }
+ 
+-    return ret;
++    return 0;
+ }
+ 
+ 
+diff --git a/src/security/security_selinux.c b/src/security/security_selinux.c
+index 4a5f61d16b..96ca59a7a4 100644
+--- a/src/security/security_selinux.c
++++ b/src/security/security_selinux.c
+@@ -2219,8 +2219,6 @@ virSecuritySELinuxSetHostdevSubsysLabel(virSecurityManager *mgr,
+     virDomainHostdevSubsysMediatedDev *mdevsrc = &dev->source.subsys.u.mdev;
+     virSecuritySELinuxCallbackData data = {.mgr = mgr, .def = def};
+ 
+-    int ret = -1;
+-
+     /* Like virSecuritySELinuxSetImageLabelInternal() for a networked
+      * disk, do nothing for an iSCSI hostdev
+      */
+@@ -2241,7 +2239,8 @@ virSecuritySELinuxSetHostdevSubsysLabel(virSecurityManager *mgr,
+         if (!usb)
+             return -1;
+ 
+-        ret = virUSBDeviceFileIterate(usb, virSecuritySELinuxSetUSBLabel, &data);
++        if (virUSBDeviceFileIterate(usb, virSecuritySELinuxSetUSBLabel, &data) < 0)
++            return -1;
+         break;
+     }
+ 
+@@ -2249,7 +2248,7 @@ virSecuritySELinuxSetHostdevSubsysLabel(virSecurityManager *mgr,
+         g_autoptr(virPCIDevice) pci = NULL;
+ 
+         if (!virPCIDeviceExists(&pcisrc->addr))
+-            break;
++            return -1;
+ 
+         pci = virPCIDeviceNew(&pcisrc->addr);
+ 
+@@ -2263,23 +2262,26 @@ virSecuritySELinuxSetHostdevSubsysLabel(virSecurityManager *mgr,
+                 if (!vfioGroupDev)
+                     return -1;
+ 
+-                ret = virSecuritySELinuxSetHostdevLabelHelper(vfioGroupDev,
+-                                                              false,
+-                                                              &data);
++                if (virSecuritySELinuxSetHostdevLabelHelper(vfioGroupDev,
++                                                            false,
++                                                            &data) < 0) {
++                    return -1;
++                }
+             } else {
+                 g_autofree char *vfiofdDev = NULL;
+ 
+                 if (virPCIDeviceGetVfioPath(pci, &vfiofdDev) < 0)
+                     return -1;
+ 
+-                ret = virSecuritySELinuxSetHostdevLabelHelper(vfiofdDev, false, &data);
+-                if (ret)
+-                    break;
++                if (virSecuritySELinuxSetHostdevLabelHelper(vfiofdDev, false, &data) < 0)
++                    return -1;
+ 
+-                ret = virSecuritySELinuxSetHostdevLabelHelper(VIR_IOMMU_DEV_PATH, false, &data);
++                if (virSecuritySELinuxSetHostdevLabelHelper(VIR_IOMMU_DEV_PATH, false, &data) < 0)
++                    return -1;
+             }
+         } else {
+-            ret = virPCIDeviceFileIterate(pci, virSecuritySELinuxSetPCILabel, &data);
++            if (virPCIDeviceFileIterate(pci, virSecuritySELinuxSetPCILabel, &data) < 0)
++                return -1;
+         }
+         break;
+     }
+@@ -2296,9 +2298,11 @@ virSecuritySELinuxSetHostdevSubsysLabel(virSecurityManager *mgr,
+         if (!scsi)
+             return -1;
+ 
+-        ret = virSCSIDeviceFileIterate(scsi,
+-                                       virSecuritySELinuxSetSCSILabel,
+-                                       &data);
++        if (virSCSIDeviceFileIterate(scsi,
++                                     virSecuritySELinuxSetSCSILabel,
++                                     &data) < 0) {
++            return -1;
++        }
+         break;
+     }
+ 
+@@ -2308,9 +2312,11 @@ virSecuritySELinuxSetHostdevSubsysLabel(virSecurityManager *mgr,
+         if (!host)
+             return -1;
+ 
+-        ret = virSCSIVHostDeviceFileIterate(host,
+-                                            virSecuritySELinuxSetHostLabel,
+-                                            &data);
++        if (virSCSIVHostDeviceFileIterate(host,
++                                          virSecuritySELinuxSetHostLabel,
++                                          &data) < 0) {
++            return -1;
++        }
+         break;
+     }
+ 
+@@ -2318,18 +2324,18 @@ virSecuritySELinuxSetHostdevSubsysLabel(virSecurityManager *mgr,
+         g_autofree char *vfiodev = NULL;
+ 
+         if (!(vfiodev = virMediatedDeviceGetIOMMUGroupDev(mdevsrc->uuidstr)))
+-            return ret;
++            return -1;
+ 
+-        ret = virSecuritySELinuxSetHostdevLabelHelper(vfiodev, false, &data);
++        if (virSecuritySELinuxSetHostdevLabelHelper(vfiodev, false, &data) < 0)
++            return -1;
+         break;
+     }
+ 
+     case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_LAST:
+-        ret = 0;
+         break;
+     }
+ 
+-    return ret;
++    return 0;
+ }
+ 
+ 
+@@ -2467,7 +2473,6 @@ virSecuritySELinuxRestoreHostdevSubsysLabel(virSecurityManager *mgr,
+     virDomainHostdevSubsysSCSI *scsisrc = &dev->source.subsys.u.scsi;
+     virDomainHostdevSubsysSCSIVHost *hostsrc = &dev->source.subsys.u.scsi_host;
+     virDomainHostdevSubsysMediatedDev *mdevsrc = &dev->source.subsys.u.mdev;
+-    int ret = -1;
+ 
+     /* Like virSecuritySELinuxRestoreImageLabelInt() for a networked
+      * disk, do nothing for an iSCSI hostdev
+@@ -2489,7 +2494,8 @@ virSecuritySELinuxRestoreHostdevSubsysLabel(virSecurityManager *mgr,
+         if (!usb)
+             return -1;
+ 
+-        ret = virUSBDeviceFileIterate(usb, virSecuritySELinuxRestoreUSBLabel, mgr);
++        if (virUSBDeviceFileIterate(usb, virSecuritySELinuxRestoreUSBLabel, mgr) < 0)
++            return -1;
+         break;
+     }
+ 
+@@ -2497,7 +2503,7 @@ virSecuritySELinuxRestoreHostdevSubsysLabel(virSecurityManager *mgr,
+         g_autoptr(virPCIDevice) pci = NULL;
+ 
+         if (!virPCIDeviceExists(&pcisrc->addr))
+-            break;
++            return -1;
+ 
+         pci = virPCIDeviceNew(&pcisrc->addr);
+ 
+@@ -2511,21 +2517,23 @@ virSecuritySELinuxRestoreHostdevSubsysLabel(virSecurityManager *mgr,
+                 if (!vfioGroupDev)
+                     return -1;
+ 
+-                ret = virSecuritySELinuxRestoreFileLabel(mgr, vfioGroupDev, false, false);
++                if (virSecuritySELinuxRestoreFileLabel(mgr, vfioGroupDev, false, false) < 0)
++                    return -1;
+             } else {
+                 g_autofree char *vfiofdDev = NULL;
+ 
+                 if (virPCIDeviceGetVfioPath(pci, &vfiofdDev) < 0)
+                     return -1;
+ 
+-                ret = virSecuritySELinuxRestoreFileLabel(mgr, vfiofdDev, false, false);
+-                if (ret < 0)
+-                    break;
++                if (virSecuritySELinuxRestoreFileLabel(mgr, vfiofdDev, false, false) < 0)
++                    return -1;
+ 
+-                ret = virSecuritySELinuxRestoreFileLabel(mgr, VIR_IOMMU_DEV_PATH, false, false);
++                if (virSecuritySELinuxRestoreFileLabel(mgr, VIR_IOMMU_DEV_PATH, false, false) < 0)
++                    return -1;
+             }
+         } else {
+-            ret = virPCIDeviceFileIterate(pci, virSecuritySELinuxRestorePCILabel, mgr);
++            if (virPCIDeviceFileIterate(pci, virSecuritySELinuxRestorePCILabel, mgr) < 0)
++                return -1;
+         }
+         break;
+     }
+@@ -2541,7 +2549,8 @@ virSecuritySELinuxRestoreHostdevSubsysLabel(virSecurityManager *mgr,
+         if (!scsi)
+             return -1;
+ 
+-        ret = virSCSIDeviceFileIterate(scsi, virSecuritySELinuxRestoreSCSILabel, mgr);
++        if (virSCSIDeviceFileIterate(scsi, virSecuritySELinuxRestoreSCSILabel, mgr) < 0)
++            return -1;
+         break;
+     }
+ 
+@@ -2551,9 +2560,11 @@ virSecuritySELinuxRestoreHostdevSubsysLabel(virSecurityManager *mgr,
+         if (!host)
+             return -1;
+ 
+-        ret = virSCSIVHostDeviceFileIterate(host,
+-                                            virSecuritySELinuxRestoreHostLabel,
+-                                            mgr);
++        if (virSCSIVHostDeviceFileIterate(host,
++                                          virSecuritySELinuxRestoreHostLabel,
++                                          mgr) < 0) {
++            return -1;
++        }
+         break;
+     }
+ 
+@@ -2563,16 +2574,16 @@ virSecuritySELinuxRestoreHostdevSubsysLabel(virSecurityManager *mgr,
+         if (!(vfiodev = virMediatedDeviceGetIOMMUGroupDev(mdevsrc->uuidstr)))
+             return -1;
+ 
+-        ret = virSecuritySELinuxRestoreFileLabel(mgr, vfiodev, false, false);
++        if (virSecuritySELinuxRestoreFileLabel(mgr, vfiodev, false, false) < 0)
++            return -1;
+         break;
+     }
+ 
+     case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_LAST:
+-        ret = 0;
+         break;
+     }
+ 
+-    return ret;
++    return 0;
+ }
+ 
+ 
+-- 
+2.54.0

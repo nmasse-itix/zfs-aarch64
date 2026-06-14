@@ -90,8 +90,8 @@
 %define __python_sitelib          %(%{__python} -Esc "from distutils.sysconfig import get_python_lib; print(get_python_lib())" 2>/dev/null || %{__python} -Esc "import sysconfig; print(sysconfig.get_path('purelib'))")
 
 Name:           zfs
-Version:        2.2.9
-Release:        3%{?dist}
+Version:        2.2.10
+Release:        1%{?dist}
 Summary:        Commands to control the kernel modules and libraries
 
 Group:          System Environment/Kernel
@@ -529,7 +529,6 @@ systemctl --system daemon-reload >/dev/null || true
 %config(noreplace) %{_sysconfdir}/%{name}/zed.d/*
 %config(noreplace) %{_sysconfdir}/%{name}/zpool.d/*
 %config(noreplace) %{_sysconfdir}/%{name}/vdev_id.conf.*.example
-%attr(440, root, root) %config(noreplace) %{_sysconfdir}/sudoers.d/*
 
 %config(noreplace) %{_bashcompletiondir}/zfs
 %config(noreplace) %{_bashcompletiondir}/zpool

@@ -1,0 +1,45 @@
+From b338719eb9908c7dfd493d5ab4a1b0bcc2258d9b Mon Sep 17 00:00:00 2001
+Message-ID: <b338719eb9908c7dfd493d5ab4a1b0bcc2258d9b.1780571166.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Thu, 26 Mar 2026 14:32:36 +0100
+Subject: [PATCH] hypervisor: Call virWaitForDevices() after detaching host
+ devices
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+On systems with selinux enabled starting a VM with managed host device
+using IOMMUFD backend can run into race-condition where both libvirt and
+udev are setting selinux label on /dev/vfio/devices/vfioX device. If
+udev is the last one to set selinux label starting VM fails with:
+
+error: internal error: QEMU unexpectedly closed the monitor (vm='test'): 2026-03-26T15:47:36.620422Z qemu-kvm: -device {"driver":"vfio-pci","id":"hostdev0","iommufd":"iommufd0","fd":"20","bus":"pci.7","addr":"0x0"}: vfio hostdev0: Failed to add fd 20 to KVM VFIO device: Invalid argument
+
+We need to wait for udev to finish processing all events.
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Ján Tomko <jtomko@redhat.com>
+(cherry picked from commit b96ea4db3aabac4790d6e1d53e2f309f5e73efae)
+
+Resolves: https://redhat.atlassian.net/browse/RHEL-156803
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ src/hypervisor/virhostdev.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/src/hypervisor/virhostdev.c b/src/hypervisor/virhostdev.c
+index 43155ceb6c..981ca4cd20 100644
+--- a/src/hypervisor/virhostdev.c
++++ b/src/hypervisor/virhostdev.c
+@@ -782,6 +782,9 @@ virHostdevPreparePCIDevicesImpl(virHostdevManager *mgr,
+         }
+     }
+ 
++    /* Step 2.5: Wait for udev to handle all events for devices. */
++    virWaitForDevices();
++
+     /* At this point, all devices are attached to the stub driver and have
+      * been marked as inactive */
+ 
+-- 
+2.54.0

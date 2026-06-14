@@ -1,0 +1,65 @@
+From 2141acf3d9891c1451d741abc1d043e35b1ed074 Mon Sep 17 00:00:00 2001
+Message-ID: <2141acf3d9891c1451d741abc1d043e35b1ed074.1780571167.git.jdenemar@redhat.com>
+From: Jiri Denemark <jdenemar@redhat.com>
+Date: Thu, 21 May 2026 14:15:01 +0200
+Subject: [PATCH] qemu_capabilities: Use g_autoptr in
+ virQEMUCapsInitHostCPUModel
+
+Signed-off-by: Jiri Denemark <jdenemar@redhat.com>
+Reviewed-by: Peter Krempa <pkrempa@redhat.com>
+(cherry picked from commit eca4c6672d3f373bb9cff271adfc2cd8b13cb4bc)
+
+https://redhat.atlassian.net/browse/RHEL-177364
+
+Signed-off-by: Jiri Denemark <jdenemar@redhat.com>
+---
+ src/qemu/qemu_capabilities.c | 22 +++++++++-------------
+ 1 file changed, 9 insertions(+), 13 deletions(-)
+
+diff --git a/src/qemu/qemu_capabilities.c b/src/qemu/qemu_capabilities.c
+index 6951e50c03..2265dae7ba 100644
+--- a/src/qemu/qemu_capabilities.c
++++ b/src/qemu/qemu_capabilities.c
+@@ -4087,11 +4087,11 @@ virQEMUCapsInitHostCPUModel(virQEMUCaps *qemuCaps,
+                             virArch hostArch,
+                             virDomainVirtType type)
+ {
+-    virCPUDef *cpu = NULL;
+-    virCPUDef *cpuExpanded = NULL;
+-    virCPUDef *migCPU = NULL;
+-    virCPUDef *hostCPU = NULL;
+-    virCPUDef *fullCPU = NULL;
++    g_autoptr(virCPUDef) cpu = NULL;
++    g_autoptr(virCPUDef) cpuExpanded = NULL;
++    g_autoptr(virCPUDef) migCPU = NULL;
++    g_autoptr(virCPUDef) hostCPU = NULL;
++    g_autoptr(virCPUDef) fullCPU = NULL;
+     unsigned int physAddrSize = 0;
+     size_t i;
+     int rc;
+@@ -4165,19 +4165,15 @@ virQEMUCapsInitHostCPUModel(virQEMUCaps *qemuCaps,
+     if (virQEMUCapsTypeIsAccelerated(type))
+         virHostCPUGetPhysAddrSize(hostArch, &physAddrSize);
+ 
+-    virQEMUCapsSetHostModel(qemuCaps, type, physAddrSize, cpu, migCPU, fullCPU);
++    virQEMUCapsSetHostModel(qemuCaps, type, physAddrSize,
++                            g_steal_pointer(&cpu),
++                            g_steal_pointer(&migCPU),
++                            g_steal_pointer(&fullCPU));
+ 
+- cleanup:
+-    virCPUDefFree(cpuExpanded);
+-    virCPUDefFree(hostCPU);
+     return;
+ 
+  error:
+-    virCPUDefFree(cpu);
+-    virCPUDefFree(migCPU);
+-    virCPUDefFree(fullCPU);
+     virResetLastError();
+-    goto cleanup;
+ }
+ 
+ 
+-- 
+2.54.0

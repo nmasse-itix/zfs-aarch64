@@ -1,0 +1,54 @@
+From 9644e7aceda1ca2b88d9eb699a274c5b4eafbda1 Mon Sep 17 00:00:00 2001
+Message-ID: <9644e7aceda1ca2b88d9eb699a274c5b4eafbda1.1780571166.git.jdenemar@redhat.com>
+From: Jiri Denemark <jdenemar@redhat.com>
+Date: Wed, 11 Mar 2026 11:31:06 +0100
+Subject: [PATCH] Introduce EXPAND_CPU_FEATURES flag for domain capabilities
+
+The new VIR_CONNECT_GET_DOMAIN_CAPABILITIES_EXPAND_CPU_FEATURES flag for
+virConnectGetDomainCapabilities can be used to request the host-model
+CPU definition to include all supported features (normally only extra
+features relative to the selected CPU model are listed).
+
+Signed-off-by: Jiri Denemark <jdenemar@redhat.com>
+Reviewed-by: Peter Krempa <pkrempa@redhat.com>
+(cherry picked from commit 8aa13d1b16b08feea37ecacc85540671e7995bb8)
+
+https://issues.redhat.com/browse/RHEL-153653
+
+Signed-off-by: Jiri Denemark <jdenemar@redhat.com>
+---
+ include/libvirt/libvirt-domain.h | 2 ++
+ src/libvirt-domain.c             | 5 +++++
+ 2 files changed, 7 insertions(+)
+
+diff --git a/include/libvirt/libvirt-domain.h b/include/libvirt/libvirt-domain.h
+index 8e62bd23d4..1c5dbdc26e 100644
+--- a/include/libvirt/libvirt-domain.h
++++ b/include/libvirt/libvirt-domain.h
+@@ -1517,6 +1517,8 @@ int virDomainMigrateStartPostCopy(virDomainPtr domain,
+ typedef enum {
+     /* Report host model with deprecated features disabled. (Since: 11.0.0) */
+     VIR_CONNECT_GET_DOMAIN_CAPABILITIES_DISABLE_DEPRECATED_FEATURES = (1 << 0),
++    /* Report all host model CPU features. (Since: 12.2.0) */
++    VIR_CONNECT_GET_DOMAIN_CAPABILITIES_EXPAND_CPU_FEATURES = (1 << 1),
+ } virConnectGetDomainCapabilitiesFlags;
+ 
+ char * virConnectGetDomainCapabilities(virConnectPtr conn,
+diff --git a/src/libvirt-domain.c b/src/libvirt-domain.c
+index c7451fee05..034f126dd5 100644
+--- a/src/libvirt-domain.c
++++ b/src/libvirt-domain.c
+@@ -12330,6 +12330,11 @@ virDomainSetUserPassword(virDomainPtr dom,
+  * instance, if host, libvirt and qemu is capable of VFIO
+  * passthrough and so on.
+  *
++ * If @flags includes VIR_CONNECT_GET_DOMAIN_CAPABILITIES_EXPAND_CPU_FEATURES,
++ * libvirt will explicitly list all CPU features (in host-model CPU definition)
++ * that are supported on the host. Without this flag features that are part of
++ * the CPU model itself will not be listed.
++ *
+  * Returns NULL in case of error or an XML string
+  * defining the capabilities.
+  *
+-- 
+2.54.0

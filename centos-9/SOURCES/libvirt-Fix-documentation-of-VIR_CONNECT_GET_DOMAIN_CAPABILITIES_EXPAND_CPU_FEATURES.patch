@@ -1,0 +1,73 @@
+From 7a8f13f443843e8903ab18d5917f6f8bc4192dd6 Mon Sep 17 00:00:00 2001
+Message-ID: <7a8f13f443843e8903ab18d5917f6f8bc4192dd6.1780571167.git.jdenemar@redhat.com>
+From: Jiri Denemark <jdenemar@redhat.com>
+Date: Tue, 26 May 2026 15:38:59 +0200
+Subject: [PATCH] Fix documentation of
+ VIR_CONNECT_GET_DOMAIN_CAPABILITIES_EXPAND_CPU_FEATURES
+
+The flag is designed for expanding the CPU model used by host-model. But
+the documentation was sometimes describing it as showing all CPU
+features supported on the host, which is wrong as the host may support
+features that would not be enabled in host-model.
+
+Signed-off-by: Jiri Denemark <jdenemar@redhat.com>
+Reviewed-by: Peter Krempa <pkrempa@redhat.com>
+(cherry picked from commit 090183a7dc4a64cca83937eff9a4e93a45b4d712)
+
+https://redhat.atlassian.net/browse/RHEL-177364
+
+Signed-off-by: Jiri Denemark <jdenemar@redhat.com>
+---
+ docs/manpages/virsh.rst | 5 +++--
+ src/libvirt-domain.c    | 6 +++---
+ tools/virsh-host.c      | 2 +-
+ 3 files changed, 7 insertions(+), 6 deletions(-)
+
+diff --git a/docs/manpages/virsh.rst b/docs/manpages/virsh.rst
+index 85fa6ab011..7169b6bc05 100644
+--- a/docs/manpages/virsh.rst
++++ b/docs/manpages/virsh.rst
+@@ -640,8 +640,9 @@ flagged as deprecated for the CPU model by the hypervisor. These
+ features will be paired with the "disable" policy.
+ 
+ The **--expand-cpu-features** option will cause the host-model CPU definition
+-to contain all CPU features supported on the host including those implicitly
+-enabled by the selected CPU model.
++to contain all required CPU features including those implicitly enabled by the
++selected CPU model. Without this flag features that are part of the CPU model
++itself will not be listed.
+ 
+ 
+ pool-capabilities
+diff --git a/src/libvirt-domain.c b/src/libvirt-domain.c
+index 034f126dd5..e146fa7e82 100644
+--- a/src/libvirt-domain.c
++++ b/src/libvirt-domain.c
+@@ -12331,9 +12331,9 @@ virDomainSetUserPassword(virDomainPtr dom,
+  * passthrough and so on.
+  *
+  * If @flags includes VIR_CONNECT_GET_DOMAIN_CAPABILITIES_EXPAND_CPU_FEATURES,
+- * libvirt will explicitly list all CPU features (in host-model CPU definition)
+- * that are supported on the host. Without this flag features that are part of
+- * the CPU model itself will not be listed.
++ * libvirt will explicitly list all CPU features that will be enabled for
++ * host-model CPU mode. Without this flag features that are part of the CPU
++ * model itself will not be listed.
+  *
+  * Returns NULL in case of error or an XML string
+  * defining the capabilities.
+diff --git a/tools/virsh-host.c b/tools/virsh-host.c
+index dd98917fa8..5dbeb54ae5 100644
+--- a/tools/virsh-host.c
++++ b/tools/virsh-host.c
+@@ -120,7 +120,7 @@ static const vshCmdOptDef opts_domcapabilities[] = {
+     },
+     {.name = "expand-cpu-features",
+      .type = VSH_OT_BOOL,
+-     .help = N_("show all features in host CPU model"),
++     .help = N_("expand 'host-model' CPU to also show features enabled by the CPU model"),
+     },
+     {.name = NULL}
+ };
+-- 
+2.54.0

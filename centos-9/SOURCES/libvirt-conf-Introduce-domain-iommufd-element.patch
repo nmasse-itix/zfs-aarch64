@@ -1,0 +1,218 @@
+From 28b77cb65fd0eedbd017d97d803256265ce3cbf4 Mon Sep 17 00:00:00 2001
+Message-ID: <28b77cb65fd0eedbd017d97d803256265ce3cbf4.1780571166.git.jdenemar@redhat.com>
+From: Pavel Hrdina <phrdina@redhat.com>
+Date: Fri, 13 Mar 2026 11:57:57 +0100
+Subject: [PATCH] conf: Introduce domain iommufd element
+
+In addition to configuring IOMMUFD for each host device add
+configuration for the whole VM. This will be extended to add support for
+passing FD to libvirt from management applications.
+
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Peter Krempa <pkrempa@redhat.com>
+(cherry picked from commit c03b8f0804f648a2bbc2eb7e957f2f8821b8e167)
+
+Resolves: https://redhat.atlassian.net/browse/RHEL-156803
+Signed-off-by: Pavel Hrdina <phrdina@redhat.com>
+---
+ docs/formatdomain.rst                  | 21 ++++++++++++
+ src/conf/domain_conf.c                 | 46 ++++++++++++++++++++++++++
+ src/conf/domain_conf.h                 |  2 ++
+ src/conf/schemas/domaincommon.rng      | 12 +++++++
+ tests/genericxml2xmlindata/iommufd.xml | 18 ++++++++++
+ tests/genericxml2xmltest.c             |  2 ++
+ 6 files changed, 101 insertions(+)
+ create mode 100644 tests/genericxml2xmlindata/iommufd.xml
+
+diff --git a/docs/formatdomain.rst b/docs/formatdomain.rst
+index 5ec9a41aac..86b3bad903 100644
+--- a/docs/formatdomain.rst
++++ b/docs/formatdomain.rst
+@@ -1361,6 +1361,27 @@ Block I/O Tuning
+    ``write_iops_sec``
+       Write I/O operations per second limit. :since:`Since 1.2.2`
+ 
++Host Device IOMMUFD
++-------------------
++
++::
++
++   <domain>
++     ...
++     <iommufd enabled='yes'/>
++     ...
++   </domain>
++
++``iommufd``
++   :since:`Since 12.2.0 (QEMU/KVM only)` The optional ``iommufd`` element with
++   mandatory ``enabled`` attribute can be used to enable IOMMUFD backend for
++   VFIO host devices. This provides an interface to propagate DMA mappings to
++   kernel for assigned devices. Libvirt will open the /dev/iommu and VFIO device
++   cdev and pass associated file descriptors to QEMU.
++
++   This controls IOMMUFD usage for all host devices, each device can change this
++   global default by setting ``iommufd`` attribute for ``driver`` element.
++
+ Resource partitioning
+ ---------------------
+ 
+diff --git a/src/conf/domain_conf.c b/src/conf/domain_conf.c
+index 576a1bd79b..1e91561fea 100644
+--- a/src/conf/domain_conf.c
++++ b/src/conf/domain_conf.c
+@@ -19743,6 +19743,31 @@ virDomainDefControllersParse(virDomainDef *def,
+     return 0;
+ }
+ 
++static int
++virDomainDefIommufdParse(virDomainDef *def,
++                         xmlXPathContextPtr ctxt)
++{
++    int n;
++    g_autofree xmlNodePtr *nodes = NULL;
++
++    if ((n = virXPathNodeSet("./iommufd", ctxt, &nodes)) < 0)
++        return -1;
++
++    if (n > 1) {
++        virReportError(VIR_ERR_XML_ERROR, "%s",
++                       _("only one 'iommufd' element is supported"));
++        return -1;
++    }
++
++    if (n == 0)
++        return 0;
++
++    if (virXMLPropTristateBool(nodes[0], "enabled", VIR_XML_PROP_REQUIRED, &def->iommufd) < 0)
++        return -1;
++
++    return 0;
++}
++
+ static virDomainDef *
+ virDomainDefParseXML(xmlXPathContextPtr ctxt,
+                      virDomainXMLOption *xmlopt,
+@@ -19821,6 +19846,9 @@ virDomainDefParseXML(xmlXPathContextPtr ctxt,
+         !virDomainIOThreadIDArrayHasPin(def))
+         def->placement_mode = VIR_DOMAIN_CPU_PLACEMENT_MODE_AUTO;
+ 
++    if (virDomainDefIommufdParse(def, ctxt) < 0)
++        return NULL;
++
+     if ((n = virXPathNodeSet("./resource", ctxt, &nodes)) < 0)
+         return NULL;
+ 
+@@ -27958,6 +27986,22 @@ virDomainHubDefFormat(virBuffer *buf,
+ }
+ 
+ 
++static void
++virDomainDefIommufdFormat(virBuffer *buf,
++                          virDomainDef *def)
++{
++    g_auto(virBuffer) attrBuf = VIR_BUFFER_INITIALIZER;
++
++    if (def->iommufd == VIR_TRISTATE_BOOL_ABSENT)
++        return;
++
++    virBufferAsprintf(&attrBuf, " enabled='%s'",
++                      virTristateBoolTypeToString(def->iommufd));
++
++    virXMLFormatElement(buf, "iommufd", &attrBuf, NULL);
++}
++
++
+ static void
+ virDomainResourceDefFormat(virBuffer *buf,
+                            virDomainResourceDef *def)
+@@ -29482,6 +29526,8 @@ virDomainDefFormatInternalSetRootName(virDomainDef *def,
+     if (virDomainNumatuneFormatXML(buf, def->numa) < 0)
+         return -1;
+ 
++    virDomainDefIommufdFormat(buf, def);
++
+     virDomainResourceDefFormat(buf, def->resource);
+ 
+     for (i = 0; i < def->nsysinfo; i++) {
+diff --git a/src/conf/domain_conf.h b/src/conf/domain_conf.h
+index f1c8478208..e12064a3ab 100644
+--- a/src/conf/domain_conf.h
++++ b/src/conf/domain_conf.h
+@@ -3231,6 +3231,8 @@ struct _virDomainDef {
+     virTristateSwitch apic_eoi;
+     virDomainFeatureTCG *tcg_features;
+ 
++    virTristateBool iommufd;
++
+     bool tseg_specified;
+     unsigned long long tseg_size;
+ 
+diff --git a/src/conf/schemas/domaincommon.rng b/src/conf/schemas/domaincommon.rng
+index afdf7bfc1a..81b57a937a 100644
+--- a/src/conf/schemas/domaincommon.rng
++++ b/src/conf/schemas/domaincommon.rng
+@@ -1001,6 +1001,10 @@
+         <ref name="numatune"/>
+       </optional>
+ 
++      <optional>
++        <ref name="iommufd"/>
++      </optional>
++
+       <optional>
+         <ref name="respartition"/>
+       </optional>
+@@ -1344,6 +1348,14 @@
+     </element>
+   </define>
+ 
++  <define name="iommufd">
++    <element name="iommufd">
++      <attribute name="enabled">
++        <ref name="virYesNo"/>
++      </attribute>
++    </element>
++  </define>
++
+   <define name="respartition">
+     <element name="resource">
+       <optional>
+diff --git a/tests/genericxml2xmlindata/iommufd.xml b/tests/genericxml2xmlindata/iommufd.xml
+new file mode 100644
+index 0000000000..63ea839383
+--- /dev/null
++++ b/tests/genericxml2xmlindata/iommufd.xml
+@@ -0,0 +1,18 @@
++<domain type='kvm'>
++  <name>foo</name>
++  <uuid>c7a5fdbd-edaf-9455-926a-d65c16db1809</uuid>
++  <memory unit='KiB'>219136</memory>
++  <currentMemory unit='KiB'>219136</currentMemory>
++  <vcpu placement='static'>1</vcpu>
++  <iommufd enabled='yes'/>
++  <os>
++    <type arch='i686' machine='pc'>hvm</type>
++    <boot dev='hd'/>
++  </os>
++  <clock offset='utc'/>
++  <on_poweroff>destroy</on_poweroff>
++  <on_reboot>restart</on_reboot>
++  <on_crash>destroy</on_crash>
++  <devices>
++  </devices>
++</domain>
+diff --git a/tests/genericxml2xmltest.c b/tests/genericxml2xmltest.c
+index 6757fc44de..6be694cac5 100644
+--- a/tests/genericxml2xmltest.c
++++ b/tests/genericxml2xmltest.c
+@@ -263,6 +263,8 @@ mymain(void)
+ 
+     DO_TEST("iothreadids");
+ 
++    DO_TEST("iommufd");
++
+     virObjectUnref(caps);
+     virObjectUnref(xmlopt);
+ 
+-- 
+2.54.0

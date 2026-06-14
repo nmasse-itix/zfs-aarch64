@@ -1,0 +1,109 @@
+From d34cc77ac31f6df5195dad6b53d5aed00bda7dd7 Mon Sep 17 00:00:00 2001
+Message-ID: <d34cc77ac31f6df5195dad6b53d5aed00bda7dd7.1780571167.git.jdenemar@redhat.com>
+From: Jiri Denemark <jdenemar@redhat.com>
+Date: Mon, 25 May 2026 13:17:47 +0200
+Subject: [PATCH] cpu_x86: Introduce virCPUx86DataAddMSR
+
+This just makes the relevant part of virCPUx86GetHost reusable in other
+places.
+
+Signed-off-by: Jiri Denemark <jdenemar@redhat.com>
+Reviewed-by: Peter Krempa <pkrempa@redhat.com>
+(cherry picked from commit a8952076d8e5062a2fac08e11597ad47871c2236)
+
+https://redhat.atlassian.net/browse/RHEL-177364
+
+Signed-off-by: Jiri Denemark <jdenemar@redhat.com>
+---
+ src/cpu/cpu_x86.c        | 40 ++++++++++++++++++++++++++++------------
+ src/cpu/cpu_x86.h        |  4 ++++
+ src/libvirt_private.syms |  1 +
+ 3 files changed, 33 insertions(+), 12 deletions(-)
+
+diff --git a/src/cpu/cpu_x86.c b/src/cpu/cpu_x86.c
+index 0f7eb8f48b..e5825fbb4d 100644
+--- a/src/cpu/cpu_x86.c
++++ b/src/cpu/cpu_x86.c
+@@ -2912,18 +2912,8 @@ virCPUx86GetHost(virCPUDef *cpu,
+     /* This is best effort since there might be no way to read the MSR
+      * when we are not running as root. */
+     for (i = 0; i < nmsrs; i++) {
+-        if (virHostCPUGetMSR(msrs[i], &msr) == 0) {
+-            virCPUx86DataItem item = {
+-                .type = VIR_CPU_X86_DATA_MSR,
+-                .data.msr = {
+-                    .index = msrs[i],
+-                    .eax = msr & 0xffffffff,
+-                    .edx = msr >> 32,
+-                },
+-            };
+-
+-            virCPUx86DataAdd(cpuData, &item);
+-        }
++        if (virHostCPUGetMSR(msrs[i], &msr) == 0)
++            virCPUx86DataAddMSR(cpuData, msrs[i], msr);
+     }
+ 
+     ret = x86DecodeCPUData(cpu, cpuData, models);
+@@ -3461,6 +3451,32 @@ virCPUx86DataAdd(virCPUData *cpuData,
+ }
+ 
+ 
++/**
++ * virCPUx86DataAddMSR:
++ * @cpuData: CPU data to update
++ * @index: MSR index
++ * @value: content of the @index MSR
++ *
++ * Adds the specified MSR content to CPU data.
++ */
++void
++virCPUx86DataAddMSR(virCPUData *cpuData,
++                    uint32_t index,
++                    uint64_t value)
++{
++    virCPUx86DataItem item = {
++        .type = VIR_CPU_X86_DATA_MSR,
++        .data.msr = {
++            .index = index,
++            .eax = value & 0xffffffff,
++            .edx = value >> 32,
++        },
++    };
++
++    virCPUx86DataAdd(cpuData, &item);
++}
++
++
+ void
+ virCPUx86DataSetSignature(virCPUData *cpuData,
+                           unsigned int family,
+diff --git a/src/cpu/cpu_x86.h b/src/cpu/cpu_x86.h
+index 2cd965fea4..bbc2a16447 100644
+--- a/src/cpu/cpu_x86.h
++++ b/src/cpu/cpu_x86.h
+@@ -28,6 +28,10 @@ extern struct cpuArchDriver cpuDriverX86;
+ void virCPUx86DataAdd(virCPUData *cpuData,
+                       const virCPUx86DataItem *cpuid);
+ 
++void virCPUx86DataAddMSR(virCPUData *cpuData,
++                         uint32_t index,
++                         uint64_t value);
++
+ void virCPUx86DataSetSignature(virCPUData *cpuData,
+                                unsigned int family,
+                                unsigned int model,
+diff --git a/src/libvirt_private.syms b/src/libvirt_private.syms
+index 3eca15f066..3eb6943440 100644
+--- a/src/libvirt_private.syms
++++ b/src/libvirt_private.syms
+@@ -1592,6 +1592,7 @@ virCPUValidateFeatures;
+ 
+ # cpu/cpu_x86.h
+ virCPUx86DataAdd;
++virCPUx86DataAddMSR;
+ virCPUx86DataGetSignature;
+ virCPUx86DataSetSignature;
+ virCPUx86DataSetVendor;
+-- 
+2.54.0

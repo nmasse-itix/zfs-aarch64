@@ -1,0 +1,3806 @@
+From e6a0a49faf7a372015a2173add7a84d725c201aa Mon Sep 17 00:00:00 2001
+Message-ID: <e6a0a49faf7a372015a2173add7a84d725c201aa.1780571166.git.jdenemar@redhat.com>
+From: Jiri Denemark <jdenemar@redhat.com>
+Date: Fri, 29 May 2026 14:19:30 +0200
+Subject: [PATCH] qemu_capabilities: Always sort features in host-model CPU
+
+Expanding a CPU model always produces a sorted list of features so the
+features in host-model CPU capabilities were either sorted or not
+depending on flags passed to virConnectGetDomainCapabilities.
+
+Signed-off-by: Jiri Denemark <jdenemar@redhat.com>
+Reviewed-by: Peter Krempa <pkrempa@redhat.com>
+(cherry picked from commit 003b573108d8e0f09b6069d69fd31ca637afe21c)
+
+https://redhat.atlassian.net/browse/RHEL-177364
+
+Conflicts:
+	tests/domaincapsdata/*
+            - test files for old QEMU releases were removed upstream
+            - test files for new QEMU are missing downstream
+            - a few features are missing in QEMU 10.[12] caps downstream
+
+Signed-off-by: Jiri Denemark <jdenemar@redhat.com>
+---
+ src/qemu/qemu_capabilities.c                  |  1 +
+ .../qemu_10.0.0-q35.x86_64+amdsev.xml         | 48 +++++-----
+ .../domaincapsdata/qemu_10.0.0-q35.x86_64.xml | 50 +++++-----
+ .../qemu_10.0.0-tcg.x86_64+amdsev.xml         | 60 ++++++------
+ .../domaincapsdata/qemu_10.0.0-tcg.x86_64.xml | 60 ++++++------
+ tests/domaincapsdata/qemu_10.0.0.s390x.xml    | 94 +++++++++----------
+ .../qemu_10.0.0.x86_64+amdsev.xml             | 48 +++++-----
+ tests/domaincapsdata/qemu_10.0.0.x86_64.xml   | 50 +++++-----
+ .../qemu_10.1.0-q35.x86_64+inteltdx.xml       | 52 +++++-----
+ .../domaincapsdata/qemu_10.1.0-q35.x86_64.xml | 40 ++++----
+ .../qemu_10.1.0-tcg.x86_64+inteltdx.xml       | 66 ++++++-------
+ .../domaincapsdata/qemu_10.1.0-tcg.x86_64.xml | 66 ++++++-------
+ .../qemu_10.1.0.x86_64+inteltdx.xml           | 52 +++++-----
+ tests/domaincapsdata/qemu_10.1.0.x86_64.xml   | 40 ++++----
+ .../domaincapsdata/qemu_10.2.0-q35.x86_64.xml | 24 ++---
+ .../qemu_10.2.0-tcg.x86_64+mshv.xml           | 66 ++++++-------
+ .../domaincapsdata/qemu_10.2.0-tcg.x86_64.xml | 66 ++++++-------
+ tests/domaincapsdata/qemu_10.2.0.x86_64.xml   | 24 ++---
+ .../domaincapsdata/qemu_6.2.0-q35.x86_64.xml  | 28 +++---
+ .../domaincapsdata/qemu_6.2.0-tcg.x86_64.xml  | 64 ++++++-------
+ tests/domaincapsdata/qemu_6.2.0.x86_64.xml    | 28 +++---
+ .../domaincapsdata/qemu_7.0.0-q35.x86_64.xml  | 30 +++---
+ .../domaincapsdata/qemu_7.0.0-tcg.x86_64.xml  | 66 ++++++-------
+ tests/domaincapsdata/qemu_7.0.0.x86_64.xml    | 30 +++---
+ .../domaincapsdata/qemu_7.1.0-q35.x86_64.xml  | 32 +++----
+ .../domaincapsdata/qemu_7.1.0-tcg.x86_64.xml  | 66 ++++++-------
+ tests/domaincapsdata/qemu_7.1.0.x86_64.xml    | 32 +++----
+ .../qemu_7.2.0-hvf.x86_64+hvf.xml             | 36 +++----
+ .../domaincapsdata/qemu_7.2.0-q35.x86_64.xml  | 36 +++----
+ .../qemu_7.2.0-tcg.x86_64+hvf.xml             | 46 ++++-----
+ .../domaincapsdata/qemu_7.2.0-tcg.x86_64.xml  | 46 ++++-----
+ tests/domaincapsdata/qemu_7.2.0.x86_64.xml    | 36 +++----
+ .../domaincapsdata/qemu_8.0.0-q35.x86_64.xml  | 36 +++----
+ .../domaincapsdata/qemu_8.0.0-tcg.x86_64.xml  | 54 +++++------
+ tests/domaincapsdata/qemu_8.0.0.x86_64.xml    | 36 +++----
+ .../domaincapsdata/qemu_8.1.0-q35.x86_64.xml  | 38 ++++----
+ .../domaincapsdata/qemu_8.1.0-tcg.x86_64.xml  | 60 ++++++------
+ tests/domaincapsdata/qemu_8.1.0.s390x.xml     | 62 ++++++------
+ tests/domaincapsdata/qemu_8.1.0.x86_64.xml    | 38 ++++----
+ .../domaincapsdata/qemu_8.2.0-q35.x86_64.xml  | 40 ++++----
+ .../domaincapsdata/qemu_8.2.0-tcg.x86_64.xml  | 58 ++++++------
+ tests/domaincapsdata/qemu_8.2.0.s390x.xml     | 62 ++++++------
+ tests/domaincapsdata/qemu_8.2.0.x86_64.xml    | 40 ++++----
+ .../domaincapsdata/qemu_9.0.0-q35.x86_64.xml  | 40 ++++----
+ .../domaincapsdata/qemu_9.0.0-tcg.x86_64.xml  | 62 ++++++------
+ tests/domaincapsdata/qemu_9.0.0.x86_64.xml    | 40 ++++----
+ .../domaincapsdata/qemu_9.1.0-q35.x86_64.xml  | 48 +++++-----
+ .../domaincapsdata/qemu_9.1.0-tcg.x86_64.xml  | 60 ++++++------
+ tests/domaincapsdata/qemu_9.1.0.s390x.xml     | 94 +++++++++----------
+ tests/domaincapsdata/qemu_9.1.0.x86_64.xml    | 48 +++++-----
+ .../qemu_9.2.0-q35.x86_64+amdsev.xml          | 48 +++++-----
+ .../domaincapsdata/qemu_9.2.0-q35.x86_64.xml  | 50 +++++-----
+ .../qemu_9.2.0-tcg.x86_64+amdsev.xml          | 60 ++++++------
+ .../domaincapsdata/qemu_9.2.0-tcg.x86_64.xml  | 60 ++++++------
+ tests/domaincapsdata/qemu_9.2.0.s390x.xml     | 94 +++++++++----------
+ .../qemu_9.2.0.x86_64+amdsev.xml              | 48 +++++-----
+ tests/domaincapsdata/qemu_9.2.0.x86_64.xml    | 50 +++++-----
+ 57 files changed, 1405 insertions(+), 1404 deletions(-)
+
+diff --git a/src/qemu/qemu_capabilities.c b/src/qemu/qemu_capabilities.c
+index c17b55420d..6951e50c03 100644
+--- a/src/qemu/qemu_capabilities.c
++++ b/src/qemu/qemu_capabilities.c
+@@ -6603,6 +6603,7 @@ virQEMUCapsFillDomainCPUHostModel(virQEMUCaps *qemuCaps,
+     if (flags & VIR_CONNECT_GET_DOMAIN_CAPABILITIES_EXPAND_CPU_FEATURES)
+         virCPUExpandFeatures(domCaps->arch, cpu);
+ 
++    virCPUDefSortFeatures(cpu);
+     domCaps->cpu.hostModel = cpu;
+ }
+ 
+diff --git a/tests/domaincapsdata/qemu_10.0.0-q35.x86_64+amdsev.xml b/tests/domaincapsdata/qemu_10.0.0-q35.x86_64+amdsev.xml
+index aeccdf612d..4f854ab11d 100644
+--- a/tests/domaincapsdata/qemu_10.0.0-q35.x86_64+amdsev.xml
++++ b/tests/domaincapsdata/qemu_10.0.0-q35.x86_64+amdsev.xml
+@@ -44,37 +44,37 @@
+       <model fallback='forbid'>EPYC-Genoa</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='spec-ctrl'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='flush-l1d'/>
+       <feature policy='require' name='arch-capabilities'/>
+-      <feature policy='require' name='ssbd'/>
+       <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='overflow-recov'/>
+-      <feature policy='require' name='succor'/>
+-      <feature policy='require' name='invtsc'/>
+-      <feature policy='require' name='virt-ssbd'/>
+-      <feature policy='require' name='lbrv'/>
+-      <feature policy='require' name='tsc-scale'/>
+-      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='flush-l1d'/>
+       <feature policy='require' name='flushbyasid'/>
++      <feature policy='require' name='gds-no'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='ibpb-brtype'/>
++      <feature policy='require' name='invtsc'/>
++      <feature policy='require' name='lbrv'/>
++      <feature policy='require' name='mds-no'/>
++      <feature policy='require' name='overflow-recov'/>
+       <feature policy='require' name='pause-filter'/>
++      <feature policy='require' name='perfmon-v2'/>
+       <feature policy='require' name='pfthreshold'/>
++      <feature policy='require' name='pschange-mc-no'/>
++      <feature policy='require' name='rdctl-no'/>
++      <feature policy='require' name='rfds-no'/>
++      <feature policy='require' name='sbpb'/>
++      <feature policy='require' name='skip-l1dfl-vmentry'/>
++      <feature policy='require' name='spec-ctrl'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='succor'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc-scale'/>
++      <feature policy='require' name='tsc_adjust'/>
+       <feature policy='require' name='v-vmsave-vmload'/>
+       <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='sbpb'/>
+-      <feature policy='require' name='ibpb-brtype'/>
+-      <feature policy='require' name='perfmon-v2'/>
+-      <feature policy='require' name='rdctl-no'/>
+-      <feature policy='require' name='skip-l1dfl-vmentry'/>
+-      <feature policy='require' name='mds-no'/>
+-      <feature policy='require' name='pschange-mc-no'/>
+-      <feature policy='require' name='gds-no'/>
+-      <feature policy='require' name='rfds-no'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='x2apic'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_10.0.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_10.0.0-q35.x86_64.xml
+index 86a740099b..8214cf90b2 100644
+--- a/tests/domaincapsdata/qemu_10.0.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.0.0-q35.x86_64.xml
+@@ -44,37 +44,37 @@
+       <model fallback='forbid'>EPYC-Rome</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='arch-capabilities'/>
+-      <feature policy='require' name='ssbd'/>
+-      <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='overflow-recov'/>
+-      <feature policy='require' name='succor'/>
+-      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='amd-ssbd'/>
+-      <feature policy='require' name='virt-ssbd'/>
+-      <feature policy='require' name='lbrv'/>
+-      <feature policy='require' name='tsc-scale'/>
+-      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='arch-capabilities'/>
++      <feature policy='require' name='cmp_legacy'/>
+       <feature policy='require' name='flushbyasid'/>
++      <feature policy='require' name='gds-no'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='ibpb-brtype'/>
++      <feature policy='require' name='invtsc'/>
++      <feature policy='require' name='lbrv'/>
++      <feature policy='require' name='lfence-always-serializing'/>
++      <feature policy='require' name='mds-no'/>
++      <feature policy='require' name='null-sel-clr-base'/>
++      <feature policy='require' name='overflow-recov'/>
+       <feature policy='require' name='pause-filter'/>
+       <feature policy='require' name='pfthreshold'/>
++      <feature policy='require' name='pschange-mc-no'/>
++      <feature policy='require' name='rdctl-no'/>
++      <feature policy='require' name='rfds-no'/>
++      <feature policy='require' name='skip-l1dfl-vmentry'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='succor'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc-scale'/>
++      <feature policy='require' name='tsc_adjust'/>
+       <feature policy='require' name='v-vmsave-vmload'/>
+       <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='require' name='lfence-always-serializing'/>
+-      <feature policy='require' name='null-sel-clr-base'/>
+-      <feature policy='require' name='ibpb-brtype'/>
+-      <feature policy='require' name='rdctl-no'/>
+-      <feature policy='require' name='skip-l1dfl-vmentry'/>
+-      <feature policy='require' name='mds-no'/>
+-      <feature policy='require' name='pschange-mc-no'/>
+-      <feature policy='require' name='gds-no'/>
+-      <feature policy='require' name='rfds-no'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='x2apic'/>
+       <feature policy='disable' name='xsaves'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64+amdsev.xml b/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64+amdsev.xml
+index 5d9ce948f8..e4d1ed0dcc 100644
+--- a/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64+amdsev.xml
++++ b/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64+amdsev.xml
+@@ -37,39 +37,39 @@
+     <mode name='host-model' supported='yes'>
+       <model fallback='forbid'>EPYC</model>
+       <vendor>AMD</vendor>
+-      <feature policy='require' name='monitor'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='acpi'/>
+-      <feature policy='require' name='ss'/>
+-      <feature policy='require' name='erms'/>
+-      <feature policy='require' name='mpx'/>
+-      <feature policy='require' name='clwb'/>
+-      <feature policy='require' name='umip'/>
+-      <feature policy='require' name='pku'/>
+-      <feature policy='require' name='vaes'/>
+-      <feature policy='require' name='la57'/>
+-      <feature policy='require' name='rdpid'/>
+-      <feature policy='require' name='pks'/>
+-      <feature policy='require' name='fsrm'/>
+-      <feature policy='require' name='cmpccxadd'/>
+-      <feature policy='require' name='fzrm'/>
+-      <feature policy='require' name='fsrs'/>
+-      <feature policy='require' name='fsrc'/>
+-      <feature policy='require' name='3dnowext'/>
+       <feature policy='require' name='3dnow'/>
+-      <feature policy='require' name='xsaveerptr'/>
+-      <feature policy='require' name='wbnoinvd'/>
+-      <feature policy='require' name='npt'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='disable' name='vme'/>
+-      <feature policy='disable' name='xsavec'/>
+-      <feature policy='disable' name='misalignsse'/>
+-      <feature policy='disable' name='osvw'/>
+-      <feature policy='disable' name='topoext'/>
++      <feature policy='require' name='3dnowext'/>
++      <feature policy='require' name='acpi'/>
++      <feature policy='require' name='clwb'/>
++      <feature policy='require' name='cmpccxadd'/>
++      <feature policy='require' name='erms'/>
++      <feature policy='require' name='fsrc'/>
++      <feature policy='require' name='fsrm'/>
++      <feature policy='require' name='fsrs'/>
+       <feature policy='disable' name='fxsr_opt'/>
++      <feature policy='require' name='fzrm'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='la57'/>
++      <feature policy='disable' name='misalignsse'/>
++      <feature policy='require' name='monitor'/>
++      <feature policy='require' name='mpx'/>
++      <feature policy='require' name='npt'/>
+       <feature policy='disable' name='nrip-save'/>
++      <feature policy='disable' name='osvw'/>
++      <feature policy='require' name='pks'/>
++      <feature policy='require' name='pku'/>
++      <feature policy='require' name='rdpid'/>
++      <feature policy='require' name='ss'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='disable' name='topoext'/>
++      <feature policy='require' name='umip'/>
++      <feature policy='require' name='vaes'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='disable' name='vme'/>
++      <feature policy='require' name='wbnoinvd'/>
++      <feature policy='require' name='x2apic'/>
++      <feature policy='disable' name='xsavec'/>
++      <feature policy='require' name='xsaveerptr'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64.xml
+index 3915ec38cf..0e48e5e00c 100644
+--- a/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.0.0-tcg.x86_64.xml
+@@ -37,39 +37,39 @@
+     <mode name='host-model' supported='yes'>
+       <model fallback='forbid'>EPYC</model>
+       <vendor>AMD</vendor>
+-      <feature policy='require' name='monitor'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='acpi'/>
+-      <feature policy='require' name='ss'/>
+-      <feature policy='require' name='erms'/>
+-      <feature policy='require' name='mpx'/>
+-      <feature policy='require' name='clwb'/>
+-      <feature policy='require' name='umip'/>
+-      <feature policy='require' name='pku'/>
+-      <feature policy='require' name='vaes'/>
+-      <feature policy='require' name='la57'/>
+-      <feature policy='require' name='rdpid'/>
+-      <feature policy='require' name='pks'/>
+-      <feature policy='require' name='fsrm'/>
+-      <feature policy='require' name='cmpccxadd'/>
+-      <feature policy='require' name='fzrm'/>
+-      <feature policy='require' name='fsrs'/>
+-      <feature policy='require' name='fsrc'/>
+-      <feature policy='require' name='3dnowext'/>
+       <feature policy='require' name='3dnow'/>
+-      <feature policy='require' name='xsaveerptr'/>
+-      <feature policy='require' name='wbnoinvd'/>
+-      <feature policy='require' name='npt'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='disable' name='vme'/>
+-      <feature policy='disable' name='xsavec'/>
+-      <feature policy='disable' name='misalignsse'/>
+-      <feature policy='disable' name='osvw'/>
+-      <feature policy='disable' name='topoext'/>
++      <feature policy='require' name='3dnowext'/>
++      <feature policy='require' name='acpi'/>
++      <feature policy='require' name='clwb'/>
++      <feature policy='require' name='cmpccxadd'/>
++      <feature policy='require' name='erms'/>
++      <feature policy='require' name='fsrc'/>
++      <feature policy='require' name='fsrm'/>
++      <feature policy='require' name='fsrs'/>
+       <feature policy='disable' name='fxsr_opt'/>
++      <feature policy='require' name='fzrm'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='la57'/>
++      <feature policy='disable' name='misalignsse'/>
++      <feature policy='require' name='monitor'/>
++      <feature policy='require' name='mpx'/>
++      <feature policy='require' name='npt'/>
+       <feature policy='disable' name='nrip-save'/>
++      <feature policy='disable' name='osvw'/>
++      <feature policy='require' name='pks'/>
++      <feature policy='require' name='pku'/>
++      <feature policy='require' name='rdpid'/>
++      <feature policy='require' name='ss'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='disable' name='topoext'/>
++      <feature policy='require' name='umip'/>
++      <feature policy='require' name='vaes'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='disable' name='vme'/>
++      <feature policy='require' name='wbnoinvd'/>
++      <feature policy='require' name='x2apic'/>
++      <feature policy='disable' name='xsavec'/>
++      <feature policy='require' name='xsaveerptr'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_10.0.0.s390x.xml b/tests/domaincapsdata/qemu_10.0.0.s390x.xml
+index 220afb9d7d..bc88468201 100644
+--- a/tests/domaincapsdata/qemu_10.0.0.s390x.xml
++++ b/tests/domaincapsdata/qemu_10.0.0.s390x.xml
+@@ -37,61 +37,61 @@
+     </mode>
+     <mode name='host-model' supported='yes'>
+       <model fallback='forbid'>gen16a-base</model>
+-      <feature policy='require' name='nnpa'/>
+-      <feature policy='require' name='aen'/>
+-      <feature policy='require' name='cmmnt'/>
+-      <feature policy='require' name='vxpdeh'/>
+       <feature policy='require' name='aefsi'/>
+-      <feature policy='require' name='diag318'/>
+-      <feature policy='require' name='csske'/>
+-      <feature policy='require' name='mepoch'/>
+-      <feature policy='require' name='msa9'/>
+-      <feature policy='require' name='msa8'/>
+-      <feature policy='require' name='msa7'/>
+-      <feature policy='require' name='msa6'/>
+-      <feature policy='require' name='msa5'/>
+-      <feature policy='require' name='msa4'/>
+-      <feature policy='require' name='msa3'/>
+-      <feature policy='require' name='msa2'/>
+-      <feature policy='require' name='msa1'/>
+-      <feature policy='require' name='sthyi'/>
+-      <feature policy='require' name='edat'/>
+-      <feature policy='require' name='ri'/>
+-      <feature policy='require' name='deflate'/>
+-      <feature policy='require' name='edat2'/>
+-      <feature policy='require' name='etoken'/>
+-      <feature policy='require' name='vx'/>
+-      <feature policy='require' name='ipter'/>
+-      <feature policy='require' name='pai'/>
+-      <feature policy='require' name='paie'/>
+-      <feature policy='require' name='mepochptff'/>
++      <feature policy='require' name='aen'/>
++      <feature policy='require' name='ais'/>
+       <feature policy='require' name='ap'/>
+-      <feature policy='require' name='vxeh'/>
+-      <feature policy='require' name='vxpd'/>
+-      <feature policy='require' name='esop'/>
+-      <feature policy='require' name='msa9_pckmo'/>
+-      <feature policy='require' name='vxeh2'/>
+-      <feature policy='require' name='esort'/>
+-      <feature policy='require' name='appv'/>
+-      <feature policy='require' name='apqi'/>
+       <feature policy='require' name='apft'/>
+-      <feature policy='require' name='els'/>
+-      <feature policy='require' name='iep'/>
++      <feature policy='require' name='appv'/>
+       <feature policy='require' name='appvi'/>
+       <feature policy='require' name='apqci'/>
+-      <feature policy='require' name='cte'/>
+-      <feature policy='require' name='ais'/>
+-      <feature policy='require' name='bpb'/>
+-      <feature policy='require' name='ctop'/>
+-      <feature policy='require' name='gs'/>
+-      <feature policy='require' name='ppa15'/>
+-      <feature policy='require' name='zpci'/>
+-      <feature policy='require' name='rdp'/>
+-      <feature policy='require' name='sea_esop2'/>
++      <feature policy='require' name='apqi'/>
+       <feature policy='require' name='beareh'/>
+-      <feature policy='require' name='te'/>
++      <feature policy='require' name='bpb'/>
+       <feature policy='require' name='cmm'/>
++      <feature policy='require' name='cmmnt'/>
++      <feature policy='require' name='csske'/>
++      <feature policy='require' name='cte'/>
++      <feature policy='require' name='ctop'/>
++      <feature policy='require' name='deflate'/>
++      <feature policy='require' name='diag318'/>
++      <feature policy='require' name='edat'/>
++      <feature policy='require' name='edat2'/>
++      <feature policy='require' name='els'/>
++      <feature policy='require' name='esop'/>
++      <feature policy='require' name='esort'/>
++      <feature policy='require' name='etoken'/>
++      <feature policy='require' name='gs'/>
++      <feature policy='require' name='iep'/>
++      <feature policy='require' name='ipter'/>
++      <feature policy='require' name='mepoch'/>
++      <feature policy='require' name='mepochptff'/>
++      <feature policy='require' name='msa1'/>
++      <feature policy='require' name='msa2'/>
++      <feature policy='require' name='msa3'/>
++      <feature policy='require' name='msa4'/>
++      <feature policy='require' name='msa5'/>
++      <feature policy='require' name='msa6'/>
++      <feature policy='require' name='msa7'/>
++      <feature policy='require' name='msa8'/>
++      <feature policy='require' name='msa9'/>
++      <feature policy='require' name='msa9_pckmo'/>
++      <feature policy='require' name='nnpa'/>
++      <feature policy='require' name='pai'/>
++      <feature policy='require' name='paie'/>
++      <feature policy='require' name='ppa15'/>
++      <feature policy='require' name='rdp'/>
++      <feature policy='require' name='ri'/>
++      <feature policy='require' name='sea_esop2'/>
++      <feature policy='require' name='sthyi'/>
++      <feature policy='require' name='te'/>
++      <feature policy='require' name='vx'/>
++      <feature policy='require' name='vxeh'/>
++      <feature policy='require' name='vxeh2'/>
++      <feature policy='require' name='vxpd'/>
++      <feature policy='require' name='vxpdeh'/>
+       <feature policy='require' name='vxpdeh2'/>
++      <feature policy='require' name='zpci'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='IBM'>gen15a</model>
+diff --git a/tests/domaincapsdata/qemu_10.0.0.x86_64+amdsev.xml b/tests/domaincapsdata/qemu_10.0.0.x86_64+amdsev.xml
+index 9dcc7f2e44..9297ed6d46 100644
+--- a/tests/domaincapsdata/qemu_10.0.0.x86_64+amdsev.xml
++++ b/tests/domaincapsdata/qemu_10.0.0.x86_64+amdsev.xml
+@@ -43,37 +43,37 @@
+       <model fallback='forbid'>EPYC-Genoa</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='spec-ctrl'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='flush-l1d'/>
+       <feature policy='require' name='arch-capabilities'/>
+-      <feature policy='require' name='ssbd'/>
+       <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='overflow-recov'/>
+-      <feature policy='require' name='succor'/>
+-      <feature policy='require' name='invtsc'/>
+-      <feature policy='require' name='virt-ssbd'/>
+-      <feature policy='require' name='lbrv'/>
+-      <feature policy='require' name='tsc-scale'/>
+-      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='flush-l1d'/>
+       <feature policy='require' name='flushbyasid'/>
++      <feature policy='require' name='gds-no'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='ibpb-brtype'/>
++      <feature policy='require' name='invtsc'/>
++      <feature policy='require' name='lbrv'/>
++      <feature policy='require' name='mds-no'/>
++      <feature policy='require' name='overflow-recov'/>
+       <feature policy='require' name='pause-filter'/>
++      <feature policy='require' name='perfmon-v2'/>
+       <feature policy='require' name='pfthreshold'/>
++      <feature policy='require' name='pschange-mc-no'/>
++      <feature policy='require' name='rdctl-no'/>
++      <feature policy='require' name='rfds-no'/>
++      <feature policy='require' name='sbpb'/>
++      <feature policy='require' name='skip-l1dfl-vmentry'/>
++      <feature policy='require' name='spec-ctrl'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='succor'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc-scale'/>
++      <feature policy='require' name='tsc_adjust'/>
+       <feature policy='require' name='v-vmsave-vmload'/>
+       <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='sbpb'/>
+-      <feature policy='require' name='ibpb-brtype'/>
+-      <feature policy='require' name='perfmon-v2'/>
+-      <feature policy='require' name='rdctl-no'/>
+-      <feature policy='require' name='skip-l1dfl-vmentry'/>
+-      <feature policy='require' name='mds-no'/>
+-      <feature policy='require' name='pschange-mc-no'/>
+-      <feature policy='require' name='gds-no'/>
+-      <feature policy='require' name='rfds-no'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='x2apic'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_10.0.0.x86_64.xml b/tests/domaincapsdata/qemu_10.0.0.x86_64.xml
+index c0c3a2e6db..85c0e8a8e1 100644
+--- a/tests/domaincapsdata/qemu_10.0.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.0.0.x86_64.xml
+@@ -43,37 +43,37 @@
+       <model fallback='forbid'>EPYC-Rome</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='arch-capabilities'/>
+-      <feature policy='require' name='ssbd'/>
+-      <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='overflow-recov'/>
+-      <feature policy='require' name='succor'/>
+-      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='amd-ssbd'/>
+-      <feature policy='require' name='virt-ssbd'/>
+-      <feature policy='require' name='lbrv'/>
+-      <feature policy='require' name='tsc-scale'/>
+-      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='arch-capabilities'/>
++      <feature policy='require' name='cmp_legacy'/>
+       <feature policy='require' name='flushbyasid'/>
++      <feature policy='require' name='gds-no'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='ibpb-brtype'/>
++      <feature policy='require' name='invtsc'/>
++      <feature policy='require' name='lbrv'/>
++      <feature policy='require' name='lfence-always-serializing'/>
++      <feature policy='require' name='mds-no'/>
++      <feature policy='require' name='null-sel-clr-base'/>
++      <feature policy='require' name='overflow-recov'/>
+       <feature policy='require' name='pause-filter'/>
+       <feature policy='require' name='pfthreshold'/>
++      <feature policy='require' name='pschange-mc-no'/>
++      <feature policy='require' name='rdctl-no'/>
++      <feature policy='require' name='rfds-no'/>
++      <feature policy='require' name='skip-l1dfl-vmentry'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='succor'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc-scale'/>
++      <feature policy='require' name='tsc_adjust'/>
+       <feature policy='require' name='v-vmsave-vmload'/>
+       <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='require' name='lfence-always-serializing'/>
+-      <feature policy='require' name='null-sel-clr-base'/>
+-      <feature policy='require' name='ibpb-brtype'/>
+-      <feature policy='require' name='rdctl-no'/>
+-      <feature policy='require' name='skip-l1dfl-vmentry'/>
+-      <feature policy='require' name='mds-no'/>
+-      <feature policy='require' name='pschange-mc-no'/>
+-      <feature policy='require' name='gds-no'/>
+-      <feature policy='require' name='rfds-no'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='x2apic'/>
+       <feature policy='disable' name='xsaves'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_10.1.0-q35.x86_64+inteltdx.xml b/tests/domaincapsdata/qemu_10.1.0-q35.x86_64+inteltdx.xml
+index 346a94c1ec..f7f437eb28 100644
+--- a/tests/domaincapsdata/qemu_10.1.0-q35.x86_64+inteltdx.xml
++++ b/tests/domaincapsdata/qemu_10.1.0-q35.x86_64+inteltdx.xml
+@@ -44,40 +44,40 @@
+       <model fallback='forbid'>GraniteRapids</model>
+       <vendor>Intel</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='dtes64'/>
+-      <feature policy='require' name='vmx'/>
+-      <feature policy='require' name='pdcm'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='ds'/>
+-      <feature policy='require' name='ss'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='fdp-excptn-only'/>
+-      <feature policy='require' name='zero-fcs-fds'/>
+-      <feature policy='require' name='waitpkg'/>
++      <feature policy='require' name='amd-ssbd'/>
++      <feature policy='require' name='amd-stibp'/>
+       <feature policy='require' name='cldemote'/>
+-      <feature policy='require' name='movdiri'/>
+-      <feature policy='require' name='movdir64b'/>
+-      <feature policy='require' name='md-clear'/>
+-      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='ds'/>
++      <feature policy='require' name='dtes64'/>
++      <feature policy='disable' name='fbsdp-no'/>
++      <feature policy='require' name='fdp-excptn-only'/>
+       <feature policy='require' name='flush-l1d'/>
+-      <feature policy='require' name='intel-psfd'/>
+-      <feature policy='require' name='invtsc'/>
++      <feature policy='require' name='gds-no'/>
++      <feature policy='require' name='hypervisor'/>
+       <feature policy='require' name='ibpb'/>
+       <feature policy='require' name='ibrs'/>
+-      <feature policy='require' name='amd-stibp'/>
+-      <feature policy='require' name='amd-ssbd'/>
+-      <feature policy='require' name='tsx-ctrl'/>
+-      <feature policy='require' name='gds-no'/>
++      <feature policy='require' name='intel-psfd'/>
++      <feature policy='require' name='invtsc'/>
++      <feature policy='disable' name='mcdt-no'/>
++      <feature policy='require' name='md-clear'/>
++      <feature policy='require' name='movdir64b'/>
++      <feature policy='require' name='movdiri'/>
++      <feature policy='disable' name='pbrsb-no'/>
++      <feature policy='require' name='pdcm'/>
++      <feature policy='disable' name='psdp-no'/>
+       <feature policy='require' name='rfds-no'/>
++      <feature policy='disable' name='sbdr-ssdp-no'/>
++      <feature policy='require' name='ss'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='tsc_adjust'/>
++      <feature policy='require' name='tsx-ctrl'/>
++      <feature policy='require' name='vmx'/>
+       <feature policy='require' name='vmx-activity-wait-sipi'/>
++      <feature policy='require' name='vmx-enable-user-wait-pause'/>
+       <feature policy='require' name='vmx-encls-exit'/>
+       <feature policy='require' name='vmx-tsc-scaling'/>
+-      <feature policy='require' name='vmx-enable-user-wait-pause'/>
+-      <feature policy='disable' name='mcdt-no'/>
+-      <feature policy='disable' name='sbdr-ssdp-no'/>
+-      <feature policy='disable' name='fbsdp-no'/>
+-      <feature policy='disable' name='psdp-no'/>
+-      <feature policy='disable' name='pbrsb-no'/>
++      <feature policy='require' name='waitpkg'/>
++      <feature policy='require' name='zero-fcs-fds'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_10.1.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_10.1.0-q35.x86_64.xml
+index fc82987630..244fce575b 100644
+--- a/tests/domaincapsdata/qemu_10.1.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.1.0-q35.x86_64.xml
+@@ -44,30 +44,30 @@
+       <model fallback='forbid'>EPYC-Rome</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='ssbd'/>
+-      <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='overflow-recov'/>
+-      <feature policy='require' name='succor'/>
+-      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='amd-ssbd'/>
+-      <feature policy='require' name='virt-ssbd'/>
+-      <feature policy='require' name='lbrv'/>
+-      <feature policy='require' name='tsc-scale'/>
+-      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='cmp_legacy'/>
+       <feature policy='require' name='flushbyasid'/>
+-      <feature policy='require' name='pause-filter'/>
+-      <feature policy='require' name='pfthreshold'/>
+-      <feature policy='require' name='v-vmsave-vmload'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='ibpb-brtype'/>
++      <feature policy='require' name='invtsc'/>
++      <feature policy='require' name='lbrv'/>
+       <feature policy='require' name='lfence-always-serializing'/>
+       <feature policy='require' name='null-sel-clr-base'/>
+-      <feature policy='require' name='ibpb-brtype'/>
++      <feature policy='require' name='overflow-recov'/>
++      <feature policy='require' name='pause-filter'/>
++      <feature policy='require' name='pfthreshold'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='succor'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc-scale'/>
++      <feature policy='require' name='tsc_adjust'/>
++      <feature policy='require' name='v-vmsave-vmload'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='x2apic'/>
+       <feature policy='disable' name='xsaves'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64+inteltdx.xml b/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64+inteltdx.xml
+index 07fe65d429..4518281672 100644
+--- a/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64+inteltdx.xml
++++ b/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64+inteltdx.xml
+@@ -37,42 +37,42 @@
+     <mode name='host-model' supported='yes'>
+       <model fallback='forbid'>EPYC</model>
+       <vendor>AMD</vendor>
+-      <feature policy='require' name='monitor'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='acpi'/>
+-      <feature policy='require' name='ss'/>
+-      <feature policy='require' name='erms'/>
+-      <feature policy='require' name='mpx'/>
+-      <feature policy='require' name='clwb'/>
+-      <feature policy='require' name='umip'/>
+-      <feature policy='require' name='pku'/>
+-      <feature policy='require' name='vaes'/>
+-      <feature policy='require' name='la57'/>
+-      <feature policy='require' name='rdpid'/>
+-      <feature policy='require' name='pks'/>
+-      <feature policy='require' name='fsrm'/>
+-      <feature policy='require' name='cmpccxadd'/>
+-      <feature policy='require' name='fzrm'/>
+-      <feature policy='require' name='fsrs'/>
+-      <feature policy='require' name='fsrc'/>
+-      <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='3dnowext'/>
+       <feature policy='require' name='3dnow'/>
+-      <feature policy='require' name='xsaveerptr'/>
+-      <feature policy='require' name='wbnoinvd'/>
+-      <feature policy='require' name='npt'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='require' name='no-nested-data-bp'/>
+-      <feature policy='require' name='null-sel-clr-base'/>
+-      <feature policy='disable' name='vme'/>
+-      <feature policy='disable' name='xsavec'/>
+-      <feature policy='disable' name='misalignsse'/>
+-      <feature policy='disable' name='osvw'/>
+-      <feature policy='disable' name='topoext'/>
++      <feature policy='require' name='3dnowext'/>
++      <feature policy='require' name='acpi'/>
++      <feature policy='require' name='clwb'/>
++      <feature policy='require' name='cmp_legacy'/>
++      <feature policy='require' name='cmpccxadd'/>
++      <feature policy='require' name='erms'/>
++      <feature policy='require' name='fsrc'/>
++      <feature policy='require' name='fsrm'/>
++      <feature policy='require' name='fsrs'/>
+       <feature policy='disable' name='fxsr_opt'/>
++      <feature policy='require' name='fzrm'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='la57'/>
++      <feature policy='disable' name='misalignsse'/>
++      <feature policy='require' name='monitor'/>
++      <feature policy='require' name='mpx'/>
++      <feature policy='require' name='no-nested-data-bp'/>
++      <feature policy='require' name='npt'/>
+       <feature policy='disable' name='nrip-save'/>
++      <feature policy='require' name='null-sel-clr-base'/>
++      <feature policy='disable' name='osvw'/>
++      <feature policy='require' name='pks'/>
++      <feature policy='require' name='pku'/>
++      <feature policy='require' name='rdpid'/>
++      <feature policy='require' name='ss'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='disable' name='topoext'/>
++      <feature policy='require' name='umip'/>
++      <feature policy='require' name='vaes'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='disable' name='vme'/>
++      <feature policy='require' name='wbnoinvd'/>
++      <feature policy='require' name='x2apic'/>
++      <feature policy='disable' name='xsavec'/>
++      <feature policy='require' name='xsaveerptr'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64.xml
+index 34e5812613..eca7f35c67 100644
+--- a/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.1.0-tcg.x86_64.xml
+@@ -37,42 +37,42 @@
+     <mode name='host-model' supported='yes'>
+       <model fallback='forbid'>EPYC</model>
+       <vendor>AMD</vendor>
+-      <feature policy='require' name='monitor'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='acpi'/>
+-      <feature policy='require' name='ss'/>
+-      <feature policy='require' name='erms'/>
+-      <feature policy='require' name='mpx'/>
+-      <feature policy='require' name='clwb'/>
+-      <feature policy='require' name='umip'/>
+-      <feature policy='require' name='pku'/>
+-      <feature policy='require' name='vaes'/>
+-      <feature policy='require' name='la57'/>
+-      <feature policy='require' name='rdpid'/>
+-      <feature policy='require' name='pks'/>
+-      <feature policy='require' name='fsrm'/>
+-      <feature policy='require' name='cmpccxadd'/>
+-      <feature policy='require' name='fzrm'/>
+-      <feature policy='require' name='fsrs'/>
+-      <feature policy='require' name='fsrc'/>
+-      <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='3dnowext'/>
+       <feature policy='require' name='3dnow'/>
+-      <feature policy='require' name='xsaveerptr'/>
+-      <feature policy='require' name='wbnoinvd'/>
+-      <feature policy='require' name='npt'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='require' name='no-nested-data-bp'/>
+-      <feature policy='require' name='null-sel-clr-base'/>
+-      <feature policy='disable' name='vme'/>
+-      <feature policy='disable' name='xsavec'/>
+-      <feature policy='disable' name='misalignsse'/>
+-      <feature policy='disable' name='osvw'/>
+-      <feature policy='disable' name='topoext'/>
++      <feature policy='require' name='3dnowext'/>
++      <feature policy='require' name='acpi'/>
++      <feature policy='require' name='clwb'/>
++      <feature policy='require' name='cmp_legacy'/>
++      <feature policy='require' name='cmpccxadd'/>
++      <feature policy='require' name='erms'/>
++      <feature policy='require' name='fsrc'/>
++      <feature policy='require' name='fsrm'/>
++      <feature policy='require' name='fsrs'/>
+       <feature policy='disable' name='fxsr_opt'/>
++      <feature policy='require' name='fzrm'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='la57'/>
++      <feature policy='disable' name='misalignsse'/>
++      <feature policy='require' name='monitor'/>
++      <feature policy='require' name='mpx'/>
++      <feature policy='require' name='no-nested-data-bp'/>
++      <feature policy='require' name='npt'/>
+       <feature policy='disable' name='nrip-save'/>
++      <feature policy='require' name='null-sel-clr-base'/>
++      <feature policy='disable' name='osvw'/>
++      <feature policy='require' name='pks'/>
++      <feature policy='require' name='pku'/>
++      <feature policy='require' name='rdpid'/>
++      <feature policy='require' name='ss'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='disable' name='topoext'/>
++      <feature policy='require' name='umip'/>
++      <feature policy='require' name='vaes'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='disable' name='vme'/>
++      <feature policy='require' name='wbnoinvd'/>
++      <feature policy='require' name='x2apic'/>
++      <feature policy='disable' name='xsavec'/>
++      <feature policy='require' name='xsaveerptr'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_10.1.0.x86_64+inteltdx.xml b/tests/domaincapsdata/qemu_10.1.0.x86_64+inteltdx.xml
+index 1d476275a2..9b7b6a95d6 100644
+--- a/tests/domaincapsdata/qemu_10.1.0.x86_64+inteltdx.xml
++++ b/tests/domaincapsdata/qemu_10.1.0.x86_64+inteltdx.xml
+@@ -43,40 +43,40 @@
+       <model fallback='forbid'>GraniteRapids</model>
+       <vendor>Intel</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='dtes64'/>
+-      <feature policy='require' name='vmx'/>
+-      <feature policy='require' name='pdcm'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='ds'/>
+-      <feature policy='require' name='ss'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='fdp-excptn-only'/>
+-      <feature policy='require' name='zero-fcs-fds'/>
+-      <feature policy='require' name='waitpkg'/>
++      <feature policy='require' name='amd-ssbd'/>
++      <feature policy='require' name='amd-stibp'/>
+       <feature policy='require' name='cldemote'/>
+-      <feature policy='require' name='movdiri'/>
+-      <feature policy='require' name='movdir64b'/>
+-      <feature policy='require' name='md-clear'/>
+-      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='ds'/>
++      <feature policy='require' name='dtes64'/>
++      <feature policy='disable' name='fbsdp-no'/>
++      <feature policy='require' name='fdp-excptn-only'/>
+       <feature policy='require' name='flush-l1d'/>
+-      <feature policy='require' name='intel-psfd'/>
+-      <feature policy='require' name='invtsc'/>
++      <feature policy='require' name='gds-no'/>
++      <feature policy='require' name='hypervisor'/>
+       <feature policy='require' name='ibpb'/>
+       <feature policy='require' name='ibrs'/>
+-      <feature policy='require' name='amd-stibp'/>
+-      <feature policy='require' name='amd-ssbd'/>
+-      <feature policy='require' name='tsx-ctrl'/>
+-      <feature policy='require' name='gds-no'/>
++      <feature policy='require' name='intel-psfd'/>
++      <feature policy='require' name='invtsc'/>
++      <feature policy='disable' name='mcdt-no'/>
++      <feature policy='require' name='md-clear'/>
++      <feature policy='require' name='movdir64b'/>
++      <feature policy='require' name='movdiri'/>
++      <feature policy='disable' name='pbrsb-no'/>
++      <feature policy='require' name='pdcm'/>
++      <feature policy='disable' name='psdp-no'/>
+       <feature policy='require' name='rfds-no'/>
++      <feature policy='disable' name='sbdr-ssdp-no'/>
++      <feature policy='require' name='ss'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='tsc_adjust'/>
++      <feature policy='require' name='tsx-ctrl'/>
++      <feature policy='require' name='vmx'/>
+       <feature policy='require' name='vmx-activity-wait-sipi'/>
++      <feature policy='require' name='vmx-enable-user-wait-pause'/>
+       <feature policy='require' name='vmx-encls-exit'/>
+       <feature policy='require' name='vmx-tsc-scaling'/>
+-      <feature policy='require' name='vmx-enable-user-wait-pause'/>
+-      <feature policy='disable' name='mcdt-no'/>
+-      <feature policy='disable' name='sbdr-ssdp-no'/>
+-      <feature policy='disable' name='fbsdp-no'/>
+-      <feature policy='disable' name='psdp-no'/>
+-      <feature policy='disable' name='pbrsb-no'/>
++      <feature policy='require' name='waitpkg'/>
++      <feature policy='require' name='zero-fcs-fds'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_10.1.0.x86_64.xml b/tests/domaincapsdata/qemu_10.1.0.x86_64.xml
+index 3be5e34fe6..cbdebe9da5 100644
+--- a/tests/domaincapsdata/qemu_10.1.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.1.0.x86_64.xml
+@@ -43,30 +43,30 @@
+       <model fallback='forbid'>EPYC-Rome</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='ssbd'/>
+-      <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='overflow-recov'/>
+-      <feature policy='require' name='succor'/>
+-      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='amd-ssbd'/>
+-      <feature policy='require' name='virt-ssbd'/>
+-      <feature policy='require' name='lbrv'/>
+-      <feature policy='require' name='tsc-scale'/>
+-      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='cmp_legacy'/>
+       <feature policy='require' name='flushbyasid'/>
+-      <feature policy='require' name='pause-filter'/>
+-      <feature policy='require' name='pfthreshold'/>
+-      <feature policy='require' name='v-vmsave-vmload'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='ibpb-brtype'/>
++      <feature policy='require' name='invtsc'/>
++      <feature policy='require' name='lbrv'/>
+       <feature policy='require' name='lfence-always-serializing'/>
+       <feature policy='require' name='null-sel-clr-base'/>
+-      <feature policy='require' name='ibpb-brtype'/>
++      <feature policy='require' name='overflow-recov'/>
++      <feature policy='require' name='pause-filter'/>
++      <feature policy='require' name='pfthreshold'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='succor'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc-scale'/>
++      <feature policy='require' name='tsc_adjust'/>
++      <feature policy='require' name='v-vmsave-vmload'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='x2apic'/>
+       <feature policy='disable' name='xsaves'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_10.2.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_10.2.0-q35.x86_64.xml
+index baf8f458db..9389141012 100644
+--- a/tests/domaincapsdata/qemu_10.2.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.2.0-q35.x86_64.xml
+@@ -44,21 +44,21 @@
+       <model fallback='forbid'>EPYC-Turin</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='spec-ctrl'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='flush-l1d'/>
+-      <feature policy='require' name='ssbd'/>
+       <feature policy='require' name='cmp_legacy'/>
++      <feature policy='require' name='flush-l1d'/>
++      <feature policy='require' name='hypervisor'/>
+       <feature policy='require' name='invtsc'/>
+-      <feature policy='require' name='virt-ssbd'/>
+-      <feature policy='require' name='tsa-sq-no'/>
+-      <feature policy='require' name='tsa-l1-no'/>
+-      <feature policy='disable' name='pcid'/>
+       <feature policy='disable' name='la57'/>
++      <feature policy='disable' name='pcid'/>
++      <feature policy='require' name='spec-ctrl'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='tsa-l1-no'/>
++      <feature policy='require' name='tsa-sq-no'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc_adjust'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='x2apic'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64+mshv.xml b/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64+mshv.xml
+index 35331dc4d4..84c5084452 100644
+--- a/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64+mshv.xml
++++ b/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64+mshv.xml
+@@ -37,42 +37,42 @@
+     <mode name='host-model' supported='yes'>
+       <model fallback='forbid'>EPYC</model>
+       <vendor>AMD</vendor>
+-      <feature policy='require' name='monitor'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='acpi'/>
+-      <feature policy='require' name='ss'/>
+-      <feature policy='require' name='erms'/>
+-      <feature policy='require' name='mpx'/>
+-      <feature policy='require' name='clwb'/>
+-      <feature policy='require' name='umip'/>
+-      <feature policy='require' name='pku'/>
+-      <feature policy='require' name='vaes'/>
+-      <feature policy='require' name='la57'/>
+-      <feature policy='require' name='rdpid'/>
+-      <feature policy='require' name='pks'/>
+-      <feature policy='require' name='fsrm'/>
+-      <feature policy='require' name='cmpccxadd'/>
+-      <feature policy='require' name='fzrm'/>
+-      <feature policy='require' name='fsrs'/>
+-      <feature policy='require' name='fsrc'/>
+-      <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='3dnowext'/>
+       <feature policy='require' name='3dnow'/>
+-      <feature policy='require' name='xsaveerptr'/>
+-      <feature policy='require' name='wbnoinvd'/>
+-      <feature policy='require' name='npt'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='require' name='no-nested-data-bp'/>
+-      <feature policy='require' name='null-sel-clr-base'/>
+-      <feature policy='disable' name='vme'/>
+-      <feature policy='disable' name='xsavec'/>
+-      <feature policy='disable' name='misalignsse'/>
+-      <feature policy='disable' name='osvw'/>
+-      <feature policy='disable' name='topoext'/>
++      <feature policy='require' name='3dnowext'/>
++      <feature policy='require' name='acpi'/>
++      <feature policy='require' name='clwb'/>
++      <feature policy='require' name='cmp_legacy'/>
++      <feature policy='require' name='cmpccxadd'/>
++      <feature policy='require' name='erms'/>
++      <feature policy='require' name='fsrc'/>
++      <feature policy='require' name='fsrm'/>
++      <feature policy='require' name='fsrs'/>
+       <feature policy='disable' name='fxsr_opt'/>
++      <feature policy='require' name='fzrm'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='la57'/>
++      <feature policy='disable' name='misalignsse'/>
++      <feature policy='require' name='monitor'/>
++      <feature policy='require' name='mpx'/>
++      <feature policy='require' name='no-nested-data-bp'/>
++      <feature policy='require' name='npt'/>
+       <feature policy='disable' name='nrip-save'/>
++      <feature policy='require' name='null-sel-clr-base'/>
++      <feature policy='disable' name='osvw'/>
++      <feature policy='require' name='pks'/>
++      <feature policy='require' name='pku'/>
++      <feature policy='require' name='rdpid'/>
++      <feature policy='require' name='ss'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='disable' name='topoext'/>
++      <feature policy='require' name='umip'/>
++      <feature policy='require' name='vaes'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='disable' name='vme'/>
++      <feature policy='require' name='wbnoinvd'/>
++      <feature policy='require' name='x2apic'/>
++      <feature policy='disable' name='xsavec'/>
++      <feature policy='require' name='xsaveerptr'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64.xml
+index 7fba7f45f3..ae91b4c984 100644
+--- a/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.2.0-tcg.x86_64.xml
+@@ -37,42 +37,42 @@
+     <mode name='host-model' supported='yes'>
+       <model fallback='forbid'>EPYC</model>
+       <vendor>AMD</vendor>
+-      <feature policy='require' name='monitor'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='acpi'/>
+-      <feature policy='require' name='ss'/>
+-      <feature policy='require' name='erms'/>
+-      <feature policy='require' name='mpx'/>
+-      <feature policy='require' name='clwb'/>
+-      <feature policy='require' name='umip'/>
+-      <feature policy='require' name='pku'/>
+-      <feature policy='require' name='vaes'/>
+-      <feature policy='require' name='la57'/>
+-      <feature policy='require' name='rdpid'/>
+-      <feature policy='require' name='pks'/>
+-      <feature policy='require' name='fsrm'/>
+-      <feature policy='require' name='cmpccxadd'/>
+-      <feature policy='require' name='fzrm'/>
+-      <feature policy='require' name='fsrs'/>
+-      <feature policy='require' name='fsrc'/>
+-      <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='3dnowext'/>
+       <feature policy='require' name='3dnow'/>
+-      <feature policy='require' name='xsaveerptr'/>
+-      <feature policy='require' name='wbnoinvd'/>
+-      <feature policy='require' name='npt'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='require' name='no-nested-data-bp'/>
+-      <feature policy='require' name='null-sel-clr-base'/>
+-      <feature policy='disable' name='vme'/>
+-      <feature policy='disable' name='xsavec'/>
+-      <feature policy='disable' name='misalignsse'/>
+-      <feature policy='disable' name='osvw'/>
+-      <feature policy='disable' name='topoext'/>
++      <feature policy='require' name='3dnowext'/>
++      <feature policy='require' name='acpi'/>
++      <feature policy='require' name='clwb'/>
++      <feature policy='require' name='cmp_legacy'/>
++      <feature policy='require' name='cmpccxadd'/>
++      <feature policy='require' name='erms'/>
++      <feature policy='require' name='fsrc'/>
++      <feature policy='require' name='fsrm'/>
++      <feature policy='require' name='fsrs'/>
+       <feature policy='disable' name='fxsr_opt'/>
++      <feature policy='require' name='fzrm'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='la57'/>
++      <feature policy='disable' name='misalignsse'/>
++      <feature policy='require' name='monitor'/>
++      <feature policy='require' name='mpx'/>
++      <feature policy='require' name='no-nested-data-bp'/>
++      <feature policy='require' name='npt'/>
+       <feature policy='disable' name='nrip-save'/>
++      <feature policy='require' name='null-sel-clr-base'/>
++      <feature policy='disable' name='osvw'/>
++      <feature policy='require' name='pks'/>
++      <feature policy='require' name='pku'/>
++      <feature policy='require' name='rdpid'/>
++      <feature policy='require' name='ss'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='disable' name='topoext'/>
++      <feature policy='require' name='umip'/>
++      <feature policy='require' name='vaes'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='disable' name='vme'/>
++      <feature policy='require' name='wbnoinvd'/>
++      <feature policy='require' name='x2apic'/>
++      <feature policy='disable' name='xsavec'/>
++      <feature policy='require' name='xsaveerptr'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_10.2.0.x86_64.xml b/tests/domaincapsdata/qemu_10.2.0.x86_64.xml
+index 354653d49a..dd3bfec565 100644
+--- a/tests/domaincapsdata/qemu_10.2.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_10.2.0.x86_64.xml
+@@ -43,21 +43,21 @@
+       <model fallback='forbid'>EPYC-Turin</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='spec-ctrl'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='flush-l1d'/>
+-      <feature policy='require' name='ssbd'/>
+       <feature policy='require' name='cmp_legacy'/>
++      <feature policy='require' name='flush-l1d'/>
++      <feature policy='require' name='hypervisor'/>
+       <feature policy='require' name='invtsc'/>
+-      <feature policy='require' name='virt-ssbd'/>
+-      <feature policy='require' name='tsa-sq-no'/>
+-      <feature policy='require' name='tsa-l1-no'/>
+-      <feature policy='disable' name='pcid'/>
+       <feature policy='disable' name='la57'/>
++      <feature policy='disable' name='pcid'/>
++      <feature policy='require' name='spec-ctrl'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='tsa-l1-no'/>
++      <feature policy='require' name='tsa-sq-no'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc_adjust'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='x2apic'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_6.2.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_6.2.0-q35.x86_64.xml
+index 0b66b77e73..f721f16740 100644
+--- a/tests/domaincapsdata/qemu_6.2.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_6.2.0-q35.x86_64.xml
+@@ -44,23 +44,23 @@
+       <model fallback='forbid'>EPYC-Rome</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='arch-capabilities'/>
+-      <feature policy='require' name='ssbd'/>
+-      <feature policy='require' name='xsaves'/>
+-      <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='amd-ssbd'/>
+-      <feature policy='require' name='virt-ssbd'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='require' name='rdctl-no'/>
+-      <feature policy='require' name='skip-l1dfl-vmentry'/>
++      <feature policy='require' name='arch-capabilities'/>
++      <feature policy='require' name='cmp_legacy'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='mds-no'/>
+       <feature policy='require' name='pschange-mc-no'/>
++      <feature policy='require' name='rdctl-no'/>
++      <feature policy='require' name='skip-l1dfl-vmentry'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc_adjust'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='x2apic'/>
++      <feature policy='require' name='xsaves'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_6.2.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_6.2.0-tcg.x86_64.xml
+index ce4b14f28c..a4b75bce0f 100644
+--- a/tests/domaincapsdata/qemu_6.2.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_6.2.0-tcg.x86_64.xml
+@@ -37,44 +37,44 @@
+     <mode name='host-model' supported='yes'>
+       <model fallback='forbid'>Opteron_G3</model>
+       <vendor>AMD</vendor>
+-      <feature policy='require' name='pclmuldq'/>
+-      <feature policy='require' name='monitor'/>
+-      <feature policy='require' name='ssse3'/>
+-      <feature policy='require' name='sse4.1'/>
+-      <feature policy='require' name='sse4.2'/>
+-      <feature policy='require' name='movbe'/>
+-      <feature policy='require' name='aes'/>
+-      <feature policy='require' name='xsave'/>
+-      <feature policy='require' name='rdrand'/>
+-      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='3dnow'/>
++      <feature policy='require' name='3dnowext'/>
+       <feature policy='require' name='acpi'/>
+-      <feature policy='require' name='ss'/>
+-      <feature policy='require' name='arat'/>
+-      <feature policy='require' name='fsgsbase'/>
+-      <feature policy='require' name='bmi1'/>
+-      <feature policy='require' name='smep'/>
+-      <feature policy='require' name='bmi2'/>
+-      <feature policy='require' name='erms'/>
+-      <feature policy='require' name='mpx'/>
+       <feature policy='require' name='adx'/>
+-      <feature policy='require' name='smap'/>
+-      <feature policy='require' name='pcommit'/>
++      <feature policy='require' name='aes'/>
++      <feature policy='require' name='arat'/>
++      <feature policy='require' name='bmi1'/>
++      <feature policy='require' name='bmi2'/>
+       <feature policy='require' name='clflushopt'/>
+       <feature policy='require' name='clwb'/>
+-      <feature policy='require' name='pku'/>
+-      <feature policy='require' name='la57'/>
+-      <feature policy='require' name='pks'/>
+-      <feature policy='require' name='xsaveopt'/>
+-      <feature policy='require' name='xgetbv1'/>
+       <feature policy='require' name='cr8legacy'/>
+-      <feature policy='require' name='mmxext'/>
+-      <feature policy='require' name='pdpe1gb'/>
+-      <feature policy='require' name='3dnowext'/>
+-      <feature policy='require' name='3dnow'/>
+-      <feature policy='require' name='npt'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='erms'/>
++      <feature policy='require' name='fsgsbase'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='la57'/>
+       <feature policy='disable' name='misalignsse'/>
++      <feature policy='require' name='mmxext'/>
++      <feature policy='require' name='monitor'/>
++      <feature policy='require' name='movbe'/>
++      <feature policy='require' name='mpx'/>
++      <feature policy='require' name='npt'/>
++      <feature policy='require' name='pclmuldq'/>
++      <feature policy='require' name='pcommit'/>
++      <feature policy='require' name='pdpe1gb'/>
++      <feature policy='require' name='pks'/>
++      <feature policy='require' name='pku'/>
++      <feature policy='require' name='rdrand'/>
++      <feature policy='require' name='smap'/>
++      <feature policy='require' name='smep'/>
++      <feature policy='require' name='ss'/>
++      <feature policy='require' name='sse4.1'/>
++      <feature policy='require' name='sse4.2'/>
++      <feature policy='require' name='ssse3'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='require' name='xgetbv1'/>
++      <feature policy='require' name='xsave'/>
++      <feature policy='require' name='xsaveopt'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_6.2.0.x86_64.xml b/tests/domaincapsdata/qemu_6.2.0.x86_64.xml
+index 33b2e4905e..475ba48555 100644
+--- a/tests/domaincapsdata/qemu_6.2.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_6.2.0.x86_64.xml
+@@ -43,23 +43,23 @@
+       <model fallback='forbid'>EPYC-Rome</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='arch-capabilities'/>
+-      <feature policy='require' name='ssbd'/>
+-      <feature policy='require' name='xsaves'/>
+-      <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='amd-ssbd'/>
+-      <feature policy='require' name='virt-ssbd'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='require' name='rdctl-no'/>
+-      <feature policy='require' name='skip-l1dfl-vmentry'/>
++      <feature policy='require' name='arch-capabilities'/>
++      <feature policy='require' name='cmp_legacy'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='mds-no'/>
+       <feature policy='require' name='pschange-mc-no'/>
++      <feature policy='require' name='rdctl-no'/>
++      <feature policy='require' name='skip-l1dfl-vmentry'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc_adjust'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='x2apic'/>
++      <feature policy='require' name='xsaves'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_7.0.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_7.0.0-q35.x86_64.xml
+index 2d7519ae94..738aac802f 100644
+--- a/tests/domaincapsdata/qemu_7.0.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.0.0-q35.x86_64.xml
+@@ -44,24 +44,24 @@
+       <model fallback='forbid'>EPYC-Rome</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='arch-capabilities'/>
+-      <feature policy='require' name='ssbd'/>
+-      <feature policy='require' name='xsaves'/>
+-      <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='amd-ssbd'/>
+-      <feature policy='require' name='virt-ssbd'/>
+-      <feature policy='require' name='tsc-scale'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='require' name='rdctl-no'/>
+-      <feature policy='require' name='skip-l1dfl-vmentry'/>
++      <feature policy='require' name='arch-capabilities'/>
++      <feature policy='require' name='cmp_legacy'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='mds-no'/>
+       <feature policy='require' name='pschange-mc-no'/>
++      <feature policy='require' name='rdctl-no'/>
++      <feature policy='require' name='skip-l1dfl-vmentry'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc-scale'/>
++      <feature policy='require' name='tsc_adjust'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='x2apic'/>
++      <feature policy='require' name='xsaves'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_7.0.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_7.0.0-tcg.x86_64.xml
+index 01975a5e34..0f249bc278 100644
+--- a/tests/domaincapsdata/qemu_7.0.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.0.0-tcg.x86_64.xml
+@@ -37,45 +37,45 @@
+     <mode name='host-model' supported='yes'>
+       <model fallback='forbid'>Opteron_G3</model>
+       <vendor>AMD</vendor>
+-      <feature policy='require' name='pclmuldq'/>
+-      <feature policy='require' name='monitor'/>
+-      <feature policy='require' name='ssse3'/>
+-      <feature policy='require' name='sse4.1'/>
+-      <feature policy='require' name='sse4.2'/>
+-      <feature policy='require' name='movbe'/>
+-      <feature policy='require' name='aes'/>
+-      <feature policy='require' name='xsave'/>
+-      <feature policy='require' name='rdrand'/>
+-      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='3dnow'/>
++      <feature policy='require' name='3dnowext'/>
+       <feature policy='require' name='acpi'/>
+-      <feature policy='require' name='ss'/>
+-      <feature policy='require' name='arat'/>
+-      <feature policy='require' name='fsgsbase'/>
+-      <feature policy='require' name='bmi1'/>
+-      <feature policy='require' name='smep'/>
+-      <feature policy='require' name='bmi2'/>
+-      <feature policy='require' name='erms'/>
+-      <feature policy='require' name='mpx'/>
+       <feature policy='require' name='adx'/>
+-      <feature policy='require' name='smap'/>
+-      <feature policy='require' name='pcommit'/>
++      <feature policy='require' name='aes'/>
++      <feature policy='require' name='arat'/>
++      <feature policy='require' name='bmi1'/>
++      <feature policy='require' name='bmi2'/>
+       <feature policy='require' name='clflushopt'/>
+       <feature policy='require' name='clwb'/>
+-      <feature policy='require' name='umip'/>
+-      <feature policy='require' name='pku'/>
+-      <feature policy='require' name='la57'/>
+-      <feature policy='require' name='pks'/>
+-      <feature policy='require' name='xsaveopt'/>
+-      <feature policy='require' name='xgetbv1'/>
+       <feature policy='require' name='cr8legacy'/>
+-      <feature policy='require' name='mmxext'/>
+-      <feature policy='require' name='pdpe1gb'/>
+-      <feature policy='require' name='3dnowext'/>
+-      <feature policy='require' name='3dnow'/>
+-      <feature policy='require' name='npt'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='erms'/>
++      <feature policy='require' name='fsgsbase'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='la57'/>
+       <feature policy='disable' name='misalignsse'/>
++      <feature policy='require' name='mmxext'/>
++      <feature policy='require' name='monitor'/>
++      <feature policy='require' name='movbe'/>
++      <feature policy='require' name='mpx'/>
++      <feature policy='require' name='npt'/>
++      <feature policy='require' name='pclmuldq'/>
++      <feature policy='require' name='pcommit'/>
++      <feature policy='require' name='pdpe1gb'/>
++      <feature policy='require' name='pks'/>
++      <feature policy='require' name='pku'/>
++      <feature policy='require' name='rdrand'/>
++      <feature policy='require' name='smap'/>
++      <feature policy='require' name='smep'/>
++      <feature policy='require' name='ss'/>
++      <feature policy='require' name='sse4.1'/>
++      <feature policy='require' name='sse4.2'/>
++      <feature policy='require' name='ssse3'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='umip'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='require' name='xgetbv1'/>
++      <feature policy='require' name='xsave'/>
++      <feature policy='require' name='xsaveopt'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_7.0.0.x86_64.xml b/tests/domaincapsdata/qemu_7.0.0.x86_64.xml
+index 8fa3d3e0f4..fec64cbb03 100644
+--- a/tests/domaincapsdata/qemu_7.0.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.0.0.x86_64.xml
+@@ -43,24 +43,24 @@
+       <model fallback='forbid'>EPYC-Rome</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='arch-capabilities'/>
+-      <feature policy='require' name='ssbd'/>
+-      <feature policy='require' name='xsaves'/>
+-      <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='amd-ssbd'/>
+-      <feature policy='require' name='virt-ssbd'/>
+-      <feature policy='require' name='tsc-scale'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='require' name='rdctl-no'/>
+-      <feature policy='require' name='skip-l1dfl-vmentry'/>
++      <feature policy='require' name='arch-capabilities'/>
++      <feature policy='require' name='cmp_legacy'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='mds-no'/>
+       <feature policy='require' name='pschange-mc-no'/>
++      <feature policy='require' name='rdctl-no'/>
++      <feature policy='require' name='skip-l1dfl-vmentry'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc-scale'/>
++      <feature policy='require' name='tsc_adjust'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='x2apic'/>
++      <feature policy='require' name='xsaves'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_7.1.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_7.1.0-q35.x86_64.xml
+index 1991133a62..3ef878cc52 100644
+--- a/tests/domaincapsdata/qemu_7.1.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.1.0-q35.x86_64.xml
+@@ -44,25 +44,25 @@
+       <model fallback='forbid'>EPYC-Rome</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='arch-capabilities'/>
+-      <feature policy='require' name='ssbd'/>
+-      <feature policy='require' name='xsaves'/>
+-      <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='amd-ssbd'/>
+-      <feature policy='require' name='virt-ssbd'/>
+-      <feature policy='require' name='tsc-scale'/>
+-      <feature policy='require' name='vmcb-clean'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='require' name='rdctl-no'/>
+-      <feature policy='require' name='skip-l1dfl-vmentry'/>
++      <feature policy='require' name='arch-capabilities'/>
++      <feature policy='require' name='cmp_legacy'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='mds-no'/>
+       <feature policy='require' name='pschange-mc-no'/>
++      <feature policy='require' name='rdctl-no'/>
++      <feature policy='require' name='skip-l1dfl-vmentry'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc-scale'/>
++      <feature policy='require' name='tsc_adjust'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='x2apic'/>
++      <feature policy='require' name='xsaves'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_7.1.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_7.1.0-tcg.x86_64.xml
+index 41bfdbecb6..31b40552c2 100644
+--- a/tests/domaincapsdata/qemu_7.1.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.1.0-tcg.x86_64.xml
+@@ -37,45 +37,45 @@
+     <mode name='host-model' supported='yes'>
+       <model fallback='forbid'>Opteron_G3</model>
+       <vendor>AMD</vendor>
+-      <feature policy='require' name='pclmuldq'/>
+-      <feature policy='require' name='monitor'/>
+-      <feature policy='require' name='ssse3'/>
+-      <feature policy='require' name='sse4.1'/>
+-      <feature policy='require' name='sse4.2'/>
+-      <feature policy='require' name='movbe'/>
+-      <feature policy='require' name='aes'/>
+-      <feature policy='require' name='xsave'/>
+-      <feature policy='require' name='rdrand'/>
+-      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='3dnow'/>
++      <feature policy='require' name='3dnowext'/>
+       <feature policy='require' name='acpi'/>
+-      <feature policy='require' name='ss'/>
+-      <feature policy='require' name='arat'/>
+-      <feature policy='require' name='fsgsbase'/>
+-      <feature policy='require' name='bmi1'/>
+-      <feature policy='require' name='smep'/>
+-      <feature policy='require' name='bmi2'/>
+-      <feature policy='require' name='erms'/>
+-      <feature policy='require' name='mpx'/>
+       <feature policy='require' name='adx'/>
+-      <feature policy='require' name='smap'/>
+-      <feature policy='require' name='pcommit'/>
++      <feature policy='require' name='aes'/>
++      <feature policy='require' name='arat'/>
++      <feature policy='require' name='bmi1'/>
++      <feature policy='require' name='bmi2'/>
+       <feature policy='require' name='clflushopt'/>
+       <feature policy='require' name='clwb'/>
+-      <feature policy='require' name='umip'/>
+-      <feature policy='require' name='pku'/>
+-      <feature policy='require' name='la57'/>
+-      <feature policy='require' name='pks'/>
+-      <feature policy='require' name='xsaveopt'/>
+-      <feature policy='require' name='xgetbv1'/>
+       <feature policy='require' name='cr8legacy'/>
+-      <feature policy='require' name='mmxext'/>
+-      <feature policy='require' name='pdpe1gb'/>
+-      <feature policy='require' name='3dnowext'/>
+-      <feature policy='require' name='3dnow'/>
+-      <feature policy='require' name='npt'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='erms'/>
++      <feature policy='require' name='fsgsbase'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='la57'/>
+       <feature policy='disable' name='misalignsse'/>
++      <feature policy='require' name='mmxext'/>
++      <feature policy='require' name='monitor'/>
++      <feature policy='require' name='movbe'/>
++      <feature policy='require' name='mpx'/>
++      <feature policy='require' name='npt'/>
++      <feature policy='require' name='pclmuldq'/>
++      <feature policy='require' name='pcommit'/>
++      <feature policy='require' name='pdpe1gb'/>
++      <feature policy='require' name='pks'/>
++      <feature policy='require' name='pku'/>
++      <feature policy='require' name='rdrand'/>
++      <feature policy='require' name='smap'/>
++      <feature policy='require' name='smep'/>
++      <feature policy='require' name='ss'/>
++      <feature policy='require' name='sse4.1'/>
++      <feature policy='require' name='sse4.2'/>
++      <feature policy='require' name='ssse3'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='umip'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='require' name='xgetbv1'/>
++      <feature policy='require' name='xsave'/>
++      <feature policy='require' name='xsaveopt'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_7.1.0.x86_64.xml b/tests/domaincapsdata/qemu_7.1.0.x86_64.xml
+index 54e8e9d87a..4cf33e2c8f 100644
+--- a/tests/domaincapsdata/qemu_7.1.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.1.0.x86_64.xml
+@@ -43,25 +43,25 @@
+       <model fallback='forbid'>EPYC-Rome</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='arch-capabilities'/>
+-      <feature policy='require' name='ssbd'/>
+-      <feature policy='require' name='xsaves'/>
+-      <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='amd-ssbd'/>
+-      <feature policy='require' name='virt-ssbd'/>
+-      <feature policy='require' name='tsc-scale'/>
+-      <feature policy='require' name='vmcb-clean'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='require' name='rdctl-no'/>
+-      <feature policy='require' name='skip-l1dfl-vmentry'/>
++      <feature policy='require' name='arch-capabilities'/>
++      <feature policy='require' name='cmp_legacy'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='mds-no'/>
+       <feature policy='require' name='pschange-mc-no'/>
++      <feature policy='require' name='rdctl-no'/>
++      <feature policy='require' name='skip-l1dfl-vmentry'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc-scale'/>
++      <feature policy='require' name='tsc_adjust'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='x2apic'/>
++      <feature policy='require' name='xsaves'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_7.2.0-hvf.x86_64+hvf.xml b/tests/domaincapsdata/qemu_7.2.0-hvf.x86_64+hvf.xml
+index 58ef1bde99..3bf8873f07 100644
+--- a/tests/domaincapsdata/qemu_7.2.0-hvf.x86_64+hvf.xml
++++ b/tests/domaincapsdata/qemu_7.2.0-hvf.x86_64+hvf.xml
+@@ -43,30 +43,30 @@
+       <model fallback='forbid'>EPYC-Rome</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='arch-capabilities'/>
+-      <feature policy='require' name='ssbd'/>
+-      <feature policy='require' name='xsaves'/>
+-      <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='amd-ssbd'/>
+-      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='arch-capabilities'/>
++      <feature policy='require' name='cmp_legacy'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='lbrv'/>
+-      <feature policy='require' name='tsc-scale'/>
+-      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='mds-no'/>
+       <feature policy='require' name='pause-filter'/>
+       <feature policy='require' name='pfthreshold'/>
+-      <feature policy='require' name='v-vmsave-vmload'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='pschange-mc-no'/>
+       <feature policy='require' name='rdctl-no'/>
+       <feature policy='require' name='skip-l1dfl-vmentry'/>
+-      <feature policy='require' name='mds-no'/>
+-      <feature policy='require' name='pschange-mc-no'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc-scale'/>
++      <feature policy='require' name='tsc_adjust'/>
++      <feature policy='require' name='v-vmsave-vmload'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='x2apic'/>
++      <feature policy='require' name='xsaves'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_7.2.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_7.2.0-q35.x86_64.xml
+index 7c325b52aa..e3d4beb1cd 100644
+--- a/tests/domaincapsdata/qemu_7.2.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.2.0-q35.x86_64.xml
+@@ -44,30 +44,30 @@
+       <model fallback='forbid'>EPYC-Rome</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='arch-capabilities'/>
+-      <feature policy='require' name='ssbd'/>
+-      <feature policy='require' name='xsaves'/>
+-      <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='amd-ssbd'/>
+-      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='arch-capabilities'/>
++      <feature policy='require' name='cmp_legacy'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='lbrv'/>
+-      <feature policy='require' name='tsc-scale'/>
+-      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='mds-no'/>
+       <feature policy='require' name='pause-filter'/>
+       <feature policy='require' name='pfthreshold'/>
+-      <feature policy='require' name='v-vmsave-vmload'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='pschange-mc-no'/>
+       <feature policy='require' name='rdctl-no'/>
+       <feature policy='require' name='skip-l1dfl-vmentry'/>
+-      <feature policy='require' name='mds-no'/>
+-      <feature policy='require' name='pschange-mc-no'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc-scale'/>
++      <feature policy='require' name='tsc_adjust'/>
++      <feature policy='require' name='v-vmsave-vmload'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='x2apic'/>
++      <feature policy='require' name='xsaves'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64+hvf.xml b/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64+hvf.xml
+index 27ecea6fe0..b3caa8014c 100644
+--- a/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64+hvf.xml
++++ b/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64+hvf.xml
+@@ -37,34 +37,34 @@
+     <mode name='host-model' supported='yes'>
+       <model fallback='forbid'>EPYC</model>
+       <vendor>AMD</vendor>
+-      <feature policy='require' name='monitor'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='acpi'/>
+-      <feature policy='require' name='ss'/>
+-      <feature policy='require' name='erms'/>
+-      <feature policy='require' name='mpx'/>
+-      <feature policy='require' name='pcommit'/>
+-      <feature policy='require' name='clwb'/>
+-      <feature policy='require' name='umip'/>
+-      <feature policy='require' name='pku'/>
+-      <feature policy='require' name='vaes'/>
+-      <feature policy='require' name='la57'/>
+-      <feature policy='require' name='pks'/>
+-      <feature policy='require' name='3dnowext'/>
+       <feature policy='require' name='3dnow'/>
++      <feature policy='require' name='3dnowext'/>
++      <feature policy='disable' name='3dnowprefetch'/>
++      <feature policy='require' name='acpi'/>
++      <feature policy='require' name='clwb'/>
++      <feature policy='require' name='erms'/>
++      <feature policy='disable' name='fxsr_opt'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='la57'/>
++      <feature policy='disable' name='misalignsse'/>
++      <feature policy='require' name='monitor'/>
++      <feature policy='require' name='mpx'/>
+       <feature policy='require' name='npt'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='disable' name='vme'/>
++      <feature policy='disable' name='nrip-save'/>
++      <feature policy='disable' name='osvw'/>
++      <feature policy='require' name='pcommit'/>
++      <feature policy='require' name='pks'/>
++      <feature policy='require' name='pku'/>
+       <feature policy='disable' name='rdseed'/>
+       <feature policy='disable' name='sha-ni'/>
+-      <feature policy='disable' name='xsavec'/>
+-      <feature policy='disable' name='misalignsse'/>
+-      <feature policy='disable' name='3dnowprefetch'/>
+-      <feature policy='disable' name='osvw'/>
++      <feature policy='require' name='ss'/>
++      <feature policy='require' name='svme-addr-chk'/>
+       <feature policy='disable' name='topoext'/>
+-      <feature policy='disable' name='fxsr_opt'/>
+-      <feature policy='disable' name='nrip-save'/>
++      <feature policy='require' name='umip'/>
++      <feature policy='require' name='vaes'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='disable' name='vme'/>
++      <feature policy='disable' name='xsavec'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64.xml
+index 27ecea6fe0..b3caa8014c 100644
+--- a/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.2.0-tcg.x86_64.xml
+@@ -37,34 +37,34 @@
+     <mode name='host-model' supported='yes'>
+       <model fallback='forbid'>EPYC</model>
+       <vendor>AMD</vendor>
+-      <feature policy='require' name='monitor'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='acpi'/>
+-      <feature policy='require' name='ss'/>
+-      <feature policy='require' name='erms'/>
+-      <feature policy='require' name='mpx'/>
+-      <feature policy='require' name='pcommit'/>
+-      <feature policy='require' name='clwb'/>
+-      <feature policy='require' name='umip'/>
+-      <feature policy='require' name='pku'/>
+-      <feature policy='require' name='vaes'/>
+-      <feature policy='require' name='la57'/>
+-      <feature policy='require' name='pks'/>
+-      <feature policy='require' name='3dnowext'/>
+       <feature policy='require' name='3dnow'/>
++      <feature policy='require' name='3dnowext'/>
++      <feature policy='disable' name='3dnowprefetch'/>
++      <feature policy='require' name='acpi'/>
++      <feature policy='require' name='clwb'/>
++      <feature policy='require' name='erms'/>
++      <feature policy='disable' name='fxsr_opt'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='la57'/>
++      <feature policy='disable' name='misalignsse'/>
++      <feature policy='require' name='monitor'/>
++      <feature policy='require' name='mpx'/>
+       <feature policy='require' name='npt'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='disable' name='vme'/>
++      <feature policy='disable' name='nrip-save'/>
++      <feature policy='disable' name='osvw'/>
++      <feature policy='require' name='pcommit'/>
++      <feature policy='require' name='pks'/>
++      <feature policy='require' name='pku'/>
+       <feature policy='disable' name='rdseed'/>
+       <feature policy='disable' name='sha-ni'/>
+-      <feature policy='disable' name='xsavec'/>
+-      <feature policy='disable' name='misalignsse'/>
+-      <feature policy='disable' name='3dnowprefetch'/>
+-      <feature policy='disable' name='osvw'/>
++      <feature policy='require' name='ss'/>
++      <feature policy='require' name='svme-addr-chk'/>
+       <feature policy='disable' name='topoext'/>
+-      <feature policy='disable' name='fxsr_opt'/>
+-      <feature policy='disable' name='nrip-save'/>
++      <feature policy='require' name='umip'/>
++      <feature policy='require' name='vaes'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='disable' name='vme'/>
++      <feature policy='disable' name='xsavec'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_7.2.0.x86_64.xml b/tests/domaincapsdata/qemu_7.2.0.x86_64.xml
+index b9a174368a..b67fae39a4 100644
+--- a/tests/domaincapsdata/qemu_7.2.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_7.2.0.x86_64.xml
+@@ -43,30 +43,30 @@
+       <model fallback='forbid'>EPYC-Rome</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='arch-capabilities'/>
+-      <feature policy='require' name='ssbd'/>
+-      <feature policy='require' name='xsaves'/>
+-      <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='amd-ssbd'/>
+-      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='arch-capabilities'/>
++      <feature policy='require' name='cmp_legacy'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='lbrv'/>
+-      <feature policy='require' name='tsc-scale'/>
+-      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='mds-no'/>
+       <feature policy='require' name='pause-filter'/>
+       <feature policy='require' name='pfthreshold'/>
+-      <feature policy='require' name='v-vmsave-vmload'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='pschange-mc-no'/>
+       <feature policy='require' name='rdctl-no'/>
+       <feature policy='require' name='skip-l1dfl-vmentry'/>
+-      <feature policy='require' name='mds-no'/>
+-      <feature policy='require' name='pschange-mc-no'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc-scale'/>
++      <feature policy='require' name='tsc_adjust'/>
++      <feature policy='require' name='v-vmsave-vmload'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='x2apic'/>
++      <feature policy='require' name='xsaves'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_8.0.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_8.0.0-q35.x86_64.xml
+index 60893adebf..fb5e2184b3 100644
+--- a/tests/domaincapsdata/qemu_8.0.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.0.0-q35.x86_64.xml
+@@ -44,30 +44,30 @@
+       <model fallback='forbid'>EPYC-Rome</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='arch-capabilities'/>
+-      <feature policy='require' name='ssbd'/>
+-      <feature policy='require' name='xsaves'/>
+-      <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='amd-ssbd'/>
+-      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='arch-capabilities'/>
++      <feature policy='require' name='cmp_legacy'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='lbrv'/>
+-      <feature policy='require' name='tsc-scale'/>
+-      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='mds-no'/>
+       <feature policy='require' name='pause-filter'/>
+       <feature policy='require' name='pfthreshold'/>
+-      <feature policy='require' name='v-vmsave-vmload'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='pschange-mc-no'/>
+       <feature policy='require' name='rdctl-no'/>
+       <feature policy='require' name='skip-l1dfl-vmentry'/>
+-      <feature policy='require' name='mds-no'/>
+-      <feature policy='require' name='pschange-mc-no'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc-scale'/>
++      <feature policy='require' name='tsc_adjust'/>
++      <feature policy='require' name='v-vmsave-vmload'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='x2apic'/>
++      <feature policy='require' name='xsaves'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_8.0.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_8.0.0-tcg.x86_64.xml
+index 23e41eb13c..eb1cb17485 100644
+--- a/tests/domaincapsdata/qemu_8.0.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.0.0-tcg.x86_64.xml
+@@ -37,38 +37,38 @@
+     <mode name='host-model' supported='yes'>
+       <model fallback='forbid'>EPYC</model>
+       <vendor>AMD</vendor>
+-      <feature policy='require' name='monitor'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='acpi'/>
+-      <feature policy='require' name='ss'/>
+-      <feature policy='require' name='erms'/>
+-      <feature policy='require' name='mpx'/>
+-      <feature policy='require' name='pcommit'/>
+-      <feature policy='require' name='clwb'/>
+-      <feature policy='require' name='umip'/>
+-      <feature policy='require' name='pku'/>
+-      <feature policy='require' name='vaes'/>
+-      <feature policy='require' name='la57'/>
+-      <feature policy='require' name='pks'/>
+-      <feature policy='require' name='fsrm'/>
+-      <feature policy='require' name='fzrm'/>
+-      <feature policy='require' name='fsrs'/>
+-      <feature policy='require' name='fsrc'/>
+-      <feature policy='require' name='3dnowext'/>
+       <feature policy='require' name='3dnow'/>
++      <feature policy='require' name='3dnowext'/>
++      <feature policy='disable' name='3dnowprefetch'/>
++      <feature policy='require' name='acpi'/>
++      <feature policy='require' name='clwb'/>
++      <feature policy='require' name='erms'/>
++      <feature policy='require' name='fsrc'/>
++      <feature policy='require' name='fsrm'/>
++      <feature policy='require' name='fsrs'/>
++      <feature policy='disable' name='fxsr_opt'/>
++      <feature policy='require' name='fzrm'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='la57'/>
++      <feature policy='disable' name='misalignsse'/>
++      <feature policy='require' name='monitor'/>
++      <feature policy='require' name='mpx'/>
+       <feature policy='require' name='npt'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='disable' name='vme'/>
++      <feature policy='disable' name='nrip-save'/>
++      <feature policy='disable' name='osvw'/>
++      <feature policy='require' name='pcommit'/>
++      <feature policy='require' name='pks'/>
++      <feature policy='require' name='pku'/>
+       <feature policy='disable' name='rdseed'/>
+       <feature policy='disable' name='sha-ni'/>
+-      <feature policy='disable' name='xsavec'/>
+-      <feature policy='disable' name='misalignsse'/>
+-      <feature policy='disable' name='3dnowprefetch'/>
+-      <feature policy='disable' name='osvw'/>
++      <feature policy='require' name='ss'/>
++      <feature policy='require' name='svme-addr-chk'/>
+       <feature policy='disable' name='topoext'/>
+-      <feature policy='disable' name='fxsr_opt'/>
+-      <feature policy='disable' name='nrip-save'/>
++      <feature policy='require' name='umip'/>
++      <feature policy='require' name='vaes'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='disable' name='vme'/>
++      <feature policy='disable' name='xsavec'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_8.0.0.x86_64.xml b/tests/domaincapsdata/qemu_8.0.0.x86_64.xml
+index daa91d428f..f0153262ec 100644
+--- a/tests/domaincapsdata/qemu_8.0.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.0.0.x86_64.xml
+@@ -43,30 +43,30 @@
+       <model fallback='forbid'>EPYC-Rome</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='arch-capabilities'/>
+-      <feature policy='require' name='ssbd'/>
+-      <feature policy='require' name='xsaves'/>
+-      <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='amd-ssbd'/>
+-      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='arch-capabilities'/>
++      <feature policy='require' name='cmp_legacy'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='lbrv'/>
+-      <feature policy='require' name='tsc-scale'/>
+-      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='mds-no'/>
+       <feature policy='require' name='pause-filter'/>
+       <feature policy='require' name='pfthreshold'/>
+-      <feature policy='require' name='v-vmsave-vmload'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='pschange-mc-no'/>
+       <feature policy='require' name='rdctl-no'/>
+       <feature policy='require' name='skip-l1dfl-vmentry'/>
+-      <feature policy='require' name='mds-no'/>
+-      <feature policy='require' name='pschange-mc-no'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc-scale'/>
++      <feature policy='require' name='tsc_adjust'/>
++      <feature policy='require' name='v-vmsave-vmload'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='x2apic'/>
++      <feature policy='require' name='xsaves'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_8.1.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_8.1.0-q35.x86_64.xml
+index df003825ea..d651b112b9 100644
+--- a/tests/domaincapsdata/qemu_8.1.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.1.0-q35.x86_64.xml
+@@ -44,31 +44,31 @@
+       <model fallback='forbid'>EPYC-Rome</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='arch-capabilities'/>
+-      <feature policy='require' name='ssbd'/>
+-      <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='amd-ssbd'/>
+-      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='arch-capabilities'/>
++      <feature policy='require' name='cmp_legacy'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='lbrv'/>
+-      <feature policy='require' name='tsc-scale'/>
+-      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='lfence-always-serializing'/>
++      <feature policy='require' name='mds-no'/>
++      <feature policy='require' name='null-sel-clr-base'/>
+       <feature policy='require' name='pause-filter'/>
+       <feature policy='require' name='pfthreshold'/>
+-      <feature policy='require' name='v-vmsave-vmload'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='require' name='lfence-always-serializing'/>
+-      <feature policy='require' name='null-sel-clr-base'/>
++      <feature policy='require' name='pschange-mc-no'/>
+       <feature policy='require' name='rdctl-no'/>
+       <feature policy='require' name='skip-l1dfl-vmentry'/>
+-      <feature policy='require' name='mds-no'/>
+-      <feature policy='require' name='pschange-mc-no'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc-scale'/>
++      <feature policy='require' name='tsc_adjust'/>
++      <feature policy='require' name='v-vmsave-vmload'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='x2apic'/>
+       <feature policy='disable' name='xsaves'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_8.1.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_8.1.0-tcg.x86_64.xml
+index 10330281bd..95163de537 100644
+--- a/tests/domaincapsdata/qemu_8.1.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.1.0-tcg.x86_64.xml
+@@ -37,39 +37,39 @@
+     <mode name='host-model' supported='yes'>
+       <model fallback='forbid'>EPYC</model>
+       <vendor>AMD</vendor>
+-      <feature policy='require' name='monitor'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='acpi'/>
+-      <feature policy='require' name='ss'/>
+-      <feature policy='require' name='erms'/>
+-      <feature policy='require' name='mpx'/>
+-      <feature policy='require' name='pcommit'/>
+-      <feature policy='require' name='clwb'/>
+-      <feature policy='require' name='umip'/>
+-      <feature policy='require' name='pku'/>
+-      <feature policy='require' name='vaes'/>
+-      <feature policy='require' name='la57'/>
+-      <feature policy='require' name='rdpid'/>
+-      <feature policy='require' name='pks'/>
+-      <feature policy='require' name='fsrm'/>
+-      <feature policy='require' name='fzrm'/>
+-      <feature policy='require' name='fsrs'/>
+-      <feature policy='require' name='fsrc'/>
+-      <feature policy='require' name='3dnowext'/>
+       <feature policy='require' name='3dnow'/>
+-      <feature policy='require' name='xsaveerptr'/>
+-      <feature policy='require' name='wbnoinvd'/>
+-      <feature policy='require' name='npt'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='disable' name='vme'/>
+-      <feature policy='disable' name='sha-ni'/>
+-      <feature policy='disable' name='xsavec'/>
+-      <feature policy='disable' name='misalignsse'/>
+-      <feature policy='disable' name='osvw'/>
+-      <feature policy='disable' name='topoext'/>
++      <feature policy='require' name='3dnowext'/>
++      <feature policy='require' name='acpi'/>
++      <feature policy='require' name='clwb'/>
++      <feature policy='require' name='erms'/>
++      <feature policy='require' name='fsrc'/>
++      <feature policy='require' name='fsrm'/>
++      <feature policy='require' name='fsrs'/>
+       <feature policy='disable' name='fxsr_opt'/>
++      <feature policy='require' name='fzrm'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='la57'/>
++      <feature policy='disable' name='misalignsse'/>
++      <feature policy='require' name='monitor'/>
++      <feature policy='require' name='mpx'/>
++      <feature policy='require' name='npt'/>
+       <feature policy='disable' name='nrip-save'/>
++      <feature policy='disable' name='osvw'/>
++      <feature policy='require' name='pcommit'/>
++      <feature policy='require' name='pks'/>
++      <feature policy='require' name='pku'/>
++      <feature policy='require' name='rdpid'/>
++      <feature policy='disable' name='sha-ni'/>
++      <feature policy='require' name='ss'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='disable' name='topoext'/>
++      <feature policy='require' name='umip'/>
++      <feature policy='require' name='vaes'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='disable' name='vme'/>
++      <feature policy='require' name='wbnoinvd'/>
++      <feature policy='disable' name='xsavec'/>
++      <feature policy='require' name='xsaveerptr'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_8.1.0.s390x.xml b/tests/domaincapsdata/qemu_8.1.0.s390x.xml
+index c86f0113f3..adbc1e220b 100644
+--- a/tests/domaincapsdata/qemu_8.1.0.s390x.xml
++++ b/tests/domaincapsdata/qemu_8.1.0.s390x.xml
+@@ -37,44 +37,44 @@
+     </mode>
+     <mode name='host-model' supported='yes'>
+       <model fallback='forbid'>gen15a-base</model>
+-      <feature policy='require' name='aen'/>
+-      <feature policy='require' name='vxpdeh'/>
+       <feature policy='require' name='aefsi'/>
+-      <feature policy='require' name='diag318'/>
+-      <feature policy='require' name='csske'/>
+-      <feature policy='require' name='msa9'/>
+-      <feature policy='require' name='msa8'/>
+-      <feature policy='require' name='msa7'/>
+-      <feature policy='require' name='msa6'/>
+-      <feature policy='require' name='msa5'/>
+-      <feature policy='require' name='msa4'/>
+-      <feature policy='require' name='msa3'/>
+-      <feature policy='require' name='msa2'/>
+-      <feature policy='require' name='msa1'/>
+-      <feature policy='require' name='sthyi'/>
+-      <feature policy='require' name='edat'/>
+-      <feature policy='require' name='deflate'/>
+-      <feature policy='require' name='etoken'/>
+-      <feature policy='require' name='vx'/>
+-      <feature policy='require' name='ap'/>
+-      <feature policy='require' name='vxeh'/>
+-      <feature policy='require' name='vxpd'/>
+-      <feature policy='require' name='esop'/>
+-      <feature policy='require' name='msa9_pckmo'/>
+-      <feature policy='require' name='vxeh2'/>
+-      <feature policy='require' name='esort'/>
+-      <feature policy='require' name='apft'/>
+-      <feature policy='require' name='els'/>
+-      <feature policy='require' name='iep'/>
+-      <feature policy='require' name='apqci'/>
+-      <feature policy='require' name='cte'/>
++      <feature policy='require' name='aen'/>
+       <feature policy='require' name='ais'/>
++      <feature policy='require' name='ap'/>
++      <feature policy='require' name='apft'/>
++      <feature policy='require' name='apqci'/>
+       <feature policy='require' name='bpb'/>
++      <feature policy='require' name='csske'/>
++      <feature policy='require' name='cte'/>
++      <feature policy='require' name='deflate'/>
++      <feature policy='require' name='diag318'/>
++      <feature policy='require' name='edat'/>
++      <feature policy='require' name='els'/>
++      <feature policy='require' name='esop'/>
++      <feature policy='require' name='esort'/>
++      <feature policy='require' name='etoken'/>
+       <feature policy='require' name='gs'/>
++      <feature policy='require' name='iep'/>
++      <feature policy='require' name='msa1'/>
++      <feature policy='require' name='msa2'/>
++      <feature policy='require' name='msa3'/>
++      <feature policy='require' name='msa4'/>
++      <feature policy='require' name='msa5'/>
++      <feature policy='require' name='msa6'/>
++      <feature policy='require' name='msa7'/>
++      <feature policy='require' name='msa8'/>
++      <feature policy='require' name='msa9'/>
++      <feature policy='require' name='msa9_pckmo'/>
+       <feature policy='require' name='ppa15'/>
+-      <feature policy='require' name='zpci'/>
+       <feature policy='require' name='sea_esop2'/>
++      <feature policy='require' name='sthyi'/>
+       <feature policy='require' name='te'/>
++      <feature policy='require' name='vx'/>
++      <feature policy='require' name='vxeh'/>
++      <feature policy='require' name='vxeh2'/>
++      <feature policy='require' name='vxpd'/>
++      <feature policy='require' name='vxpdeh'/>
++      <feature policy='require' name='zpci'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='no' vendor='IBM'>gen15a</model>
+diff --git a/tests/domaincapsdata/qemu_8.1.0.x86_64.xml b/tests/domaincapsdata/qemu_8.1.0.x86_64.xml
+index 205334e84b..1b311db3ce 100644
+--- a/tests/domaincapsdata/qemu_8.1.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.1.0.x86_64.xml
+@@ -43,31 +43,31 @@
+       <model fallback='forbid'>EPYC-Rome</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='arch-capabilities'/>
+-      <feature policy='require' name='ssbd'/>
+-      <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='amd-ssbd'/>
+-      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='arch-capabilities'/>
++      <feature policy='require' name='cmp_legacy'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='lbrv'/>
+-      <feature policy='require' name='tsc-scale'/>
+-      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='lfence-always-serializing'/>
++      <feature policy='require' name='mds-no'/>
++      <feature policy='require' name='null-sel-clr-base'/>
+       <feature policy='require' name='pause-filter'/>
+       <feature policy='require' name='pfthreshold'/>
+-      <feature policy='require' name='v-vmsave-vmload'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='require' name='lfence-always-serializing'/>
+-      <feature policy='require' name='null-sel-clr-base'/>
++      <feature policy='require' name='pschange-mc-no'/>
+       <feature policy='require' name='rdctl-no'/>
+       <feature policy='require' name='skip-l1dfl-vmentry'/>
+-      <feature policy='require' name='mds-no'/>
+-      <feature policy='require' name='pschange-mc-no'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc-scale'/>
++      <feature policy='require' name='tsc_adjust'/>
++      <feature policy='require' name='v-vmsave-vmload'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='x2apic'/>
+       <feature policy='disable' name='xsaves'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_8.2.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_8.2.0-q35.x86_64.xml
+index bd9dbf8cba..ef53e39080 100644
+--- a/tests/domaincapsdata/qemu_8.2.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.2.0-q35.x86_64.xml
+@@ -44,32 +44,32 @@
+       <model fallback='forbid'>EPYC-Rome</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='arch-capabilities'/>
+-      <feature policy='require' name='ssbd'/>
+-      <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='amd-ssbd'/>
+-      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='arch-capabilities'/>
++      <feature policy='require' name='cmp_legacy'/>
++      <feature policy='require' name='gds-no'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='lbrv'/>
+-      <feature policy='require' name='tsc-scale'/>
+-      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='lfence-always-serializing'/>
++      <feature policy='require' name='mds-no'/>
++      <feature policy='require' name='null-sel-clr-base'/>
+       <feature policy='require' name='pause-filter'/>
+       <feature policy='require' name='pfthreshold'/>
+-      <feature policy='require' name='v-vmsave-vmload'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='require' name='lfence-always-serializing'/>
+-      <feature policy='require' name='null-sel-clr-base'/>
++      <feature policy='require' name='pschange-mc-no'/>
+       <feature policy='require' name='rdctl-no'/>
+       <feature policy='require' name='skip-l1dfl-vmentry'/>
+-      <feature policy='require' name='mds-no'/>
+-      <feature policy='require' name='pschange-mc-no'/>
+-      <feature policy='require' name='gds-no'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc-scale'/>
++      <feature policy='require' name='tsc_adjust'/>
++      <feature policy='require' name='v-vmsave-vmload'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='x2apic'/>
+       <feature policy='disable' name='xsaves'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_8.2.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_8.2.0-tcg.x86_64.xml
+index 60e5cb8632..ce7acaf22e 100644
+--- a/tests/domaincapsdata/qemu_8.2.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.2.0-tcg.x86_64.xml
+@@ -37,38 +37,38 @@
+     <mode name='host-model' supported='yes'>
+       <model fallback='forbid'>EPYC</model>
+       <vendor>AMD</vendor>
+-      <feature policy='require' name='monitor'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='acpi'/>
+-      <feature policy='require' name='ss'/>
+-      <feature policy='require' name='erms'/>
+-      <feature policy='require' name='mpx'/>
+-      <feature policy='require' name='pcommit'/>
+-      <feature policy='require' name='clwb'/>
+-      <feature policy='require' name='umip'/>
+-      <feature policy='require' name='pku'/>
+-      <feature policy='require' name='vaes'/>
+-      <feature policy='require' name='la57'/>
+-      <feature policy='require' name='rdpid'/>
+-      <feature policy='require' name='pks'/>
+-      <feature policy='require' name='fsrm'/>
+-      <feature policy='require' name='fzrm'/>
+-      <feature policy='require' name='fsrs'/>
+-      <feature policy='require' name='fsrc'/>
+-      <feature policy='require' name='3dnowext'/>
+       <feature policy='require' name='3dnow'/>
+-      <feature policy='require' name='xsaveerptr'/>
+-      <feature policy='require' name='wbnoinvd'/>
+-      <feature policy='require' name='npt'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='disable' name='vme'/>
+-      <feature policy='disable' name='xsavec'/>
+-      <feature policy='disable' name='misalignsse'/>
+-      <feature policy='disable' name='osvw'/>
+-      <feature policy='disable' name='topoext'/>
++      <feature policy='require' name='3dnowext'/>
++      <feature policy='require' name='acpi'/>
++      <feature policy='require' name='clwb'/>
++      <feature policy='require' name='erms'/>
++      <feature policy='require' name='fsrc'/>
++      <feature policy='require' name='fsrm'/>
++      <feature policy='require' name='fsrs'/>
+       <feature policy='disable' name='fxsr_opt'/>
++      <feature policy='require' name='fzrm'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='la57'/>
++      <feature policy='disable' name='misalignsse'/>
++      <feature policy='require' name='monitor'/>
++      <feature policy='require' name='mpx'/>
++      <feature policy='require' name='npt'/>
+       <feature policy='disable' name='nrip-save'/>
++      <feature policy='disable' name='osvw'/>
++      <feature policy='require' name='pcommit'/>
++      <feature policy='require' name='pks'/>
++      <feature policy='require' name='pku'/>
++      <feature policy='require' name='rdpid'/>
++      <feature policy='require' name='ss'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='disable' name='topoext'/>
++      <feature policy='require' name='umip'/>
++      <feature policy='require' name='vaes'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='disable' name='vme'/>
++      <feature policy='require' name='wbnoinvd'/>
++      <feature policy='disable' name='xsavec'/>
++      <feature policy='require' name='xsaveerptr'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_8.2.0.s390x.xml b/tests/domaincapsdata/qemu_8.2.0.s390x.xml
+index ad80492e30..b055e00cc4 100644
+--- a/tests/domaincapsdata/qemu_8.2.0.s390x.xml
++++ b/tests/domaincapsdata/qemu_8.2.0.s390x.xml
+@@ -37,44 +37,44 @@
+     </mode>
+     <mode name='host-model' supported='yes'>
+       <model fallback='forbid'>gen15a-base</model>
+-      <feature policy='require' name='aen'/>
+-      <feature policy='require' name='vxpdeh'/>
+       <feature policy='require' name='aefsi'/>
+-      <feature policy='require' name='diag318'/>
+-      <feature policy='require' name='csske'/>
+-      <feature policy='require' name='msa9'/>
+-      <feature policy='require' name='msa8'/>
+-      <feature policy='require' name='msa7'/>
+-      <feature policy='require' name='msa6'/>
+-      <feature policy='require' name='msa5'/>
+-      <feature policy='require' name='msa4'/>
+-      <feature policy='require' name='msa3'/>
+-      <feature policy='require' name='msa2'/>
+-      <feature policy='require' name='msa1'/>
+-      <feature policy='require' name='sthyi'/>
+-      <feature policy='require' name='edat'/>
+-      <feature policy='require' name='deflate'/>
+-      <feature policy='require' name='etoken'/>
+-      <feature policy='require' name='vx'/>
+-      <feature policy='require' name='ap'/>
+-      <feature policy='require' name='vxeh'/>
+-      <feature policy='require' name='vxpd'/>
+-      <feature policy='require' name='esop'/>
+-      <feature policy='require' name='msa9_pckmo'/>
+-      <feature policy='require' name='vxeh2'/>
+-      <feature policy='require' name='esort'/>
+-      <feature policy='require' name='apft'/>
+-      <feature policy='require' name='els'/>
+-      <feature policy='require' name='iep'/>
+-      <feature policy='require' name='apqci'/>
+-      <feature policy='require' name='cte'/>
++      <feature policy='require' name='aen'/>
+       <feature policy='require' name='ais'/>
++      <feature policy='require' name='ap'/>
++      <feature policy='require' name='apft'/>
++      <feature policy='require' name='apqci'/>
+       <feature policy='require' name='bpb'/>
++      <feature policy='require' name='csske'/>
++      <feature policy='require' name='cte'/>
++      <feature policy='require' name='deflate'/>
++      <feature policy='require' name='diag318'/>
++      <feature policy='require' name='edat'/>
++      <feature policy='require' name='els'/>
++      <feature policy='require' name='esop'/>
++      <feature policy='require' name='esort'/>
++      <feature policy='require' name='etoken'/>
+       <feature policy='require' name='gs'/>
++      <feature policy='require' name='iep'/>
++      <feature policy='require' name='msa1'/>
++      <feature policy='require' name='msa2'/>
++      <feature policy='require' name='msa3'/>
++      <feature policy='require' name='msa4'/>
++      <feature policy='require' name='msa5'/>
++      <feature policy='require' name='msa6'/>
++      <feature policy='require' name='msa7'/>
++      <feature policy='require' name='msa8'/>
++      <feature policy='require' name='msa9'/>
++      <feature policy='require' name='msa9_pckmo'/>
+       <feature policy='require' name='ppa15'/>
+-      <feature policy='require' name='zpci'/>
+       <feature policy='require' name='sea_esop2'/>
++      <feature policy='require' name='sthyi'/>
+       <feature policy='require' name='te'/>
++      <feature policy='require' name='vx'/>
++      <feature policy='require' name='vxeh'/>
++      <feature policy='require' name='vxeh2'/>
++      <feature policy='require' name='vxpd'/>
++      <feature policy='require' name='vxpdeh'/>
++      <feature policy='require' name='zpci'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='no' vendor='IBM'>gen15a</model>
+diff --git a/tests/domaincapsdata/qemu_8.2.0.x86_64.xml b/tests/domaincapsdata/qemu_8.2.0.x86_64.xml
+index c6558915c1..4a9040afb9 100644
+--- a/tests/domaincapsdata/qemu_8.2.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_8.2.0.x86_64.xml
+@@ -43,32 +43,32 @@
+       <model fallback='forbid'>EPYC-Rome</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='arch-capabilities'/>
+-      <feature policy='require' name='ssbd'/>
+-      <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='amd-ssbd'/>
+-      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='arch-capabilities'/>
++      <feature policy='require' name='cmp_legacy'/>
++      <feature policy='require' name='gds-no'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='lbrv'/>
+-      <feature policy='require' name='tsc-scale'/>
+-      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='lfence-always-serializing'/>
++      <feature policy='require' name='mds-no'/>
++      <feature policy='require' name='null-sel-clr-base'/>
+       <feature policy='require' name='pause-filter'/>
+       <feature policy='require' name='pfthreshold'/>
+-      <feature policy='require' name='v-vmsave-vmload'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='require' name='lfence-always-serializing'/>
+-      <feature policy='require' name='null-sel-clr-base'/>
++      <feature policy='require' name='pschange-mc-no'/>
+       <feature policy='require' name='rdctl-no'/>
+       <feature policy='require' name='skip-l1dfl-vmentry'/>
+-      <feature policy='require' name='mds-no'/>
+-      <feature policy='require' name='pschange-mc-no'/>
+-      <feature policy='require' name='gds-no'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc-scale'/>
++      <feature policy='require' name='tsc_adjust'/>
++      <feature policy='require' name='v-vmsave-vmload'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='x2apic'/>
+       <feature policy='disable' name='xsaves'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_9.0.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_9.0.0-q35.x86_64.xml
+index 930014727d..a52d498e66 100644
+--- a/tests/domaincapsdata/qemu_9.0.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.0.0-q35.x86_64.xml
+@@ -44,32 +44,32 @@
+       <model fallback='forbid'>EPYC-Rome</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='arch-capabilities'/>
+-      <feature policy='require' name='ssbd'/>
+-      <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='amd-ssbd'/>
+-      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='arch-capabilities'/>
++      <feature policy='require' name='cmp_legacy'/>
++      <feature policy='require' name='gds-no'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='lbrv'/>
+-      <feature policy='require' name='tsc-scale'/>
+-      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='lfence-always-serializing'/>
++      <feature policy='require' name='mds-no'/>
++      <feature policy='require' name='null-sel-clr-base'/>
+       <feature policy='require' name='pause-filter'/>
+       <feature policy='require' name='pfthreshold'/>
+-      <feature policy='require' name='v-vmsave-vmload'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='require' name='lfence-always-serializing'/>
+-      <feature policy='require' name='null-sel-clr-base'/>
++      <feature policy='require' name='pschange-mc-no'/>
+       <feature policy='require' name='rdctl-no'/>
+       <feature policy='require' name='skip-l1dfl-vmentry'/>
+-      <feature policy='require' name='mds-no'/>
+-      <feature policy='require' name='pschange-mc-no'/>
+-      <feature policy='require' name='gds-no'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc-scale'/>
++      <feature policy='require' name='tsc_adjust'/>
++      <feature policy='require' name='v-vmsave-vmload'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='x2apic'/>
+       <feature policy='disable' name='xsaves'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_9.0.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_9.0.0-tcg.x86_64.xml
+index 19adcfe249..c5b2cc8c52 100644
+--- a/tests/domaincapsdata/qemu_9.0.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.0.0-tcg.x86_64.xml
+@@ -37,40 +37,40 @@
+     <mode name='host-model' supported='yes'>
+       <model fallback='forbid'>EPYC</model>
+       <vendor>AMD</vendor>
+-      <feature policy='require' name='monitor'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='acpi'/>
+-      <feature policy='require' name='ss'/>
+-      <feature policy='require' name='erms'/>
+-      <feature policy='require' name='mpx'/>
+-      <feature policy='require' name='pcommit'/>
+-      <feature policy='require' name='clwb'/>
+-      <feature policy='require' name='umip'/>
+-      <feature policy='require' name='pku'/>
+-      <feature policy='require' name='vaes'/>
+-      <feature policy='require' name='la57'/>
+-      <feature policy='require' name='rdpid'/>
+-      <feature policy='require' name='pks'/>
+-      <feature policy='require' name='fsrm'/>
+-      <feature policy='require' name='cmpccxadd'/>
+-      <feature policy='require' name='fzrm'/>
+-      <feature policy='require' name='fsrs'/>
+-      <feature policy='require' name='fsrc'/>
+-      <feature policy='require' name='3dnowext'/>
+       <feature policy='require' name='3dnow'/>
+-      <feature policy='require' name='xsaveerptr'/>
+-      <feature policy='require' name='wbnoinvd'/>
+-      <feature policy='require' name='npt'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='disable' name='vme'/>
+-      <feature policy='disable' name='xsavec'/>
+-      <feature policy='disable' name='misalignsse'/>
+-      <feature policy='disable' name='osvw'/>
+-      <feature policy='disable' name='topoext'/>
++      <feature policy='require' name='3dnowext'/>
++      <feature policy='require' name='acpi'/>
++      <feature policy='require' name='clwb'/>
++      <feature policy='require' name='cmpccxadd'/>
++      <feature policy='require' name='erms'/>
++      <feature policy='require' name='fsrc'/>
++      <feature policy='require' name='fsrm'/>
++      <feature policy='require' name='fsrs'/>
+       <feature policy='disable' name='fxsr_opt'/>
++      <feature policy='require' name='fzrm'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='la57'/>
++      <feature policy='disable' name='misalignsse'/>
++      <feature policy='require' name='monitor'/>
++      <feature policy='require' name='mpx'/>
++      <feature policy='require' name='npt'/>
+       <feature policy='disable' name='nrip-save'/>
++      <feature policy='disable' name='osvw'/>
++      <feature policy='require' name='pcommit'/>
++      <feature policy='require' name='pks'/>
++      <feature policy='require' name='pku'/>
++      <feature policy='require' name='rdpid'/>
++      <feature policy='require' name='ss'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='disable' name='topoext'/>
++      <feature policy='require' name='umip'/>
++      <feature policy='require' name='vaes'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='disable' name='vme'/>
++      <feature policy='require' name='wbnoinvd'/>
++      <feature policy='require' name='x2apic'/>
++      <feature policy='disable' name='xsavec'/>
++      <feature policy='require' name='xsaveerptr'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_9.0.0.x86_64.xml b/tests/domaincapsdata/qemu_9.0.0.x86_64.xml
+index bc4e7fa1ee..0c9ed2f150 100644
+--- a/tests/domaincapsdata/qemu_9.0.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.0.0.x86_64.xml
+@@ -43,32 +43,32 @@
+       <model fallback='forbid'>EPYC-Rome</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='arch-capabilities'/>
+-      <feature policy='require' name='ssbd'/>
+-      <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='amd-ssbd'/>
+-      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='arch-capabilities'/>
++      <feature policy='require' name='cmp_legacy'/>
++      <feature policy='require' name='gds-no'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='lbrv'/>
+-      <feature policy='require' name='tsc-scale'/>
+-      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='lfence-always-serializing'/>
++      <feature policy='require' name='mds-no'/>
++      <feature policy='require' name='null-sel-clr-base'/>
+       <feature policy='require' name='pause-filter'/>
+       <feature policy='require' name='pfthreshold'/>
+-      <feature policy='require' name='v-vmsave-vmload'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='require' name='lfence-always-serializing'/>
+-      <feature policy='require' name='null-sel-clr-base'/>
++      <feature policy='require' name='pschange-mc-no'/>
+       <feature policy='require' name='rdctl-no'/>
+       <feature policy='require' name='skip-l1dfl-vmentry'/>
+-      <feature policy='require' name='mds-no'/>
+-      <feature policy='require' name='pschange-mc-no'/>
+-      <feature policy='require' name='gds-no'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc-scale'/>
++      <feature policy='require' name='tsc_adjust'/>
++      <feature policy='require' name='v-vmsave-vmload'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='x2apic'/>
+       <feature policy='disable' name='xsaves'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_9.1.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_9.1.0-q35.x86_64.xml
+index 927c1b4fab..97d0758e80 100644
+--- a/tests/domaincapsdata/qemu_9.1.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.1.0-q35.x86_64.xml
+@@ -44,36 +44,36 @@
+       <model fallback='forbid'>EPYC-Rome</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='arch-capabilities'/>
+-      <feature policy='require' name='ssbd'/>
+-      <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='overflow-recov'/>
+-      <feature policy='require' name='succor'/>
+-      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='amd-ssbd'/>
+-      <feature policy='require' name='virt-ssbd'/>
+-      <feature policy='require' name='lbrv'/>
+-      <feature policy='require' name='tsc-scale'/>
+-      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='arch-capabilities'/>
++      <feature policy='require' name='cmp_legacy'/>
+       <feature policy='require' name='flushbyasid'/>
++      <feature policy='require' name='gds-no'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='invtsc'/>
++      <feature policy='require' name='lbrv'/>
++      <feature policy='require' name='lfence-always-serializing'/>
++      <feature policy='require' name='mds-no'/>
++      <feature policy='require' name='null-sel-clr-base'/>
++      <feature policy='require' name='overflow-recov'/>
+       <feature policy='require' name='pause-filter'/>
+       <feature policy='require' name='pfthreshold'/>
++      <feature policy='require' name='pschange-mc-no'/>
++      <feature policy='require' name='rdctl-no'/>
++      <feature policy='require' name='rfds-no'/>
++      <feature policy='require' name='skip-l1dfl-vmentry'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='succor'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc-scale'/>
++      <feature policy='require' name='tsc_adjust'/>
+       <feature policy='require' name='v-vmsave-vmload'/>
+       <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='require' name='lfence-always-serializing'/>
+-      <feature policy='require' name='null-sel-clr-base'/>
+-      <feature policy='require' name='rdctl-no'/>
+-      <feature policy='require' name='skip-l1dfl-vmentry'/>
+-      <feature policy='require' name='mds-no'/>
+-      <feature policy='require' name='pschange-mc-no'/>
+-      <feature policy='require' name='gds-no'/>
+-      <feature policy='require' name='rfds-no'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='x2apic'/>
+       <feature policy='disable' name='xsaves'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_9.1.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_9.1.0-tcg.x86_64.xml
+index a8b1bfed73..f2da0c8731 100644
+--- a/tests/domaincapsdata/qemu_9.1.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.1.0-tcg.x86_64.xml
+@@ -37,39 +37,39 @@
+     <mode name='host-model' supported='yes'>
+       <model fallback='forbid'>EPYC</model>
+       <vendor>AMD</vendor>
+-      <feature policy='require' name='monitor'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='acpi'/>
+-      <feature policy='require' name='ss'/>
+-      <feature policy='require' name='erms'/>
+-      <feature policy='require' name='mpx'/>
+-      <feature policy='require' name='clwb'/>
+-      <feature policy='require' name='umip'/>
+-      <feature policy='require' name='pku'/>
+-      <feature policy='require' name='vaes'/>
+-      <feature policy='require' name='la57'/>
+-      <feature policy='require' name='rdpid'/>
+-      <feature policy='require' name='pks'/>
+-      <feature policy='require' name='fsrm'/>
+-      <feature policy='require' name='cmpccxadd'/>
+-      <feature policy='require' name='fzrm'/>
+-      <feature policy='require' name='fsrs'/>
+-      <feature policy='require' name='fsrc'/>
+-      <feature policy='require' name='3dnowext'/>
+       <feature policy='require' name='3dnow'/>
+-      <feature policy='require' name='xsaveerptr'/>
+-      <feature policy='require' name='wbnoinvd'/>
+-      <feature policy='require' name='npt'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='disable' name='vme'/>
+-      <feature policy='disable' name='xsavec'/>
+-      <feature policy='disable' name='misalignsse'/>
+-      <feature policy='disable' name='osvw'/>
+-      <feature policy='disable' name='topoext'/>
++      <feature policy='require' name='3dnowext'/>
++      <feature policy='require' name='acpi'/>
++      <feature policy='require' name='clwb'/>
++      <feature policy='require' name='cmpccxadd'/>
++      <feature policy='require' name='erms'/>
++      <feature policy='require' name='fsrc'/>
++      <feature policy='require' name='fsrm'/>
++      <feature policy='require' name='fsrs'/>
+       <feature policy='disable' name='fxsr_opt'/>
++      <feature policy='require' name='fzrm'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='la57'/>
++      <feature policy='disable' name='misalignsse'/>
++      <feature policy='require' name='monitor'/>
++      <feature policy='require' name='mpx'/>
++      <feature policy='require' name='npt'/>
+       <feature policy='disable' name='nrip-save'/>
++      <feature policy='disable' name='osvw'/>
++      <feature policy='require' name='pks'/>
++      <feature policy='require' name='pku'/>
++      <feature policy='require' name='rdpid'/>
++      <feature policy='require' name='ss'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='disable' name='topoext'/>
++      <feature policy='require' name='umip'/>
++      <feature policy='require' name='vaes'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='disable' name='vme'/>
++      <feature policy='require' name='wbnoinvd'/>
++      <feature policy='require' name='x2apic'/>
++      <feature policy='disable' name='xsavec'/>
++      <feature policy='require' name='xsaveerptr'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_9.1.0.s390x.xml b/tests/domaincapsdata/qemu_9.1.0.s390x.xml
+index 2854713ca3..993762ecce 100644
+--- a/tests/domaincapsdata/qemu_9.1.0.s390x.xml
++++ b/tests/domaincapsdata/qemu_9.1.0.s390x.xml
+@@ -37,61 +37,61 @@
+     </mode>
+     <mode name='host-model' supported='yes'>
+       <model fallback='forbid'>gen16a-base</model>
+-      <feature policy='require' name='nnpa'/>
+-      <feature policy='require' name='aen'/>
+-      <feature policy='require' name='cmmnt'/>
+-      <feature policy='require' name='vxpdeh'/>
+       <feature policy='require' name='aefsi'/>
+-      <feature policy='require' name='diag318'/>
+-      <feature policy='require' name='csske'/>
+-      <feature policy='require' name='mepoch'/>
+-      <feature policy='require' name='msa9'/>
+-      <feature policy='require' name='msa8'/>
+-      <feature policy='require' name='msa7'/>
+-      <feature policy='require' name='msa6'/>
+-      <feature policy='require' name='msa5'/>
+-      <feature policy='require' name='msa4'/>
+-      <feature policy='require' name='msa3'/>
+-      <feature policy='require' name='msa2'/>
+-      <feature policy='require' name='msa1'/>
+-      <feature policy='require' name='sthyi'/>
+-      <feature policy='require' name='edat'/>
+-      <feature policy='require' name='ri'/>
+-      <feature policy='require' name='deflate'/>
+-      <feature policy='require' name='edat2'/>
+-      <feature policy='require' name='etoken'/>
+-      <feature policy='require' name='vx'/>
+-      <feature policy='require' name='ipter'/>
+-      <feature policy='require' name='pai'/>
+-      <feature policy='require' name='paie'/>
+-      <feature policy='require' name='mepochptff'/>
++      <feature policy='require' name='aen'/>
++      <feature policy='require' name='ais'/>
+       <feature policy='require' name='ap'/>
+-      <feature policy='require' name='vxeh'/>
+-      <feature policy='require' name='vxpd'/>
+-      <feature policy='require' name='esop'/>
+-      <feature policy='require' name='msa9_pckmo'/>
+-      <feature policy='require' name='vxeh2'/>
+-      <feature policy='require' name='esort'/>
+-      <feature policy='require' name='appv'/>
+-      <feature policy='require' name='apqi'/>
+       <feature policy='require' name='apft'/>
+-      <feature policy='require' name='els'/>
+-      <feature policy='require' name='iep'/>
++      <feature policy='require' name='appv'/>
+       <feature policy='require' name='appvi'/>
+       <feature policy='require' name='apqci'/>
+-      <feature policy='require' name='cte'/>
+-      <feature policy='require' name='ais'/>
+-      <feature policy='require' name='bpb'/>
+-      <feature policy='require' name='ctop'/>
+-      <feature policy='require' name='gs'/>
+-      <feature policy='require' name='ppa15'/>
+-      <feature policy='require' name='zpci'/>
+-      <feature policy='require' name='rdp'/>
+-      <feature policy='require' name='sea_esop2'/>
++      <feature policy='require' name='apqi'/>
+       <feature policy='require' name='beareh'/>
+-      <feature policy='require' name='te'/>
++      <feature policy='require' name='bpb'/>
+       <feature policy='require' name='cmm'/>
++      <feature policy='require' name='cmmnt'/>
++      <feature policy='require' name='csske'/>
++      <feature policy='require' name='cte'/>
++      <feature policy='require' name='ctop'/>
++      <feature policy='require' name='deflate'/>
++      <feature policy='require' name='diag318'/>
++      <feature policy='require' name='edat'/>
++      <feature policy='require' name='edat2'/>
++      <feature policy='require' name='els'/>
++      <feature policy='require' name='esop'/>
++      <feature policy='require' name='esort'/>
++      <feature policy='require' name='etoken'/>
++      <feature policy='require' name='gs'/>
++      <feature policy='require' name='iep'/>
++      <feature policy='require' name='ipter'/>
++      <feature policy='require' name='mepoch'/>
++      <feature policy='require' name='mepochptff'/>
++      <feature policy='require' name='msa1'/>
++      <feature policy='require' name='msa2'/>
++      <feature policy='require' name='msa3'/>
++      <feature policy='require' name='msa4'/>
++      <feature policy='require' name='msa5'/>
++      <feature policy='require' name='msa6'/>
++      <feature policy='require' name='msa7'/>
++      <feature policy='require' name='msa8'/>
++      <feature policy='require' name='msa9'/>
++      <feature policy='require' name='msa9_pckmo'/>
++      <feature policy='require' name='nnpa'/>
++      <feature policy='require' name='pai'/>
++      <feature policy='require' name='paie'/>
++      <feature policy='require' name='ppa15'/>
++      <feature policy='require' name='rdp'/>
++      <feature policy='require' name='ri'/>
++      <feature policy='require' name='sea_esop2'/>
++      <feature policy='require' name='sthyi'/>
++      <feature policy='require' name='te'/>
++      <feature policy='require' name='vx'/>
++      <feature policy='require' name='vxeh'/>
++      <feature policy='require' name='vxeh2'/>
++      <feature policy='require' name='vxpd'/>
++      <feature policy='require' name='vxpdeh'/>
+       <feature policy='require' name='vxpdeh2'/>
++      <feature policy='require' name='zpci'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='IBM'>gen15a</model>
+diff --git a/tests/domaincapsdata/qemu_9.1.0.x86_64.xml b/tests/domaincapsdata/qemu_9.1.0.x86_64.xml
+index e4d36b95ac..e13d43c6b9 100644
+--- a/tests/domaincapsdata/qemu_9.1.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.1.0.x86_64.xml
+@@ -43,36 +43,36 @@
+       <model fallback='forbid'>EPYC-Rome</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='arch-capabilities'/>
+-      <feature policy='require' name='ssbd'/>
+-      <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='overflow-recov'/>
+-      <feature policy='require' name='succor'/>
+-      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='amd-ssbd'/>
+-      <feature policy='require' name='virt-ssbd'/>
+-      <feature policy='require' name='lbrv'/>
+-      <feature policy='require' name='tsc-scale'/>
+-      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='arch-capabilities'/>
++      <feature policy='require' name='cmp_legacy'/>
+       <feature policy='require' name='flushbyasid'/>
++      <feature policy='require' name='gds-no'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='invtsc'/>
++      <feature policy='require' name='lbrv'/>
++      <feature policy='require' name='lfence-always-serializing'/>
++      <feature policy='require' name='mds-no'/>
++      <feature policy='require' name='null-sel-clr-base'/>
++      <feature policy='require' name='overflow-recov'/>
+       <feature policy='require' name='pause-filter'/>
+       <feature policy='require' name='pfthreshold'/>
++      <feature policy='require' name='pschange-mc-no'/>
++      <feature policy='require' name='rdctl-no'/>
++      <feature policy='require' name='rfds-no'/>
++      <feature policy='require' name='skip-l1dfl-vmentry'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='succor'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc-scale'/>
++      <feature policy='require' name='tsc_adjust'/>
+       <feature policy='require' name='v-vmsave-vmload'/>
+       <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='require' name='lfence-always-serializing'/>
+-      <feature policy='require' name='null-sel-clr-base'/>
+-      <feature policy='require' name='rdctl-no'/>
+-      <feature policy='require' name='skip-l1dfl-vmentry'/>
+-      <feature policy='require' name='mds-no'/>
+-      <feature policy='require' name='pschange-mc-no'/>
+-      <feature policy='require' name='gds-no'/>
+-      <feature policy='require' name='rfds-no'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='x2apic'/>
+       <feature policy='disable' name='xsaves'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_9.2.0-q35.x86_64+amdsev.xml b/tests/domaincapsdata/qemu_9.2.0-q35.x86_64+amdsev.xml
+index 39bdb2615b..eafb7bde7b 100644
+--- a/tests/domaincapsdata/qemu_9.2.0-q35.x86_64+amdsev.xml
++++ b/tests/domaincapsdata/qemu_9.2.0-q35.x86_64+amdsev.xml
+@@ -44,37 +44,37 @@
+       <model fallback='forbid'>EPYC-Genoa</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='spec-ctrl'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='flush-l1d'/>
+       <feature policy='require' name='arch-capabilities'/>
+-      <feature policy='require' name='ssbd'/>
+       <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='overflow-recov'/>
+-      <feature policy='require' name='succor'/>
+-      <feature policy='require' name='invtsc'/>
+-      <feature policy='require' name='virt-ssbd'/>
+-      <feature policy='require' name='lbrv'/>
+-      <feature policy='require' name='tsc-scale'/>
+-      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='flush-l1d'/>
+       <feature policy='require' name='flushbyasid'/>
++      <feature policy='require' name='gds-no'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='ibpb-brtype'/>
++      <feature policy='require' name='invtsc'/>
++      <feature policy='require' name='lbrv'/>
++      <feature policy='require' name='mds-no'/>
++      <feature policy='require' name='overflow-recov'/>
+       <feature policy='require' name='pause-filter'/>
++      <feature policy='require' name='perfmon-v2'/>
+       <feature policy='require' name='pfthreshold'/>
++      <feature policy='require' name='pschange-mc-no'/>
++      <feature policy='require' name='rdctl-no'/>
++      <feature policy='require' name='rfds-no'/>
++      <feature policy='require' name='sbpb'/>
++      <feature policy='require' name='skip-l1dfl-vmentry'/>
++      <feature policy='require' name='spec-ctrl'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='succor'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc-scale'/>
++      <feature policy='require' name='tsc_adjust'/>
+       <feature policy='require' name='v-vmsave-vmload'/>
+       <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='sbpb'/>
+-      <feature policy='require' name='ibpb-brtype'/>
+-      <feature policy='require' name='perfmon-v2'/>
+-      <feature policy='require' name='rdctl-no'/>
+-      <feature policy='require' name='skip-l1dfl-vmentry'/>
+-      <feature policy='require' name='mds-no'/>
+-      <feature policy='require' name='pschange-mc-no'/>
+-      <feature policy='require' name='gds-no'/>
+-      <feature policy='require' name='rfds-no'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='x2apic'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_9.2.0-q35.x86_64.xml b/tests/domaincapsdata/qemu_9.2.0-q35.x86_64.xml
+index cc31c01dee..9a0035c3d8 100644
+--- a/tests/domaincapsdata/qemu_9.2.0-q35.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.2.0-q35.x86_64.xml
+@@ -44,37 +44,37 @@
+       <model fallback='forbid'>EPYC-Rome</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='arch-capabilities'/>
+-      <feature policy='require' name='ssbd'/>
+-      <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='overflow-recov'/>
+-      <feature policy='require' name='succor'/>
+-      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='amd-ssbd'/>
+-      <feature policy='require' name='virt-ssbd'/>
+-      <feature policy='require' name='lbrv'/>
+-      <feature policy='require' name='tsc-scale'/>
+-      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='arch-capabilities'/>
++      <feature policy='require' name='cmp_legacy'/>
+       <feature policy='require' name='flushbyasid'/>
++      <feature policy='require' name='gds-no'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='ibpb-brtype'/>
++      <feature policy='require' name='invtsc'/>
++      <feature policy='require' name='lbrv'/>
++      <feature policy='require' name='lfence-always-serializing'/>
++      <feature policy='require' name='mds-no'/>
++      <feature policy='require' name='null-sel-clr-base'/>
++      <feature policy='require' name='overflow-recov'/>
+       <feature policy='require' name='pause-filter'/>
+       <feature policy='require' name='pfthreshold'/>
++      <feature policy='require' name='pschange-mc-no'/>
++      <feature policy='require' name='rdctl-no'/>
++      <feature policy='require' name='rfds-no'/>
++      <feature policy='require' name='skip-l1dfl-vmentry'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='succor'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc-scale'/>
++      <feature policy='require' name='tsc_adjust'/>
+       <feature policy='require' name='v-vmsave-vmload'/>
+       <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='require' name='lfence-always-serializing'/>
+-      <feature policy='require' name='null-sel-clr-base'/>
+-      <feature policy='require' name='ibpb-brtype'/>
+-      <feature policy='require' name='rdctl-no'/>
+-      <feature policy='require' name='skip-l1dfl-vmentry'/>
+-      <feature policy='require' name='mds-no'/>
+-      <feature policy='require' name='pschange-mc-no'/>
+-      <feature policy='require' name='gds-no'/>
+-      <feature policy='require' name='rfds-no'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='x2apic'/>
+       <feature policy='disable' name='xsaves'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+diff --git a/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64+amdsev.xml b/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64+amdsev.xml
+index d01e029394..5665847e50 100644
+--- a/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64+amdsev.xml
++++ b/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64+amdsev.xml
+@@ -37,39 +37,39 @@
+     <mode name='host-model' supported='yes'>
+       <model fallback='forbid'>EPYC</model>
+       <vendor>AMD</vendor>
+-      <feature policy='require' name='monitor'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='acpi'/>
+-      <feature policy='require' name='ss'/>
+-      <feature policy='require' name='erms'/>
+-      <feature policy='require' name='mpx'/>
+-      <feature policy='require' name='clwb'/>
+-      <feature policy='require' name='umip'/>
+-      <feature policy='require' name='pku'/>
+-      <feature policy='require' name='vaes'/>
+-      <feature policy='require' name='la57'/>
+-      <feature policy='require' name='rdpid'/>
+-      <feature policy='require' name='pks'/>
+-      <feature policy='require' name='fsrm'/>
+-      <feature policy='require' name='cmpccxadd'/>
+-      <feature policy='require' name='fzrm'/>
+-      <feature policy='require' name='fsrs'/>
+-      <feature policy='require' name='fsrc'/>
+-      <feature policy='require' name='3dnowext'/>
+       <feature policy='require' name='3dnow'/>
+-      <feature policy='require' name='xsaveerptr'/>
+-      <feature policy='require' name='wbnoinvd'/>
+-      <feature policy='require' name='npt'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='disable' name='vme'/>
+-      <feature policy='disable' name='xsavec'/>
+-      <feature policy='disable' name='misalignsse'/>
+-      <feature policy='disable' name='osvw'/>
+-      <feature policy='disable' name='topoext'/>
++      <feature policy='require' name='3dnowext'/>
++      <feature policy='require' name='acpi'/>
++      <feature policy='require' name='clwb'/>
++      <feature policy='require' name='cmpccxadd'/>
++      <feature policy='require' name='erms'/>
++      <feature policy='require' name='fsrc'/>
++      <feature policy='require' name='fsrm'/>
++      <feature policy='require' name='fsrs'/>
+       <feature policy='disable' name='fxsr_opt'/>
++      <feature policy='require' name='fzrm'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='la57'/>
++      <feature policy='disable' name='misalignsse'/>
++      <feature policy='require' name='monitor'/>
++      <feature policy='require' name='mpx'/>
++      <feature policy='require' name='npt'/>
+       <feature policy='disable' name='nrip-save'/>
++      <feature policy='disable' name='osvw'/>
++      <feature policy='require' name='pks'/>
++      <feature policy='require' name='pku'/>
++      <feature policy='require' name='rdpid'/>
++      <feature policy='require' name='ss'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='disable' name='topoext'/>
++      <feature policy='require' name='umip'/>
++      <feature policy='require' name='vaes'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='disable' name='vme'/>
++      <feature policy='require' name='wbnoinvd'/>
++      <feature policy='require' name='x2apic'/>
++      <feature policy='disable' name='xsavec'/>
++      <feature policy='require' name='xsaveerptr'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64.xml b/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64.xml
+index 6088c4b905..7a7ee2ed68 100644
+--- a/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.2.0-tcg.x86_64.xml
+@@ -37,39 +37,39 @@
+     <mode name='host-model' supported='yes'>
+       <model fallback='forbid'>EPYC</model>
+       <vendor>AMD</vendor>
+-      <feature policy='require' name='monitor'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='acpi'/>
+-      <feature policy='require' name='ss'/>
+-      <feature policy='require' name='erms'/>
+-      <feature policy='require' name='mpx'/>
+-      <feature policy='require' name='clwb'/>
+-      <feature policy='require' name='umip'/>
+-      <feature policy='require' name='pku'/>
+-      <feature policy='require' name='vaes'/>
+-      <feature policy='require' name='la57'/>
+-      <feature policy='require' name='rdpid'/>
+-      <feature policy='require' name='pks'/>
+-      <feature policy='require' name='fsrm'/>
+-      <feature policy='require' name='cmpccxadd'/>
+-      <feature policy='require' name='fzrm'/>
+-      <feature policy='require' name='fsrs'/>
+-      <feature policy='require' name='fsrc'/>
+-      <feature policy='require' name='3dnowext'/>
+       <feature policy='require' name='3dnow'/>
+-      <feature policy='require' name='xsaveerptr'/>
+-      <feature policy='require' name='wbnoinvd'/>
+-      <feature policy='require' name='npt'/>
+-      <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='disable' name='vme'/>
+-      <feature policy='disable' name='xsavec'/>
+-      <feature policy='disable' name='misalignsse'/>
+-      <feature policy='disable' name='osvw'/>
+-      <feature policy='disable' name='topoext'/>
++      <feature policy='require' name='3dnowext'/>
++      <feature policy='require' name='acpi'/>
++      <feature policy='require' name='clwb'/>
++      <feature policy='require' name='cmpccxadd'/>
++      <feature policy='require' name='erms'/>
++      <feature policy='require' name='fsrc'/>
++      <feature policy='require' name='fsrm'/>
++      <feature policy='require' name='fsrs'/>
+       <feature policy='disable' name='fxsr_opt'/>
++      <feature policy='require' name='fzrm'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='la57'/>
++      <feature policy='disable' name='misalignsse'/>
++      <feature policy='require' name='monitor'/>
++      <feature policy='require' name='mpx'/>
++      <feature policy='require' name='npt'/>
+       <feature policy='disable' name='nrip-save'/>
++      <feature policy='disable' name='osvw'/>
++      <feature policy='require' name='pks'/>
++      <feature policy='require' name='pku'/>
++      <feature policy='require' name='rdpid'/>
++      <feature policy='require' name='ss'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='disable' name='topoext'/>
++      <feature policy='require' name='umip'/>
++      <feature policy='require' name='vaes'/>
++      <feature policy='require' name='vgif'/>
++      <feature policy='disable' name='vme'/>
++      <feature policy='require' name='wbnoinvd'/>
++      <feature policy='require' name='x2apic'/>
++      <feature policy='disable' name='xsavec'/>
++      <feature policy='require' name='xsaveerptr'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_9.2.0.s390x.xml b/tests/domaincapsdata/qemu_9.2.0.s390x.xml
+index ef379afe69..865f718ae6 100644
+--- a/tests/domaincapsdata/qemu_9.2.0.s390x.xml
++++ b/tests/domaincapsdata/qemu_9.2.0.s390x.xml
+@@ -37,61 +37,61 @@
+     </mode>
+     <mode name='host-model' supported='yes'>
+       <model fallback='forbid'>gen16a-base</model>
+-      <feature policy='require' name='nnpa'/>
+-      <feature policy='require' name='aen'/>
+-      <feature policy='require' name='cmmnt'/>
+-      <feature policy='require' name='vxpdeh'/>
+       <feature policy='require' name='aefsi'/>
+-      <feature policy='require' name='diag318'/>
+-      <feature policy='require' name='csske'/>
+-      <feature policy='require' name='mepoch'/>
+-      <feature policy='require' name='msa9'/>
+-      <feature policy='require' name='msa8'/>
+-      <feature policy='require' name='msa7'/>
+-      <feature policy='require' name='msa6'/>
+-      <feature policy='require' name='msa5'/>
+-      <feature policy='require' name='msa4'/>
+-      <feature policy='require' name='msa3'/>
+-      <feature policy='require' name='msa2'/>
+-      <feature policy='require' name='msa1'/>
+-      <feature policy='require' name='sthyi'/>
+-      <feature policy='require' name='edat'/>
+-      <feature policy='require' name='ri'/>
+-      <feature policy='require' name='deflate'/>
+-      <feature policy='require' name='edat2'/>
+-      <feature policy='require' name='etoken'/>
+-      <feature policy='require' name='vx'/>
+-      <feature policy='require' name='ipter'/>
+-      <feature policy='require' name='pai'/>
+-      <feature policy='require' name='paie'/>
+-      <feature policy='require' name='mepochptff'/>
++      <feature policy='require' name='aen'/>
++      <feature policy='require' name='ais'/>
+       <feature policy='require' name='ap'/>
+-      <feature policy='require' name='vxeh'/>
+-      <feature policy='require' name='vxpd'/>
+-      <feature policy='require' name='esop'/>
+-      <feature policy='require' name='msa9_pckmo'/>
+-      <feature policy='require' name='vxeh2'/>
+-      <feature policy='require' name='esort'/>
+-      <feature policy='require' name='appv'/>
+-      <feature policy='require' name='apqi'/>
+       <feature policy='require' name='apft'/>
+-      <feature policy='require' name='els'/>
+-      <feature policy='require' name='iep'/>
++      <feature policy='require' name='appv'/>
+       <feature policy='require' name='appvi'/>
+       <feature policy='require' name='apqci'/>
+-      <feature policy='require' name='cte'/>
+-      <feature policy='require' name='ais'/>
+-      <feature policy='require' name='bpb'/>
+-      <feature policy='require' name='ctop'/>
+-      <feature policy='require' name='gs'/>
+-      <feature policy='require' name='ppa15'/>
+-      <feature policy='require' name='zpci'/>
+-      <feature policy='require' name='rdp'/>
+-      <feature policy='require' name='sea_esop2'/>
++      <feature policy='require' name='apqi'/>
+       <feature policy='require' name='beareh'/>
+-      <feature policy='require' name='te'/>
++      <feature policy='require' name='bpb'/>
+       <feature policy='require' name='cmm'/>
++      <feature policy='require' name='cmmnt'/>
++      <feature policy='require' name='csske'/>
++      <feature policy='require' name='cte'/>
++      <feature policy='require' name='ctop'/>
++      <feature policy='require' name='deflate'/>
++      <feature policy='require' name='diag318'/>
++      <feature policy='require' name='edat'/>
++      <feature policy='require' name='edat2'/>
++      <feature policy='require' name='els'/>
++      <feature policy='require' name='esop'/>
++      <feature policy='require' name='esort'/>
++      <feature policy='require' name='etoken'/>
++      <feature policy='require' name='gs'/>
++      <feature policy='require' name='iep'/>
++      <feature policy='require' name='ipter'/>
++      <feature policy='require' name='mepoch'/>
++      <feature policy='require' name='mepochptff'/>
++      <feature policy='require' name='msa1'/>
++      <feature policy='require' name='msa2'/>
++      <feature policy='require' name='msa3'/>
++      <feature policy='require' name='msa4'/>
++      <feature policy='require' name='msa5'/>
++      <feature policy='require' name='msa6'/>
++      <feature policy='require' name='msa7'/>
++      <feature policy='require' name='msa8'/>
++      <feature policy='require' name='msa9'/>
++      <feature policy='require' name='msa9_pckmo'/>
++      <feature policy='require' name='nnpa'/>
++      <feature policy='require' name='pai'/>
++      <feature policy='require' name='paie'/>
++      <feature policy='require' name='ppa15'/>
++      <feature policy='require' name='rdp'/>
++      <feature policy='require' name='ri'/>
++      <feature policy='require' name='sea_esop2'/>
++      <feature policy='require' name='sthyi'/>
++      <feature policy='require' name='te'/>
++      <feature policy='require' name='vx'/>
++      <feature policy='require' name='vxeh'/>
++      <feature policy='require' name='vxeh2'/>
++      <feature policy='require' name='vxpd'/>
++      <feature policy='require' name='vxpdeh'/>
+       <feature policy='require' name='vxpdeh2'/>
++      <feature policy='require' name='zpci'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='IBM'>gen15a</model>
+diff --git a/tests/domaincapsdata/qemu_9.2.0.x86_64+amdsev.xml b/tests/domaincapsdata/qemu_9.2.0.x86_64+amdsev.xml
+index c0485f8ffa..555a302bba 100644
+--- a/tests/domaincapsdata/qemu_9.2.0.x86_64+amdsev.xml
++++ b/tests/domaincapsdata/qemu_9.2.0.x86_64+amdsev.xml
+@@ -43,37 +43,37 @@
+       <model fallback='forbid'>EPYC-Genoa</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='spec-ctrl'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='flush-l1d'/>
+       <feature policy='require' name='arch-capabilities'/>
+-      <feature policy='require' name='ssbd'/>
+       <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='overflow-recov'/>
+-      <feature policy='require' name='succor'/>
+-      <feature policy='require' name='invtsc'/>
+-      <feature policy='require' name='virt-ssbd'/>
+-      <feature policy='require' name='lbrv'/>
+-      <feature policy='require' name='tsc-scale'/>
+-      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='flush-l1d'/>
+       <feature policy='require' name='flushbyasid'/>
++      <feature policy='require' name='gds-no'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='ibpb-brtype'/>
++      <feature policy='require' name='invtsc'/>
++      <feature policy='require' name='lbrv'/>
++      <feature policy='require' name='mds-no'/>
++      <feature policy='require' name='overflow-recov'/>
+       <feature policy='require' name='pause-filter'/>
++      <feature policy='require' name='perfmon-v2'/>
+       <feature policy='require' name='pfthreshold'/>
++      <feature policy='require' name='pschange-mc-no'/>
++      <feature policy='require' name='rdctl-no'/>
++      <feature policy='require' name='rfds-no'/>
++      <feature policy='require' name='sbpb'/>
++      <feature policy='require' name='skip-l1dfl-vmentry'/>
++      <feature policy='require' name='spec-ctrl'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='succor'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc-scale'/>
++      <feature policy='require' name='tsc_adjust'/>
+       <feature policy='require' name='v-vmsave-vmload'/>
+       <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='sbpb'/>
+-      <feature policy='require' name='ibpb-brtype'/>
+-      <feature policy='require' name='perfmon-v2'/>
+-      <feature policy='require' name='rdctl-no'/>
+-      <feature policy='require' name='skip-l1dfl-vmentry'/>
+-      <feature policy='require' name='mds-no'/>
+-      <feature policy='require' name='pschange-mc-no'/>
+-      <feature policy='require' name='gds-no'/>
+-      <feature policy='require' name='rfds-no'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='x2apic'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+       <model usable='yes' vendor='unknown' canonical='486-v1'>486</model>
+diff --git a/tests/domaincapsdata/qemu_9.2.0.x86_64.xml b/tests/domaincapsdata/qemu_9.2.0.x86_64.xml
+index dcb78a93c6..0c83e12d9a 100644
+--- a/tests/domaincapsdata/qemu_9.2.0.x86_64.xml
++++ b/tests/domaincapsdata/qemu_9.2.0.x86_64.xml
+@@ -43,37 +43,37 @@
+       <model fallback='forbid'>EPYC-Rome</model>
+       <vendor>AMD</vendor>
+       <maxphysaddr mode='passthrough' limit='64'/>
+-      <feature policy='require' name='x2apic'/>
+-      <feature policy='require' name='tsc-deadline'/>
+-      <feature policy='require' name='hypervisor'/>
+-      <feature policy='require' name='tsc_adjust'/>
+-      <feature policy='require' name='stibp'/>
+-      <feature policy='require' name='arch-capabilities'/>
+-      <feature policy='require' name='ssbd'/>
+-      <feature policy='require' name='cmp_legacy'/>
+-      <feature policy='require' name='overflow-recov'/>
+-      <feature policy='require' name='succor'/>
+-      <feature policy='require' name='invtsc'/>
+       <feature policy='require' name='amd-ssbd'/>
+-      <feature policy='require' name='virt-ssbd'/>
+-      <feature policy='require' name='lbrv'/>
+-      <feature policy='require' name='tsc-scale'/>
+-      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='arch-capabilities'/>
++      <feature policy='require' name='cmp_legacy'/>
+       <feature policy='require' name='flushbyasid'/>
++      <feature policy='require' name='gds-no'/>
++      <feature policy='require' name='hypervisor'/>
++      <feature policy='require' name='ibpb-brtype'/>
++      <feature policy='require' name='invtsc'/>
++      <feature policy='require' name='lbrv'/>
++      <feature policy='require' name='lfence-always-serializing'/>
++      <feature policy='require' name='mds-no'/>
++      <feature policy='require' name='null-sel-clr-base'/>
++      <feature policy='require' name='overflow-recov'/>
+       <feature policy='require' name='pause-filter'/>
+       <feature policy='require' name='pfthreshold'/>
++      <feature policy='require' name='pschange-mc-no'/>
++      <feature policy='require' name='rdctl-no'/>
++      <feature policy='require' name='rfds-no'/>
++      <feature policy='require' name='skip-l1dfl-vmentry'/>
++      <feature policy='require' name='ssbd'/>
++      <feature policy='require' name='stibp'/>
++      <feature policy='require' name='succor'/>
++      <feature policy='require' name='svme-addr-chk'/>
++      <feature policy='require' name='tsc-deadline'/>
++      <feature policy='require' name='tsc-scale'/>
++      <feature policy='require' name='tsc_adjust'/>
+       <feature policy='require' name='v-vmsave-vmload'/>
+       <feature policy='require' name='vgif'/>
+-      <feature policy='require' name='svme-addr-chk'/>
+-      <feature policy='require' name='lfence-always-serializing'/>
+-      <feature policy='require' name='null-sel-clr-base'/>
+-      <feature policy='require' name='ibpb-brtype'/>
+-      <feature policy='require' name='rdctl-no'/>
+-      <feature policy='require' name='skip-l1dfl-vmentry'/>
+-      <feature policy='require' name='mds-no'/>
+-      <feature policy='require' name='pschange-mc-no'/>
+-      <feature policy='require' name='gds-no'/>
+-      <feature policy='require' name='rfds-no'/>
++      <feature policy='require' name='virt-ssbd'/>
++      <feature policy='require' name='vmcb-clean'/>
++      <feature policy='require' name='x2apic'/>
+       <feature policy='disable' name='xsaves'/>
+     </mode>
+     <mode name='custom' supported='yes'>
+-- 
+2.54.0

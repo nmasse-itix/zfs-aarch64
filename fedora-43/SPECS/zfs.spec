@@ -102,7 +102,7 @@ sitedir = sysconfig.get_path('purelib', scheme, vars={'base': prefix})
 print(sitedir);" 2>/dev/null || %{__python} -Esc "from distutils import sysconfig; print(sysconfig.get_python_lib(0,0))")
 
 Name:           zfs
-Version:        2.4.2
+Version:        2.4.3
 Release:        1%{?dist}
 Summary:        Commands to control the kernel modules and libraries
 
@@ -545,7 +545,6 @@ systemctl --system daemon-reload >/dev/null || true
 %config(noreplace) %{_sysconfdir}/%{name}/zed.d/*
 %config(noreplace) %{_sysconfdir}/%{name}/zpool.d/*
 %config(noreplace) %{_sysconfdir}/%{name}/vdev_id.conf.*.example
-%attr(440, root, root) %config(noreplace) %{_sysconfdir}/sudoers.d/*
 
 %config(noreplace) %{_bashcompletiondir}/zfs
 %config(noreplace) %{_bashcompletiondir}/zpool
