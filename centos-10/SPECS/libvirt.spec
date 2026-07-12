@@ -138,7 +138,6 @@
     %define with_vbox 0
     %define with_vmware 0
     %define with_libxl 0
-    %define with_hyperv 0
     %define with_lxc 0
     %define with_ch 0
 %endif
@@ -287,7 +286,7 @@
 
 Summary: Library providing a simple virtualization API
 Name: libvirt
-Version: 12.4.0
+Version: 12.5.0
 Release: 1%{?dist}%{?extra_release}
 License: GPL-2.0-or-later AND LGPL-2.1-only AND LGPL-2.1-or-later AND OFL-1.1
 URL: https://libvirt.org/
@@ -2694,6 +2693,11 @@ exit 0
 %endif
 
 %changelog
+* Wed Jul  1 2026 Jiri Denemark <jdenemar@redhat.com> - 12.5.0-1
+- Rebased to libvirt-12.5.0 (RHEL-156861)
+- The rebase also fixes the following bugs:
+    RHEL-180448, RHEL-181350, RHEL-185108, RHEL-186015, RHEL-187057
+
 * Mon Jun 15 2026 Jiri Denemark <jdenemar@redhat.com> - 12.4.0-1
 - Rebased to libvirt-12.4.0 (RHEL-156861)
 - The rebase also fixes the following bugs:

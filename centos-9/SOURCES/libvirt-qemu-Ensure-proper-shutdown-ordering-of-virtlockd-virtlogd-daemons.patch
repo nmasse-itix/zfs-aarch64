@@ -1,0 +1,119 @@
+From 36c833cacb0d001ab43ba9662fe432922491c3b5 Mon Sep 17 00:00:00 2001
+Message-ID: <36c833cacb0d001ab43ba9662fe432922491c3b5.1782911963.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Mon, 15 Jun 2026 13:01:01 +0200
+Subject: [PATCH] qemu: Ensure proper shutdown ordering of virtlockd/virtlogd
+ daemons
+
+For socket activation to work our systemd unit files use the following
+pattern:
+
+  [virtlogd.socket]  <----(After)--- [virtlogd.service]
+  [virtqemud.socket] <----(After)--- [virtqemud.service]
+
+Now the qemu daemon also wants to use the services provided by those
+daemons so we have dependency between the two too:
+
+  [virtlogd.socket]  <----(After)--- [virtlogd.service]
+         ^
+         +-------------(After+Requires)-------+
+                                              |
+  [virtqemud.socket] <----(After)--- [virtqemud.service]
+
+Now on startup everything is fine, because with socket activation, when
+'virtqemud.service' wants to use 'virtlogd' services the socket is
+already up due to the dependency+ordering and opening a connection will
+cause 'virtlogd.service' to be socket-activated.
+
+On shutdown though there's no transitive 'After' ordering between
+'virtqemud.service' and 'virtlogd.service' and thus nothing explicitly
+telling systemd that if virtlogd was started. In fact systemd is free to
+translate it that 'virtlogd' and 'virtqemud' need to be stopped before
+stopping 'virtlogd.socket'.
+
+To illustrate what happens consider the following scenario:
+
+A host is running a VM under virtqemud. 'virtqemud' is configured to
+attempt shutdown on the VMs before killing them (daemon-based guest
+shutdown, but the same reproduces also with libvirt-guests). The host
+is being rebooted.
+
+ (virtqemud attempts to shut down guests, but guest takes more than the
+  configured shutdown inhibition timeout, journald output follows):
+
+   06:44:02 fedora systemd-logind[664]: Delay lock is active (UID 0/root, PID 991/virtqemud) but inhibitor timeout is reached.
+   06:44:02 fedora systemd-logind[664]: System is rebooting.
+   [...]
+   06:44:02 fedora virtlogd[802]: 802: debug : virSystemdNotify:667 : Notify 'STOPPING=1'
+   06:44:02 fedora systemd[1]: Stopping virtlogd.service - libvirt logging daemon...
+   06:44:02 fedora systemd[1]: Stopping virtqemud.service - libvirt QEMU daemon...
+   06:44:02 fedora virtqemud[991]: 991: debug : virSystemdNotify:667 : Notify 'STOPPING=1'
+   06:44:02 fedora systemd[1]: virtlogd.service: Deactivated successfully.
+   06:44:02 fedora systemd[1]: Stopped virtlogd.service - libvirt logging daemon.
+
+   (the shutdown times out, virtqemud kills the unresponsive vm)
+
+   06:44:27 fedora virtqemud[991]: 1053: debug : qemuProcessStop:8916 : Shutting down vm=0x7f71ac032670 name=virt-vm1 id=1 pid=805, reason=destroyed, asyncJob=none, flags=0x0
+   06:44:27 fedora virtqemud[991]: 1053: debug : qemuDomainLogAppendMessage:5757 : Append log message (vm='virt-vm1' message='2026-06-15 10:44:27.427+0000: shutting down, reason=destroyed
+                                       ) stdioLogD=1
+   06:44:27 fedora virtqemud[991]: 1053: error : virNetSocketReadWire:1767 : Cannot recv data: Connection reset by peer
+   06:44:27 fedora virtqemud[991]: 1053: debug : qemuProcessKill:8811 : vm=0x7f71ac032670 name=virt-vm1 pid=805 flags=0x5
+
+Now the log shows that we want to add VM log file message in
+'qemuDomainLogAppendMessage' but it fails because virtlogd is dead
+already.
+
+Now the same happens also with 'virtlockd' but with much worse outcome,
+especially if the configured action is to save the VMs because shutdown
+of 'virtlockd' when locks are held ends up 'fencing' the VMs by killing
+them.
+
+The same also happens when libvirt-guests is used to shutdown the guests
+instead.
+
+This patch adds an explicit 'After=virtlo[ck|g]d.service' to the daemons
+containing the qemu driver to ensure that the shutdown ordering makes
+sense. This doesn't break socket activation (e.g. the log/lock daemons
+are not started unless first invoked).
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Jiri Denemark <jdenemar@redhat.com>
+(cherry picked from commit aa1bf13b9caa4ef893cd4fdbaa111d5da73aa120)
+https://redhat.atlassian.net/browse/RHEL-180876
+---
+ src/qemu/virtqemud.service.extra.in | 4 ++++
+ src/remote/libvirtd.service.in      | 4 ++++
+ 2 files changed, 8 insertions(+)
+
+diff --git a/src/qemu/virtqemud.service.extra.in b/src/qemu/virtqemud.service.extra.in
+index cc16b6a9bb..3cc2edcfd0 100644
+--- a/src/qemu/virtqemud.service.extra.in
++++ b/src/qemu/virtqemud.service.extra.in
+@@ -6,6 +6,10 @@ Requires=virtlogd.socket
+ Wants=virtlockd.socket
+ After=virtlogd.socket
+ After=virtlockd.socket
++# To ensure that our helper daemons are not shut down before the main daemon
++# shuts down we need also explicit ordering with the .service unit
++After=virtlogd.service
++After=virtlock.service
+ Wants=systemd-machined.service
+ After=systemd-machined.service
+ After=remote-fs.target
+diff --git a/src/remote/libvirtd.service.in b/src/remote/libvirtd.service.in
+index b0a062e885..f26494d646 100644
+--- a/src/remote/libvirtd.service.in
++++ b/src/remote/libvirtd.service.in
+@@ -15,6 +15,10 @@ Requires=virtlogd.socket
+ Wants=virtlockd.socket
+ After=virtlogd.socket
+ After=virtlockd.socket
++# To ensure that our helper daemons are not shut down before the main daemon
++# shuts down we need also explicit ordering with the .service unit
++After=virtlogd.service
++After=virtlock.service
+ Wants=systemd-machined.service
+ After=network.target
+ After=dbus.service
+-- 
+2.54.0

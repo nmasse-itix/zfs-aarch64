@@ -287,7 +287,7 @@
 Summary: Library providing a simple virtualization API
 Name: libvirt
 Version: 11.10.0
-Release: 13%{?dist}%{?extra_release}
+Release: 14%{?dist}%{?extra_release}
 License: GPL-2.0-or-later AND LGPL-2.1-only AND LGPL-2.1-or-later AND OFL-1.1
 URL: https://libvirt.org/
 
@@ -414,6 +414,7 @@ Patch116: libvirt-Introduce-VIR_CONNECT_GET_DOMAIN_CAPABILITIES_SUPPORTED_CPU_FE
 Patch117: libvirt-virsh-Add-supported-cpu-features-option-for-domcapabilities.patch
 Patch118: libvirt-domaincapstest-Test-SUPPORTED_CPU_FEATURES-flag.patch
 Patch119: libvirt-qemu_capabilities-Fix-domain-capabilities-on-AMD-CPUs.patch
+Patch120: libvirt-qemu-Ensure-proper-shutdown-ordering-of-virtlockd-virtlogd-daemons.patch
 
 
 Requires: libvirt-daemon = %{version}-%{release}
@@ -2805,6 +2806,10 @@ exit 0
 %endif
 
 %changelog
+* Wed Jul  1 2026 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-14
+- distro: Update URL in plans.fmf
+- qemu: Ensure proper shutdown ordering of virtlockd/virtlogd daemons (RHEL-180876)
+
 * Thu Jun  4 2026 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-13
 - conf: Parse hyperv features even for host-model (RHEL-151688)
 - qemu: Wire up new hyperv host-model mode behavior (RHEL-151688)
