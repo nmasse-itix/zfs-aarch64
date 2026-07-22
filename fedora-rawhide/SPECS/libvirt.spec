@@ -287,7 +287,7 @@
 Summary: Library providing a simple virtualization API
 Name: libvirt
 Version: 12.5.0
-Release: 1%{?dist}
+Release: 2%{?dist}
 License: GPL-2.0-or-later AND LGPL-2.1-only AND LGPL-2.1-or-later AND OFL-1.1
 URL: https://libvirt.org/
 
@@ -2694,6 +2694,9 @@ exit 0
 
 
 %changelog
+* Thu Jul 16 2026 Fedora Release Engineering <releng@fedoraproject.org> - 12.5.0-2
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_45_Mass_Rebuild
+
 * Mon Jun 01 2026 Cole Robinson <crobinso@redhat.com> - 12.4.0-1
 - Rebase to version 12.4.0
 
