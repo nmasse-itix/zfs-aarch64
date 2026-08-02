@@ -1,0 +1,81 @@
+From 2b3ed2f5fbb0255561db89a841eb2673af0095a5 Mon Sep 17 00:00:00 2001
+Message-ID: <2b3ed2f5fbb0255561db89a841eb2673af0095a5.1784297532.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Thu, 11 Jun 2026 12:52:16 +0200
+Subject: [PATCH] qemu: validate: Validate VM config with qemuCaps influenced
+ by <qemu:capabilities>
+
+The user configuration of added/removed qemu capabilities via the qemu
+namespace element was applied only right before generating a
+commandline, but the validation code didn't see these.
+
+Modify the validation entry points so that they apply this optionally.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 5319dd6f0d4ae93ef14ccb25b43346b30490db3a)
+
+https://redhat.atlassian.net/browse/RHEL-186019
+
+https://redhat.atlassian.net/browse/RHEL-177646 (rhel-9.9)
+---
+ src/qemu/qemu_validate.c | 22 ++++++++++++++--------
+ 1 file changed, 14 insertions(+), 8 deletions(-)
+
+diff --git a/src/qemu/qemu_validate.c b/src/qemu/qemu_validate.c
+index 63c5f8e037..8f3e6dd134 100644
+--- a/src/qemu/qemu_validate.c
++++ b/src/qemu/qemu_validate.c
+@@ -1272,18 +1272,21 @@ qemuValidateDomainDef(const virDomainDef *def,
+                       void *parseOpaque)
+ {
+     virQEMUDriver *driver = opaque;
++    virQEMUCaps *qemuCapsIn = parseOpaque;
+     g_autoptr(virQEMUCaps) qemuCapsLocal = NULL;
+-    virQEMUCaps *qemuCaps = parseOpaque;
++    g_autoptr(virQEMUCaps) qemuCaps = NULL;
+     size_t i;
+ 
+-    if (!qemuCaps) {
++    if (!qemuCapsIn) {
+         if (!(qemuCapsLocal = virQEMUCapsCacheLookup(driver->qemuCapsCache,
+                                                      def->emulator)))
+             return -1;
+-
+-        qemuCaps = qemuCapsLocal;
++        qemuCapsIn = qemuCapsLocal;
+     }
+ 
++    if (qemuDomainUpdateCustomCapabilities(def, qemuCapsIn, &qemuCaps) < 0)
++        return -1;
++
+     if (def->os.type != VIR_DOMAIN_OSTYPE_HVM) {
+         virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
+                        _("Emulator '%1$s' does not support os type '%2$s'"),
+@@ -5958,17 +5961,20 @@ qemuValidateDomainDeviceDef(const virDomainDeviceDef *dev,
+                             void *parseOpaque)
+ {
+     virQEMUDriver *driver = opaque;
++    virQEMUCaps *qemuCapsIn = parseOpaque;
+     g_autoptr(virQEMUCaps) qemuCapsLocal = NULL;
+-    virQEMUCaps *qemuCaps = parseOpaque;
++    g_autoptr(virQEMUCaps) qemuCaps = NULL;
+ 
+-    if (!qemuCaps) {
++    if (!qemuCapsIn) {
+         if (!(qemuCapsLocal = virQEMUCapsCacheLookup(driver->qemuCapsCache,
+                                                      def->emulator)))
+             return -1;
+-
+-        qemuCaps = qemuCapsLocal;
++        qemuCapsIn = qemuCapsLocal;
+     }
+ 
++    if (qemuDomainUpdateCustomCapabilities(def, qemuCapsIn, &qemuCaps) < 0)
++        return -1;
++
+     if (qemuValidateDomainDeviceInfo(dev, def, qemuCaps) < 0)
+         return -1;
+ 
+-- 
+2.55.0

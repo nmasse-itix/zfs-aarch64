@@ -1,0 +1,931 @@
+From 53bcd009b21687baecb0568bc4b4768b03c3ad89 Mon Sep 17 00:00:00 2001
+Message-ID: <53bcd009b21687baecb0568bc4b4768b03c3ad89.1784297532.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Mon, 8 Jun 2026 16:54:50 +0200
+Subject: [PATCH] qemu: postparse: Fill in selected virtio video frondend
+ device in the XML
+
+Historically 'virtio-vga' was always picked as the first '<video>'
+(virtio) device and any sub-sequent ones were 'virtio-gpu'. When support
+for aarch64 VMs was being added an exception to use 'virtio-gpu' for the
+primary device was added as aarch64 doesn't have anything resembling the
+"legacy" 'VGA' interface. At this point this exception was only for
+aarch64. The distinction between 'virtio-vga' and 'virtio-gpu' was *not*
+recorded in the VM XML as it was a new feature (for aarch64) and it
+didn't make sense to pick 'virtio-vga'.
+
+Some time later the following commit:
+
+  commit 4c029e8cfa3338ef1a2d6851908a9fcf494a32e5
+  Author: Pavel Hrdina <phrdina@redhat.com>
+  Date:   Fri Sep 30 14:41:37 2016 +0200
+
+      qemu_command: properly detect which model to use for video device
+
+      This improves commit 706b5b6277 in a way that we check qemu capabilities
+      instead of what architecture we are running on to detect whether we can
+      use *virtio-vga* model or not.  This is not a case only for arm/aarch64.
+
+modified the code to do this picking by checking presence of
+'virtio-vga' device instead. That approach didn't consider the fact that
+the modular deployment of qemu allows for the 'virtio-vga' device to be
+missing in certain cases, thus introducing a latent bug as we'll pick
+'virtio-gpu' in such case but don't record it anywhere.
+
+Now this creates a problem, if the deployments differ, because you can
+have two *incompatible* (at migration stream level) setups which are
+based on the same identical XML without the possibility for the
+destination libvirt instance during migration to pick which is the
+correct one.
+
+To prevent this and actually fix any existing such deployment (which
+allows upgrade of libvirt daemons on the source) we will record the
+picked device frontend at post-parse time into the XML. This luckily
+properly handles running VMs even if 'virtio-vga' were already
+installed since we record the actual qemuCaps we've started the VM with.
+
+Now 'virtio-vga' vs 'virtio-gpu' is not the only broken piece of logic.
+In fact 'virtio-vga-gl' could have been downgraded to 'virtio-vga' based
+on some very weird logic (see comments in code for explanation).
+
+The logic in 'qemuDomainDeviceVideoDefPostParse' re-creates the logic
+used to setup virtio-vga vs. virtio-gpu, and 'vhost-user-vga' vs.
+'vhost-user-gpu' as those still make sense. For the 'gl' variants two
+versions exist, one meant to recover running VMs and one for new VMs
+where the broken logic makes no sense.
+
+Now this patch just records what was selected into the XML, but doesn't
+yet modify the commandline to actually use that value verbatim (e.g. if
+the user specified an actual non-default value already).
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 38c970f64187b42605f611000a6b4c0e2dedd0d8)
+
+https://redhat.atlassian.net/browse/RHEL-186019
+
+https://redhat.atlassian.net/browse/RHEL-177646 (rhel-9.9)
+---
+ src/qemu/qemu_postparse.c                     | 97 ++++++++++++++++++-
+ .../virtio-vga-upgrade-missing-out.xml        |  2 +-
+ .../virtio-vga-upgrade-out.xml                |  2 +-
+ .../aarch64-video-default.aarch64-latest.xml  |  2 +-
+ ...64-video-virtio-gpu-pci.aarch64-latest.xml |  2 +-
+ ...fault-models.aarch64-latest.abi-update.xml |  2 +-
+ ...h64-virt-default-models.aarch64-latest.xml |  2 +-
+ .../aarch64-virt-graphics.aarch64-latest.xml  |  2 +-
+ ...ault-video-type-aarch64.aarch64-latest.xml |  2 +-
+ ...eo-type-loongarch64.loongarch64-latest.xml |  2 +-
+ ...ault-video-type-riscv64.riscv64-latest.xml |  2 +-
+ .../default-video-type-s390x.s390x-latest.xml |  2 +-
+ ...t-models.loongarch64-latest.abi-update.xml |  2 +-
+ ...virt-default-models.loongarch64-latest.xml |  2 +-
+ ...rch64-virt-graphics.loongarch64-latest.xml |  2 +-
+ .../q35-pcie-autoadd.x86_64-latest.xml        |  2 +-
+ .../q35-pcie.x86_64-latest.xml                |  2 +-
+ ...fault-models.riscv64-latest.abi-update.xml |  2 +-
+ ...v64-virt-default-models.riscv64-latest.xml |  2 +-
+ .../riscv64-virt-graphics.riscv64-latest.xml  |  2 +-
+ ...default-models.s390x-latest.abi-update.xml |  2 +-
+ .../s390x-ccw-default-models.s390x-latest.xml |  2 +-
+ .../s390x-ccw-graphics.s390x-latest.xml       |  2 +-
+ ...vhost-user-gpu-secondary.x86_64-latest.xml |  4 +-
+ .../vhost-user-vga.x86_64-latest.xml          |  2 +-
+ .../video-virtio-blob-off.x86_64-latest.xml   |  4 +-
+ .../video-virtio-blob-on.x86_64-latest.xml    |  4 +-
+ .../video-virtio-edid-none.x86_64-latest.xml  |  2 +-
+ .../video-virtio-edid-off.x86_64-latest.xml   |  2 +-
+ .../video-virtio-edid-on.x86_64-latest.xml    |  2 +-
+ ...video-virtio-gpu-ccw-auto.s390x-latest.xml |  2 +-
+ .../video-virtio-gpu-ccw.s390x-latest.xml     |  4 +-
+ .../video-virtio-gpu-device.x86_64-latest.xml |  2 +-
+ .../video-virtio-gpu-sdl-gl.x86_64-latest.xml |  2 +-
+ ...deo-virtio-gpu-secondary.x86_64-latest.xml |  4 +-
+ ...ideo-virtio-gpu-spice-gl.x86_64-latest.xml |  2 +-
+ .../video-virtio-gpu-virgl.x86_64-latest.xml  |  2 +-
+ ..._VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.xml |  2 +-
+ ...t.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled.xml |  4 +-
+ ...CAPS_VIRTIO_VGA_GL-disabled-ABI_UPDATE.xml |  4 +-
+ ...atest.QEMU_CAPS_VIRTIO_VGA_GL-disabled.xml |  4 +-
+ .../video-virtio-vga-gpu-gl.x86_64-latest.xml |  4 +-
+ ...t.QEMU_CAPS_DEVICE_VIRTIO_VGA-disabled.xml |  2 +-
+ .../video-virtio-vga.x86_64-latest.xml        |  2 +-
+ ...virtio-options-video-ats.x86_64-latest.xml |  4 +-
+ ...rtio-options-video-iommu.x86_64-latest.xml |  4 +-
+ ...tio-options-video-packed.x86_64-latest.xml |  4 +-
+ tests/qemuxmlconfdata/virtio-options.xml      |  2 +-
+ 48 files changed, 154 insertions(+), 61 deletions(-)
+
+diff --git a/src/qemu/qemu_postparse.c b/src/qemu/qemu_postparse.c
+index cd88cd1806..0d803a8abb 100644
+--- a/src/qemu/qemu_postparse.c
++++ b/src/qemu/qemu_postparse.c
+@@ -308,7 +308,8 @@ qemuDomainDefaultVideoDevice(const virDomainDef *def,
+ static int
+ qemuDomainDeviceVideoDefPostParse(virDomainVideoDef *video,
+                                   const virDomainDef *def,
+-                                  virQEMUCaps *qemuCaps)
++                                  virQEMUCaps *qemuCaps,
++                                  unsigned int parseFlags)
+ {
+     if (video->type == VIR_DOMAIN_VIDEO_TYPE_DEFAULT)
+         video->type = qemuDomainDefaultVideoDevice(def, qemuCaps);
+@@ -318,6 +319,98 @@ qemuDomainDeviceVideoDefPostParse(virDomainVideoDef *video,
+         video->vgamem = QEMU_QXL_VGAMEM_DEFAULT;
+     }
+ 
++    /* Fill in 'virtiodevice' (device='%s' attribute in XML.
++     *
++     * Historically for <video><model type='virtio' ...  the selection of the
++     * actual device type (virtio-vga, virtio-vga-gl, virtio-gpu, virtio-gpu-gl)
++     * was done when formatting commandline based on capabilities.
++     *
++     * Unfortunately neither of the aforementioned models are ABI/migration
++     * compatible. We must thus record the selcted model in the XML and that
++     * possibly retroactively based on the capabilities.
++     *
++     * For non accelerated video devices the logic is as follows:
++     *  - for any secondary video device 'virtio-gpu' is always picked
++     *  - for 'primary' video device 'virtio-vga' is used if available. If not
++     *    'virtio-gpu' is picked instead.
++     *
++     * We want to use the above logic both for existing VMs and new VMs since
++     * this is currently the proper configuration.
++     *
++     * For accelerated video devices the logic is slightly more broken as the
++     * fallbacks depended both on which of 'virtio-vga', 'virtio-vga-gl',
++     * 'virtio-gpu-gl', modules was actually found (see code below).
++     *
++     * For new VMs we do not want to fall back to non-gl versions since that
++     * disables acceleration.
++     */
++    if (qemuCaps &&
++        video->type == VIR_DOMAIN_VIDEO_TYPE_VIRTIO &&
++        video->virtiodevice == VIR_DOMAIN_VIDEO_VIRTIO_DEVICE_DEFAULT) {
++        /* in certain cases video->primary was not yet assigned */
++        bool primary = video->primary || (video == def->videos[0]);
++
++        if (video->backend == VIR_DOMAIN_VIDEO_BACKEND_TYPE_VHOSTUSER) {
++            /* primary device is 'vhost-user-vga' if available */
++            if (primary &&
++                virQEMUCapsGet(qemuCaps, QEMU_CAPS_DEVICE_VHOST_USER_VGA)) {
++                video->virtiodevice = VIR_DOMAIN_VIDEO_VIRTIO_DEVICE_VHOST_USER_VGA;
++            } else if (virQEMUCapsGet(qemuCaps, QEMU_CAPS_DEVICE_VHOST_USER_GPU)) {
++                video->virtiodevice = VIR_DOMAIN_VIDEO_VIRTIO_DEVICE_VHOST_USER_GPU;
++            } else {
++                /* Don't fill in default; let validation reject the config */
++            }
++        } else {
++            if (video->accel &&
++                video->accel->accel3d == VIR_TRISTATE_BOOL_YES) {
++                /* if starting a new config don't downgrade to the non '-gl' vriants,
++                 * allow downgrade only to preserve migration/ABI compatibility */
++                if (parseFlags & VIR_DOMAIN_DEF_PARSE_ABI_UPDATE) {
++                    if (primary &&
++                        virQEMUCapsGet(qemuCaps, QEMU_CAPS_VIRTIO_VGA_GL)) {
++                        video->virtiodevice = VIR_DOMAIN_VIDEO_VIRTIO_DEVICE_VGA_GL;
++                    } else if (virQEMUCapsGet(qemuCaps, QEMU_CAPS_VIRTIO_GPU_GL_PCI)) {
++                        video->virtiodevice = VIR_DOMAIN_VIDEO_VIRTIO_DEVICE_GPU_GL;
++                    } else {
++                        /* Don't fill in default; let validation reject the config */
++                    }
++                } else {
++                    /* This logic is wrong, but faithfully represents the device
++                     * the qemu driver would pick for an accelerated video device */
++                    if (primary &&
++                        virQEMUCapsGet(qemuCaps, QEMU_CAPS_DEVICE_VIRTIO_VGA)) {
++                        if (virQEMUCapsGet(qemuCaps, QEMU_CAPS_VIRTIO_VGA_GL)) {
++                            video->virtiodevice = VIR_DOMAIN_VIDEO_VIRTIO_DEVICE_VGA_GL;
++                        } else {
++                            /* based on the above check we know this one exists */
++                            video->virtiodevice = VIR_DOMAIN_VIDEO_VIRTIO_DEVICE_VGA;
++                        }
++                    } else {
++                        if (virQEMUCapsGet(qemuCaps, QEMU_CAPS_VIRTIO_GPU_GL_PCI)) {
++                            video->virtiodevice = VIR_DOMAIN_VIDEO_VIRTIO_DEVICE_GPU_GL;
++                        } else if (virQEMUCapsGet(qemuCaps, QEMU_CAPS_DEVICE_VIRTIO_GPU)) {
++                            video->virtiodevice = VIR_DOMAIN_VIDEO_VIRTIO_DEVICE_GPU;
++                        } else {
++                            /* this branch isn't a faithful representation of
++                             * the old logic, but the VM wouldn't start anyway
++                             * so we might as well make validation reject it */
++                        }
++                    }
++                }
++            } else {
++                /* primary device is 'virtio-vga' if available */
++                if (primary &&
++                    virQEMUCapsGet(qemuCaps, QEMU_CAPS_DEVICE_VIRTIO_VGA)) {
++                    video->virtiodevice = VIR_DOMAIN_VIDEO_VIRTIO_DEVICE_VGA;
++                } else if (virQEMUCapsGet(qemuCaps, QEMU_CAPS_DEVICE_VIRTIO_GPU)) {
++                    video->virtiodevice = VIR_DOMAIN_VIDEO_VIRTIO_DEVICE_GPU;
++                } else {
++                    /* Don't fill in default; let validation reject the config */
++                }
++            }
++        }
++    }
++
+     return 0;
+ }
+ 
+@@ -855,7 +948,7 @@ qemuDomainDeviceDefPostParse(virDomainDeviceDef *dev,
+         break;
+ 
+     case VIR_DOMAIN_DEVICE_VIDEO:
+-        ret = qemuDomainDeviceVideoDefPostParse(dev->data.video, def, qemuCaps);
++        ret = qemuDomainDeviceVideoDefPostParse(dev->data.video, def, qemuCaps, parseFlags);
+         break;
+ 
+     case VIR_DOMAIN_DEVICE_PANIC:
+diff --git a/tests/qemustatusxml2xmldata/virtio-vga-upgrade-missing-out.xml b/tests/qemustatusxml2xmldata/virtio-vga-upgrade-missing-out.xml
+index e7b3dd17ed..a58c4cc75f 100644
+--- a/tests/qemustatusxml2xmldata/virtio-vga-upgrade-missing-out.xml
++++ b/tests/qemustatusxml2xmldata/virtio-vga-upgrade-missing-out.xml
+@@ -423,7 +423,7 @@
+       </graphics>
+       <audio id='1' type='none'/>
+       <video>
+-        <model type='virtio' heads='1' primary='yes'/>
++        <model type='virtio' heads='1' primary='yes' device='virtio-gpu'/>
+         <alias name='video0'/>
+         <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x0'/>
+       </video>
+diff --git a/tests/qemustatusxml2xmldata/virtio-vga-upgrade-out.xml b/tests/qemustatusxml2xmldata/virtio-vga-upgrade-out.xml
+index 948d4c8135..db6099a2bb 100644
+--- a/tests/qemustatusxml2xmldata/virtio-vga-upgrade-out.xml
++++ b/tests/qemustatusxml2xmldata/virtio-vga-upgrade-out.xml
+@@ -425,7 +425,7 @@
+       </graphics>
+       <audio id='1' type='none'/>
+       <video>
+-        <model type='virtio' heads='1' primary='yes'/>
++        <model type='virtio' heads='1' primary='yes' device='virtio-vga'/>
+         <alias name='video0'/>
+         <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x0'/>
+       </video>
+diff --git a/tests/qemuxmlconfdata/aarch64-video-default.aarch64-latest.xml b/tests/qemuxmlconfdata/aarch64-video-default.aarch64-latest.xml
+index 558b8fab3e..c559134106 100644
+--- a/tests/qemuxmlconfdata/aarch64-video-default.aarch64-latest.xml
++++ b/tests/qemuxmlconfdata/aarch64-video-default.aarch64-latest.xml
+@@ -36,7 +36,7 @@
+     </graphics>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'/>
++      <model type='virtio' heads='1' primary='yes' device='virtio-gpu'/>
+       <address type='pci' domain='0x0000' bus='0x01' slot='0x00' function='0x0'/>
+     </video>
+   </devices>
+diff --git a/tests/qemuxmlconfdata/aarch64-video-virtio-gpu-pci.aarch64-latest.xml b/tests/qemuxmlconfdata/aarch64-video-virtio-gpu-pci.aarch64-latest.xml
+index a212a28350..167b40887c 100644
+--- a/tests/qemuxmlconfdata/aarch64-video-virtio-gpu-pci.aarch64-latest.xml
++++ b/tests/qemuxmlconfdata/aarch64-video-virtio-gpu-pci.aarch64-latest.xml
+@@ -38,7 +38,7 @@
+     </interface>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'/>
++      <model type='virtio' heads='1' primary='yes' device='virtio-gpu'/>
+       <address type='pci' domain='0x0000' bus='0x02' slot='0x00' function='0x0'/>
+     </video>
+   </devices>
+diff --git a/tests/qemuxmlconfdata/aarch64-virt-default-models.aarch64-latest.abi-update.xml b/tests/qemuxmlconfdata/aarch64-virt-default-models.aarch64-latest.abi-update.xml
+index 5abf55cf36..0f1e1a5892 100644
+--- a/tests/qemuxmlconfdata/aarch64-virt-default-models.aarch64-latest.abi-update.xml
++++ b/tests/qemuxmlconfdata/aarch64-virt-default-models.aarch64-latest.abi-update.xml
+@@ -70,7 +70,7 @@
+     </tpm>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'/>
++      <model type='virtio' heads='1' primary='yes' device='virtio-gpu'/>
+       <address type='pci' domain='0x0000' bus='0x04' slot='0x00' function='0x0'/>
+     </video>
+     <memballoon model='none'/>
+diff --git a/tests/qemuxmlconfdata/aarch64-virt-default-models.aarch64-latest.xml b/tests/qemuxmlconfdata/aarch64-virt-default-models.aarch64-latest.xml
+index 5abf55cf36..0f1e1a5892 100644
+--- a/tests/qemuxmlconfdata/aarch64-virt-default-models.aarch64-latest.xml
++++ b/tests/qemuxmlconfdata/aarch64-virt-default-models.aarch64-latest.xml
+@@ -70,7 +70,7 @@
+     </tpm>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'/>
++      <model type='virtio' heads='1' primary='yes' device='virtio-gpu'/>
+       <address type='pci' domain='0x0000' bus='0x04' slot='0x00' function='0x0'/>
+     </video>
+     <memballoon model='none'/>
+diff --git a/tests/qemuxmlconfdata/aarch64-virt-graphics.aarch64-latest.xml b/tests/qemuxmlconfdata/aarch64-virt-graphics.aarch64-latest.xml
+index 98ecc9ac70..e4a899384d 100644
+--- a/tests/qemuxmlconfdata/aarch64-virt-graphics.aarch64-latest.xml
++++ b/tests/qemuxmlconfdata/aarch64-virt-graphics.aarch64-latest.xml
+@@ -109,7 +109,7 @@
+     </graphics>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'/>
++      <model type='virtio' heads='1' primary='yes' device='virtio-gpu'/>
+       <address type='pci' domain='0x0000' bus='0x07' slot='0x00' function='0x0'/>
+     </video>
+     <memballoon model='virtio'>
+diff --git a/tests/qemuxmlconfdata/default-video-type-aarch64.aarch64-latest.xml b/tests/qemuxmlconfdata/default-video-type-aarch64.aarch64-latest.xml
+index e8fb758a71..c8e8f220be 100644
+--- a/tests/qemuxmlconfdata/default-video-type-aarch64.aarch64-latest.xml
++++ b/tests/qemuxmlconfdata/default-video-type-aarch64.aarch64-latest.xml
+@@ -34,7 +34,7 @@
+     </graphics>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'/>
++      <model type='virtio' heads='1' primary='yes' device='virtio-gpu'/>
+       <address type='pci' domain='0x0000' bus='0x01' slot='0x00' function='0x0'/>
+     </video>
+     <memballoon model='none'/>
+diff --git a/tests/qemuxmlconfdata/default-video-type-loongarch64.loongarch64-latest.xml b/tests/qemuxmlconfdata/default-video-type-loongarch64.loongarch64-latest.xml
+index 244f57ff8e..41b8bf8133 100644
+--- a/tests/qemuxmlconfdata/default-video-type-loongarch64.loongarch64-latest.xml
++++ b/tests/qemuxmlconfdata/default-video-type-loongarch64.loongarch64-latest.xml
+@@ -37,7 +37,7 @@
+     </graphics>
+     <audio id='1' type='spice'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'/>
++      <model type='virtio' heads='1' primary='yes' device='virtio-vga'/>
+       <address type='pci' domain='0x0000' bus='0x01' slot='0x00' function='0x0'/>
+     </video>
+     <memballoon model='none'/>
+diff --git a/tests/qemuxmlconfdata/default-video-type-riscv64.riscv64-latest.xml b/tests/qemuxmlconfdata/default-video-type-riscv64.riscv64-latest.xml
+index 4e138ea717..b9a8152924 100644
+--- a/tests/qemuxmlconfdata/default-video-type-riscv64.riscv64-latest.xml
++++ b/tests/qemuxmlconfdata/default-video-type-riscv64.riscv64-latest.xml
+@@ -34,7 +34,7 @@
+     </graphics>
+     <audio id='1' type='spice'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'/>
++      <model type='virtio' heads='1' primary='yes' device='virtio-vga'/>
+       <address type='pci' domain='0x0000' bus='0x01' slot='0x00' function='0x0'/>
+     </video>
+     <memballoon model='none'/>
+diff --git a/tests/qemuxmlconfdata/default-video-type-s390x.s390x-latest.xml b/tests/qemuxmlconfdata/default-video-type-s390x.s390x-latest.xml
+index c8aac8f1bf..d6223b84a0 100644
+--- a/tests/qemuxmlconfdata/default-video-type-s390x.s390x-latest.xml
++++ b/tests/qemuxmlconfdata/default-video-type-s390x.s390x-latest.xml
+@@ -22,7 +22,7 @@
+     </graphics>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'/>
++      <model type='virtio' heads='1' primary='yes' device='virtio-gpu'/>
+       <address type='ccw' cssid='0xfe' ssid='0x0' devno='0x0000'/>
+     </video>
+     <memballoon model='none'/>
+diff --git a/tests/qemuxmlconfdata/loongarch64-virt-default-models.loongarch64-latest.abi-update.xml b/tests/qemuxmlconfdata/loongarch64-virt-default-models.loongarch64-latest.abi-update.xml
+index f25d6c2cf0..0d27ffda54 100644
+--- a/tests/qemuxmlconfdata/loongarch64-virt-default-models.loongarch64-latest.abi-update.xml
++++ b/tests/qemuxmlconfdata/loongarch64-virt-default-models.loongarch64-latest.abi-update.xml
+@@ -64,7 +64,7 @@
+     </console>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'/>
++      <model type='virtio' heads='1' primary='yes' device='virtio-vga'/>
+       <address type='pci' domain='0x0000' bus='0x04' slot='0x00' function='0x0'/>
+     </video>
+     <memballoon model='none'/>
+diff --git a/tests/qemuxmlconfdata/loongarch64-virt-default-models.loongarch64-latest.xml b/tests/qemuxmlconfdata/loongarch64-virt-default-models.loongarch64-latest.xml
+index f25d6c2cf0..0d27ffda54 100644
+--- a/tests/qemuxmlconfdata/loongarch64-virt-default-models.loongarch64-latest.xml
++++ b/tests/qemuxmlconfdata/loongarch64-virt-default-models.loongarch64-latest.xml
+@@ -64,7 +64,7 @@
+     </console>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'/>
++      <model type='virtio' heads='1' primary='yes' device='virtio-vga'/>
+       <address type='pci' domain='0x0000' bus='0x04' slot='0x00' function='0x0'/>
+     </video>
+     <memballoon model='none'/>
+diff --git a/tests/qemuxmlconfdata/loongarch64-virt-graphics.loongarch64-latest.xml b/tests/qemuxmlconfdata/loongarch64-virt-graphics.loongarch64-latest.xml
+index 0be35dcba8..7bb6b123ea 100644
+--- a/tests/qemuxmlconfdata/loongarch64-virt-graphics.loongarch64-latest.xml
++++ b/tests/qemuxmlconfdata/loongarch64-virt-graphics.loongarch64-latest.xml
+@@ -102,7 +102,7 @@
+     </graphics>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'/>
++      <model type='virtio' heads='1' primary='yes' device='virtio-vga'/>
+       <address type='pci' domain='0x0000' bus='0x07' slot='0x00' function='0x0'/>
+     </video>
+     <memballoon model='virtio'>
+diff --git a/tests/qemuxmlconfdata/q35-pcie-autoadd.x86_64-latest.xml b/tests/qemuxmlconfdata/q35-pcie-autoadd.x86_64-latest.xml
+index c92408d95c..92e3943a20 100644
+--- a/tests/qemuxmlconfdata/q35-pcie-autoadd.x86_64-latest.xml
++++ b/tests/qemuxmlconfdata/q35-pcie-autoadd.x86_64-latest.xml
+@@ -138,7 +138,7 @@
+     <input type='keyboard' bus='ps2'/>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'/>
++      <model type='virtio' heads='1' primary='yes' device='virtio-vga'/>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x0'/>
+     </video>
+     <watchdog model='itco' action='reset'/>
+diff --git a/tests/qemuxmlconfdata/q35-pcie.x86_64-latest.xml b/tests/qemuxmlconfdata/q35-pcie.x86_64-latest.xml
+index 0a36e78e02..b68284320c 100644
+--- a/tests/qemuxmlconfdata/q35-pcie.x86_64-latest.xml
++++ b/tests/qemuxmlconfdata/q35-pcie.x86_64-latest.xml
+@@ -142,7 +142,7 @@
+     <input type='keyboard' bus='ps2'/>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'/>
++      <model type='virtio' heads='1' primary='yes' device='virtio-vga'/>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x0'/>
+     </video>
+     <watchdog model='itco' action='reset'/>
+diff --git a/tests/qemuxmlconfdata/riscv64-virt-default-models.riscv64-latest.abi-update.xml b/tests/qemuxmlconfdata/riscv64-virt-default-models.riscv64-latest.abi-update.xml
+index 620da73422..2e0d5f6634 100644
+--- a/tests/qemuxmlconfdata/riscv64-virt-default-models.riscv64-latest.abi-update.xml
++++ b/tests/qemuxmlconfdata/riscv64-virt-default-models.riscv64-latest.abi-update.xml
+@@ -67,7 +67,7 @@
+     </tpm>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'/>
++      <model type='virtio' heads='1' primary='yes' device='virtio-vga'/>
+       <address type='pci' domain='0x0000' bus='0x04' slot='0x00' function='0x0'/>
+     </video>
+     <memballoon model='none'/>
+diff --git a/tests/qemuxmlconfdata/riscv64-virt-default-models.riscv64-latest.xml b/tests/qemuxmlconfdata/riscv64-virt-default-models.riscv64-latest.xml
+index 620da73422..2e0d5f6634 100644
+--- a/tests/qemuxmlconfdata/riscv64-virt-default-models.riscv64-latest.xml
++++ b/tests/qemuxmlconfdata/riscv64-virt-default-models.riscv64-latest.xml
+@@ -67,7 +67,7 @@
+     </tpm>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'/>
++      <model type='virtio' heads='1' primary='yes' device='virtio-vga'/>
+       <address type='pci' domain='0x0000' bus='0x04' slot='0x00' function='0x0'/>
+     </video>
+     <memballoon model='none'/>
+diff --git a/tests/qemuxmlconfdata/riscv64-virt-graphics.riscv64-latest.xml b/tests/qemuxmlconfdata/riscv64-virt-graphics.riscv64-latest.xml
+index 9f35b5ed18..0857a00710 100644
+--- a/tests/qemuxmlconfdata/riscv64-virt-graphics.riscv64-latest.xml
++++ b/tests/qemuxmlconfdata/riscv64-virt-graphics.riscv64-latest.xml
+@@ -99,7 +99,7 @@
+     </graphics>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'/>
++      <model type='virtio' heads='1' primary='yes' device='virtio-vga'/>
+       <address type='pci' domain='0x0000' bus='0x07' slot='0x00' function='0x0'/>
+     </video>
+     <memballoon model='virtio'>
+diff --git a/tests/qemuxmlconfdata/s390x-ccw-default-models.s390x-latest.abi-update.xml b/tests/qemuxmlconfdata/s390x-ccw-default-models.s390x-latest.abi-update.xml
+index 9e0af389a9..cd3a00d01a 100644
+--- a/tests/qemuxmlconfdata/s390x-ccw-default-models.s390x-latest.abi-update.xml
++++ b/tests/qemuxmlconfdata/s390x-ccw-default-models.s390x-latest.abi-update.xml
+@@ -37,7 +37,7 @@
+     </console>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'/>
++      <model type='virtio' heads='1' primary='yes' device='virtio-gpu'/>
+       <address type='ccw' cssid='0xfe' ssid='0x0' devno='0x0001'/>
+     </video>
+     <memballoon model='none'/>
+diff --git a/tests/qemuxmlconfdata/s390x-ccw-default-models.s390x-latest.xml b/tests/qemuxmlconfdata/s390x-ccw-default-models.s390x-latest.xml
+index 9e0af389a9..cd3a00d01a 100644
+--- a/tests/qemuxmlconfdata/s390x-ccw-default-models.s390x-latest.xml
++++ b/tests/qemuxmlconfdata/s390x-ccw-default-models.s390x-latest.xml
+@@ -37,7 +37,7 @@
+     </console>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'/>
++      <model type='virtio' heads='1' primary='yes' device='virtio-gpu'/>
+       <address type='ccw' cssid='0xfe' ssid='0x0' devno='0x0001'/>
+     </video>
+     <memballoon model='none'/>
+diff --git a/tests/qemuxmlconfdata/s390x-ccw-graphics.s390x-latest.xml b/tests/qemuxmlconfdata/s390x-ccw-graphics.s390x-latest.xml
+index c4c4c4cfdb..3865e00da7 100644
+--- a/tests/qemuxmlconfdata/s390x-ccw-graphics.s390x-latest.xml
++++ b/tests/qemuxmlconfdata/s390x-ccw-graphics.s390x-latest.xml
+@@ -55,7 +55,7 @@
+     </graphics>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'/>
++      <model type='virtio' heads='1' primary='yes' device='virtio-gpu'/>
+       <address type='ccw' cssid='0xfe' ssid='0x0' devno='0x0002'/>
+     </video>
+     <memballoon model='virtio'>
+diff --git a/tests/qemuxmlconfdata/vhost-user-gpu-secondary.x86_64-latest.xml b/tests/qemuxmlconfdata/vhost-user-gpu-secondary.x86_64-latest.xml
+index 1362326590..9acf8eff2e 100644
+--- a/tests/qemuxmlconfdata/vhost-user-gpu-secondary.x86_64-latest.xml
++++ b/tests/qemuxmlconfdata/vhost-user-gpu-secondary.x86_64-latest.xml
+@@ -42,12 +42,12 @@
+     <audio id='1' type='none'/>
+     <video>
+       <driver name='vhostuser'/>
+-      <model type='virtio' heads='1' primary='yes'/>
++      <model type='virtio' heads='1' primary='yes' device='vhost-user-vga'/>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+     </video>
+     <video>
+       <driver name='vhostuser'/>
+-      <model type='virtio' heads='1'/>
++      <model type='virtio' heads='1' device='vhost-user-gpu'/>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
+     </video>
+     <memballoon model='virtio'>
+diff --git a/tests/qemuxmlconfdata/vhost-user-vga.x86_64-latest.xml b/tests/qemuxmlconfdata/vhost-user-vga.x86_64-latest.xml
+index 9a8bb9f92a..51bf78f8f4 100644
+--- a/tests/qemuxmlconfdata/vhost-user-vga.x86_64-latest.xml
++++ b/tests/qemuxmlconfdata/vhost-user-vga.x86_64-latest.xml
+@@ -42,7 +42,7 @@
+     <audio id='1' type='none'/>
+     <video>
+       <driver name='vhostuser'/>
+-      <model type='virtio' heads='1' primary='yes'/>
++      <model type='virtio' heads='1' primary='yes' device='vhost-user-vga'/>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+     </video>
+     <memballoon model='virtio'>
+diff --git a/tests/qemuxmlconfdata/video-virtio-blob-off.x86_64-latest.xml b/tests/qemuxmlconfdata/video-virtio-blob-off.x86_64-latest.xml
+index d8de97a642..4a93f53cca 100644
+--- a/tests/qemuxmlconfdata/video-virtio-blob-off.x86_64-latest.xml
++++ b/tests/qemuxmlconfdata/video-virtio-blob-off.x86_64-latest.xml
+@@ -34,11 +34,11 @@
+     <input type='keyboard' bus='ps2'/>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes' blob='off'/>
++      <model type='virtio' heads='1' primary='yes' blob='off' device='virtio-vga'/>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+     </video>
+     <video>
+-      <model type='virtio' heads='1' blob='off'/>
++      <model type='virtio' heads='1' blob='off' device='virtio-gpu'/>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
+     </video>
+     <memballoon model='virtio'>
+diff --git a/tests/qemuxmlconfdata/video-virtio-blob-on.x86_64-latest.xml b/tests/qemuxmlconfdata/video-virtio-blob-on.x86_64-latest.xml
+index 40f40b4132..916a6bd37f 100644
+--- a/tests/qemuxmlconfdata/video-virtio-blob-on.x86_64-latest.xml
++++ b/tests/qemuxmlconfdata/video-virtio-blob-on.x86_64-latest.xml
+@@ -37,11 +37,11 @@
+     <input type='keyboard' bus='ps2'/>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes' blob='on'/>
++      <model type='virtio' heads='1' primary='yes' blob='on' device='virtio-vga'/>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+     </video>
+     <video>
+-      <model type='virtio' heads='1' blob='on'/>
++      <model type='virtio' heads='1' blob='on' device='virtio-gpu'/>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
+     </video>
+     <memballoon model='virtio'>
+diff --git a/tests/qemuxmlconfdata/video-virtio-edid-none.x86_64-latest.xml b/tests/qemuxmlconfdata/video-virtio-edid-none.x86_64-latest.xml
+index 175828f44a..4fd2d71ad2 100644
+--- a/tests/qemuxmlconfdata/video-virtio-edid-none.x86_64-latest.xml
++++ b/tests/qemuxmlconfdata/video-virtio-edid-none.x86_64-latest.xml
+@@ -31,7 +31,7 @@
+     <input type='keyboard' bus='ps2'/>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'/>
++      <model type='virtio' heads='1' primary='yes' device='virtio-vga'/>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+     </video>
+     <memballoon model='virtio'>
+diff --git a/tests/qemuxmlconfdata/video-virtio-edid-off.x86_64-latest.xml b/tests/qemuxmlconfdata/video-virtio-edid-off.x86_64-latest.xml
+index 35c01128b7..1e90b74ea2 100644
+--- a/tests/qemuxmlconfdata/video-virtio-edid-off.x86_64-latest.xml
++++ b/tests/qemuxmlconfdata/video-virtio-edid-off.x86_64-latest.xml
+@@ -31,7 +31,7 @@
+     <input type='keyboard' bus='ps2'/>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes' edid='off'/>
++      <model type='virtio' heads='1' primary='yes' edid='off' device='virtio-vga'/>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+     </video>
+     <memballoon model='virtio'>
+diff --git a/tests/qemuxmlconfdata/video-virtio-edid-on.x86_64-latest.xml b/tests/qemuxmlconfdata/video-virtio-edid-on.x86_64-latest.xml
+index b6feb171c2..9981cf0584 100644
+--- a/tests/qemuxmlconfdata/video-virtio-edid-on.x86_64-latest.xml
++++ b/tests/qemuxmlconfdata/video-virtio-edid-on.x86_64-latest.xml
+@@ -31,7 +31,7 @@
+     <input type='keyboard' bus='ps2'/>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes' edid='on'/>
++      <model type='virtio' heads='1' primary='yes' edid='on' device='virtio-vga'/>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+     </video>
+     <memballoon model='virtio'>
+diff --git a/tests/qemuxmlconfdata/video-virtio-gpu-ccw-auto.s390x-latest.xml b/tests/qemuxmlconfdata/video-virtio-gpu-ccw-auto.s390x-latest.xml
+index 87ee9eee54..5bf5369ee2 100644
+--- a/tests/qemuxmlconfdata/video-virtio-gpu-ccw-auto.s390x-latest.xml
++++ b/tests/qemuxmlconfdata/video-virtio-gpu-ccw-auto.s390x-latest.xml
+@@ -29,7 +29,7 @@
+     </graphics>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'/>
++      <model type='virtio' heads='1' primary='yes' device='virtio-gpu'/>
+       <address type='ccw' cssid='0xfe' ssid='0x0' devno='0x0001'/>
+     </video>
+     <memballoon model='virtio'>
+diff --git a/tests/qemuxmlconfdata/video-virtio-gpu-ccw.s390x-latest.xml b/tests/qemuxmlconfdata/video-virtio-gpu-ccw.s390x-latest.xml
+index 9b6bf6c980..cb1dbf10af 100644
+--- a/tests/qemuxmlconfdata/video-virtio-gpu-ccw.s390x-latest.xml
++++ b/tests/qemuxmlconfdata/video-virtio-gpu-ccw.s390x-latest.xml
+@@ -29,11 +29,11 @@
+     </graphics>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'/>
++      <model type='virtio' heads='1' primary='yes' device='virtio-gpu'/>
+       <address type='ccw' cssid='0xfe' ssid='0x0' devno='0x0002'/>
+     </video>
+     <video>
+-      <model type='virtio' heads='1'/>
++      <model type='virtio' heads='1' device='virtio-gpu'/>
+       <address type='ccw' cssid='0xfe' ssid='0x0' devno='0x0003'/>
+     </video>
+     <memballoon model='virtio'>
+diff --git a/tests/qemuxmlconfdata/video-virtio-gpu-device.x86_64-latest.xml b/tests/qemuxmlconfdata/video-virtio-gpu-device.x86_64-latest.xml
+index 0c31cfb927..601932351b 100644
+--- a/tests/qemuxmlconfdata/video-virtio-gpu-device.x86_64-latest.xml
++++ b/tests/qemuxmlconfdata/video-virtio-gpu-device.x86_64-latest.xml
+@@ -34,7 +34,7 @@
+     <input type='keyboard' bus='ps2'/>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'/>
++      <model type='virtio' heads='1' primary='yes' device='virtio-vga'/>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+     </video>
+     <memballoon model='virtio'>
+diff --git a/tests/qemuxmlconfdata/video-virtio-gpu-sdl-gl.x86_64-latest.xml b/tests/qemuxmlconfdata/video-virtio-gpu-sdl-gl.x86_64-latest.xml
+index 401fdaf697..12687e63d6 100644
+--- a/tests/qemuxmlconfdata/video-virtio-gpu-sdl-gl.x86_64-latest.xml
++++ b/tests/qemuxmlconfdata/video-virtio-gpu-sdl-gl.x86_64-latest.xml
+@@ -36,7 +36,7 @@
+       <gl enable='yes'/>
+     </graphics>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'>
++      <model type='virtio' heads='1' primary='yes' device='virtio-vga-gl'>
+         <acceleration accel3d='yes'/>
+       </model>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+diff --git a/tests/qemuxmlconfdata/video-virtio-gpu-secondary.x86_64-latest.xml b/tests/qemuxmlconfdata/video-virtio-gpu-secondary.x86_64-latest.xml
+index 7eae993cc0..776217c498 100644
+--- a/tests/qemuxmlconfdata/video-virtio-gpu-secondary.x86_64-latest.xml
++++ b/tests/qemuxmlconfdata/video-virtio-gpu-secondary.x86_64-latest.xml
+@@ -25,11 +25,11 @@
+     <input type='keyboard' bus='ps2'/>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'/>
++      <model type='virtio' heads='1' primary='yes' device='virtio-vga'/>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+     </video>
+     <video>
+-      <model type='virtio' heads='1'/>
++      <model type='virtio' heads='1' device='virtio-gpu'/>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
+     </video>
+     <memballoon model='virtio'>
+diff --git a/tests/qemuxmlconfdata/video-virtio-gpu-spice-gl.x86_64-latest.xml b/tests/qemuxmlconfdata/video-virtio-gpu-spice-gl.x86_64-latest.xml
+index 89da83de01..cc0426e2db 100644
+--- a/tests/qemuxmlconfdata/video-virtio-gpu-spice-gl.x86_64-latest.xml
++++ b/tests/qemuxmlconfdata/video-virtio-gpu-spice-gl.x86_64-latest.xml
+@@ -38,7 +38,7 @@
+     </graphics>
+     <audio id='1' type='spice'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'>
++      <model type='virtio' heads='1' primary='yes' device='virtio-vga-gl'>
+         <acceleration accel3d='yes'/>
+       </model>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+diff --git a/tests/qemuxmlconfdata/video-virtio-gpu-virgl.x86_64-latest.xml b/tests/qemuxmlconfdata/video-virtio-gpu-virgl.x86_64-latest.xml
+index 48b1d833ff..fcbff0885e 100644
+--- a/tests/qemuxmlconfdata/video-virtio-gpu-virgl.x86_64-latest.xml
++++ b/tests/qemuxmlconfdata/video-virtio-gpu-virgl.x86_64-latest.xml
+@@ -34,7 +34,7 @@
+     <input type='keyboard' bus='ps2'/>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'>
++      <model type='virtio' heads='1' primary='yes' device='virtio-vga-gl'>
+         <acceleration accel3d='yes'/>
+       </model>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+diff --git a/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.xml b/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.xml
+index 991141c643..587a1c1d0e 100644
+--- a/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.xml
++++ b/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.xml
+@@ -28,7 +28,7 @@
+     <input type='keyboard' bus='ps2'/>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'>
++      <model type='virtio' heads='1' primary='yes' device='virtio-vga-gl'>
+         <acceleration accel3d='yes'/>
+       </model>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+diff --git a/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled.xml b/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled.xml
+index 991141c643..2b53a42bc6 100644
+--- a/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled.xml
++++ b/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled.xml
+@@ -28,13 +28,13 @@
+     <input type='keyboard' bus='ps2'/>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'>
++      <model type='virtio' heads='1' primary='yes' device='virtio-vga-gl'>
+         <acceleration accel3d='yes'/>
+       </model>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+     </video>
+     <video>
+-      <model type='virtio' heads='1'>
++      <model type='virtio' heads='1' device='virtio-gpu'>
+         <acceleration accel3d='yes'/>
+       </model>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
+diff --git a/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_VGA_GL-disabled-ABI_UPDATE.xml b/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_VGA_GL-disabled-ABI_UPDATE.xml
+index 991141c643..19388b100c 100644
+--- a/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_VGA_GL-disabled-ABI_UPDATE.xml
++++ b/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_VGA_GL-disabled-ABI_UPDATE.xml
+@@ -28,13 +28,13 @@
+     <input type='keyboard' bus='ps2'/>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'>
++      <model type='virtio' heads='1' primary='yes' device='virtio-gpu-gl'>
+         <acceleration accel3d='yes'/>
+       </model>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+     </video>
+     <video>
+-      <model type='virtio' heads='1'>
++      <model type='virtio' heads='1' device='virtio-gpu-gl'>
+         <acceleration accel3d='yes'/>
+       </model>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
+diff --git a/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_VGA_GL-disabled.xml b/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_VGA_GL-disabled.xml
+index 991141c643..b84241fdac 100644
+--- a/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_VGA_GL-disabled.xml
++++ b/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_VGA_GL-disabled.xml
+@@ -28,13 +28,13 @@
+     <input type='keyboard' bus='ps2'/>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'>
++      <model type='virtio' heads='1' primary='yes' device='virtio-vga'>
+         <acceleration accel3d='yes'/>
+       </model>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+     </video>
+     <video>
+-      <model type='virtio' heads='1'>
++      <model type='virtio' heads='1' device='virtio-gpu-gl'>
+         <acceleration accel3d='yes'/>
+       </model>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
+diff --git a/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.xml b/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.xml
+index 991141c643..023db901dd 100644
+--- a/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.xml
++++ b/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.xml
+@@ -28,13 +28,13 @@
+     <input type='keyboard' bus='ps2'/>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'>
++      <model type='virtio' heads='1' primary='yes' device='virtio-vga-gl'>
+         <acceleration accel3d='yes'/>
+       </model>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+     </video>
+     <video>
+-      <model type='virtio' heads='1'>
++      <model type='virtio' heads='1' device='virtio-gpu-gl'>
+         <acceleration accel3d='yes'/>
+       </model>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
+diff --git a/tests/qemuxmlconfdata/video-virtio-vga.x86_64-latest.QEMU_CAPS_DEVICE_VIRTIO_VGA-disabled.xml b/tests/qemuxmlconfdata/video-virtio-vga.x86_64-latest.QEMU_CAPS_DEVICE_VIRTIO_VGA-disabled.xml
+index 0c31cfb927..c04687983d 100644
+--- a/tests/qemuxmlconfdata/video-virtio-vga.x86_64-latest.QEMU_CAPS_DEVICE_VIRTIO_VGA-disabled.xml
++++ b/tests/qemuxmlconfdata/video-virtio-vga.x86_64-latest.QEMU_CAPS_DEVICE_VIRTIO_VGA-disabled.xml
+@@ -34,7 +34,7 @@
+     <input type='keyboard' bus='ps2'/>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'/>
++      <model type='virtio' heads='1' primary='yes' device='virtio-gpu'/>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+     </video>
+     <memballoon model='virtio'>
+diff --git a/tests/qemuxmlconfdata/video-virtio-vga.x86_64-latest.xml b/tests/qemuxmlconfdata/video-virtio-vga.x86_64-latest.xml
+index 0c31cfb927..601932351b 100644
+--- a/tests/qemuxmlconfdata/video-virtio-vga.x86_64-latest.xml
++++ b/tests/qemuxmlconfdata/video-virtio-vga.x86_64-latest.xml
+@@ -34,7 +34,7 @@
+     <input type='keyboard' bus='ps2'/>
+     <audio id='1' type='none'/>
+     <video>
+-      <model type='virtio' heads='1' primary='yes'/>
++      <model type='virtio' heads='1' primary='yes' device='virtio-vga'/>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+     </video>
+     <memballoon model='virtio'>
+diff --git a/tests/qemuxmlconfdata/virtio-options-video-ats.x86_64-latest.xml b/tests/qemuxmlconfdata/virtio-options-video-ats.x86_64-latest.xml
+index 228ace3fa5..49e488c6b4 100644
+--- a/tests/qemuxmlconfdata/virtio-options-video-ats.x86_64-latest.xml
++++ b/tests/qemuxmlconfdata/virtio-options-video-ats.x86_64-latest.xml
+@@ -26,14 +26,14 @@
+     <audio id='1' type='none'/>
+     <video>
+       <driver ats='on' name='vhostuser'/>
+-      <model type='virtio' heads='1' primary='yes'>
++      <model type='virtio' heads='1' primary='yes' device='vhost-user-vga'>
+         <acceleration accel3d='yes' rendernode='/dev/dri/test'/>
+       </model>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+     </video>
+     <video>
+       <driver ats='off' name='vhostuser'/>
+-      <model type='virtio' heads='1'>
++      <model type='virtio' heads='1' device='vhost-user-gpu'>
+         <acceleration accel3d='yes' rendernode='/dev/dri/test'/>
+       </model>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
+diff --git a/tests/qemuxmlconfdata/virtio-options-video-iommu.x86_64-latest.xml b/tests/qemuxmlconfdata/virtio-options-video-iommu.x86_64-latest.xml
+index 971cab51e7..a3fe36980f 100644
+--- a/tests/qemuxmlconfdata/virtio-options-video-iommu.x86_64-latest.xml
++++ b/tests/qemuxmlconfdata/virtio-options-video-iommu.x86_64-latest.xml
+@@ -26,14 +26,14 @@
+     <audio id='1' type='none'/>
+     <video>
+       <driver iommu='on' name='vhostuser'/>
+-      <model type='virtio' heads='1' primary='yes'>
++      <model type='virtio' heads='1' primary='yes' device='vhost-user-vga'>
+         <acceleration accel3d='yes' rendernode='/dev/dri/test'/>
+       </model>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+     </video>
+     <video>
+       <driver iommu='off' name='vhostuser'/>
+-      <model type='virtio' heads='1'>
++      <model type='virtio' heads='1' device='vhost-user-gpu'>
+         <acceleration accel3d='yes' rendernode='/dev/dri/test'/>
+       </model>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
+diff --git a/tests/qemuxmlconfdata/virtio-options-video-packed.x86_64-latest.xml b/tests/qemuxmlconfdata/virtio-options-video-packed.x86_64-latest.xml
+index 26856e5e45..efdd865561 100644
+--- a/tests/qemuxmlconfdata/virtio-options-video-packed.x86_64-latest.xml
++++ b/tests/qemuxmlconfdata/virtio-options-video-packed.x86_64-latest.xml
+@@ -26,14 +26,14 @@
+     <audio id='1' type='none'/>
+     <video>
+       <driver packed='on' name='vhostuser'/>
+-      <model type='virtio' heads='1' primary='yes'>
++      <model type='virtio' heads='1' primary='yes' device='vhost-user-vga'>
+         <acceleration accel3d='yes' rendernode='/dev/dri/test'/>
+       </model>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+     </video>
+     <video>
+       <driver packed='off' name='vhostuser'/>
+-      <model type='virtio' heads='1'>
++      <model type='virtio' heads='1' device='vhost-user-gpu'>
+         <acceleration accel3d='yes' rendernode='/dev/dri/test'/>
+       </model>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
+diff --git a/tests/qemuxmlconfdata/virtio-options.xml b/tests/qemuxmlconfdata/virtio-options.xml
+index 05eaae35a9..89a424febf 100644
+--- a/tests/qemuxmlconfdata/virtio-options.xml
++++ b/tests/qemuxmlconfdata/virtio-options.xml
+@@ -82,7 +82,7 @@
+     <audio id='1' type='none'/>
+     <video>
+       <driver iommu='on' ats='on' packed='on' page_per_vq='on' name='vhostuser'/>
+-      <model type='virtio' heads='1' primary='yes'>
++      <model type='virtio' heads='1' primary='yes' device='vhost-user-vga'>
+         <acceleration accel3d='yes' rendernode='/dev/dri/test'/>
+       </model>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+-- 
+2.55.0

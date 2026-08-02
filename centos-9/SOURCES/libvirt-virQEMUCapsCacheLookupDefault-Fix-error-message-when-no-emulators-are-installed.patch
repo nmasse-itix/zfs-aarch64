@@ -1,0 +1,46 @@
+From 1e63c510b4f687c3b52bf9b606a54793155aea21 Mon Sep 17 00:00:00 2001
+Message-ID: <1e63c510b4f687c3b52bf9b606a54793155aea21.1784297532.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Tue, 26 May 2026 11:39:28 +0200
+Subject: [PATCH] virQEMUCapsCacheLookupDefault: Fix error message when no
+ emulators are installed
+
+When querying capabilities for the default emulator with no other
+arguments (e.g. 'virsh domcapabilities) fix error whithout emulator
+installed an error is reported but the error would mention '(null)'
+architecture:
+
+  # virsh domcapabilities
+  error: failed to get emulator capabilities
+  error: unsupported configuration: unable to find any emulator to serve '(null)' architecture
+
+This happens as the error formatting takes 'archStr' which is NULL for
+the default architecture instead of using 'arch' which is populated by
+the host's architecture and converting it back.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 9e43cf3e5866eb2186e903a000c724461466516a)
+
+https://redhat.atlassian.net/browse/RHEL-186019
+
+https://redhat.atlassian.net/browse/RHEL-177646 (rhel-9.9)
+---
+ src/qemu/qemu_capabilities.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/qemu/qemu_capabilities.c b/src/qemu/qemu_capabilities.c
+index 6dd7284505..fc5a428620 100644
+--- a/src/qemu/qemu_capabilities.c
++++ b/src/qemu/qemu_capabilities.c
+@@ -6372,7 +6372,7 @@ virQEMUCapsCacheLookupDefault(virFileCache *cache,
+     if (!binary) {
+         virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
+                        _("unable to find any emulator to serve '%1$s' architecture"),
+-                       archStr);
++                       virArchToString(arch));
+         return NULL;
+     }
+ 
+-- 
+2.55.0

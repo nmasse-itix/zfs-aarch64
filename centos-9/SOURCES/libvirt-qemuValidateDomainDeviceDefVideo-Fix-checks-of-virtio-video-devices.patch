@@ -1,0 +1,272 @@
+From d02940fb7bdfbabfc8f34349ff01b64960965d66 Mon Sep 17 00:00:00 2001
+Message-ID: <d02940fb7bdfbabfc8f34349ff01b64960965d66.1784297532.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Wed, 10 Jun 2026 14:45:24 +0200
+Subject: [PATCH] qemuValidateDomainDeviceDefVideo: Fix checks of virtio video
+ devices
+
+The currently existing checks are broken:
+ - only QEMU_CAPS_DEVICE_VHOST_USER_GPU is checked for vhostuser
+   backends (vhost-user-vga is actually separately packaged)
+ - the check for the 3d accelerated (-gl) versions checks only if one
+   of them exists (the commandline formatter picks a non-gl afterwards)
+ - 'virtio-vga'/'virtio-gpu' is not checked at all
+
+The code also doesn't yet check if, when the user passes the new
+'device' property manually the config actually makes sense.
+
+To fix all of the above introduce a table of supported frontend devices
+as well as properties that need to be checked for them.
+
+This requires fixing a recently-introduced test case which shows a
+nonsensical situation.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 177ff813479872d4d7e3c270acf1e045f25b1e21)
+
+https://redhat.atlassian.net/browse/RHEL-186019
+
+ Conflicts:
+	tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.args
+	Context; conflict with previous conflict resolution
+
+https://redhat.atlassian.net/browse/RHEL-177646 (rhel-9.9)
+---
+ src/qemu/qemu_validate.c                      | 88 +++++++++++++------
+ ...VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.args | 35 --------
+ ..._VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.err |  1 +
+ ..._VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.xml | 46 ----------
+ tests/qemuxmlconftest.c                       |  1 +
+ 5 files changed, 65 insertions(+), 106 deletions(-)
+ delete mode 100644 tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.args
+ create mode 100644 tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.err
+ delete mode 100644 tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.xml
+
+diff --git a/src/qemu/qemu_validate.c b/src/qemu/qemu_validate.c
+index 8f3e6dd134..3e84ef7139 100644
+--- a/src/qemu/qemu_validate.c
++++ b/src/qemu/qemu_validate.c
+@@ -2784,6 +2784,26 @@ qemuValidateDomainDeviceDefHostdev(const virDomainHostdevDef *hostdev,
+ }
+ 
+ 
++struct qemuValidateDeviceVideoVirtioData {
++    virQEMUCapsFlags cap; /* capability for the device */
++    bool primary; /* this device can be only the primary device */
++    bool vhostuser; /* uses the vhostuser protocol */
++    bool gl; /* supports 3d accel */
++};
++
++
++struct qemuValidateDeviceVideoVirtioData qemuValidateDeviceVideoVirtioTable[] = {
++    [VIR_DOMAIN_VIDEO_VIRTIO_DEVICE_DEFAULT] = { .cap = QEMU_CAPS_LAST },
++    [VIR_DOMAIN_VIDEO_VIRTIO_DEVICE_VGA] = { .cap = QEMU_CAPS_DEVICE_VIRTIO_VGA, .primary = true },
++    [VIR_DOMAIN_VIDEO_VIRTIO_DEVICE_GPU] = { .cap = QEMU_CAPS_DEVICE_VIRTIO_GPU },
++    [VIR_DOMAIN_VIDEO_VIRTIO_DEVICE_VGA_GL] = { .cap = QEMU_CAPS_VIRTIO_VGA_GL, .gl = true, .primary = true },
++    [VIR_DOMAIN_VIDEO_VIRTIO_DEVICE_GPU_GL] = { .cap = QEMU_CAPS_VIRTIO_GPU_GL_PCI, .gl = true },
++    [VIR_DOMAIN_VIDEO_VIRTIO_DEVICE_VHOST_USER_VGA] = { .cap = QEMU_CAPS_DEVICE_VHOST_USER_VGA, .vhostuser = true, .primary = true },
++    [VIR_DOMAIN_VIDEO_VIRTIO_DEVICE_VHOST_USER_GPU] = { .cap = QEMU_CAPS_DEVICE_VHOST_USER_GPU, .vhostuser = true },
++};
++G_STATIC_ASSERT(G_N_ELEMENTS(qemuValidateDeviceVideoVirtioTable) == VIR_DOMAIN_VIDEO_VIRTIO_DEVICE_LAST);
++
++
+ static int
+ qemuValidateDomainDeviceDefVideo(const virDomainVideoDef *video,
+                                  const virDomainDef *def,
+@@ -2804,6 +2824,49 @@ qemuValidateDomainDeviceDefVideo(const virDomainVideoDef *video,
+         return -1;
+     }
+ 
++    if (video->type == VIR_DOMAIN_VIDEO_TYPE_VIRTIO) {
++        struct qemuValidateDeviceVideoVirtioData *data = &qemuValidateDeviceVideoVirtioTable[video->virtiodevice];
++
++        if (data->cap == QEMU_CAPS_LAST) {
++            virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
++                           _("this QEMU binary lacks any suitable 'virtio' video device frontend"));
++            return -1;
++        }
++
++        if (!virQEMUCapsGet(qemuCaps, data->cap)) {
++            virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
++                           _("this QEMU doesn't support the '%1$s' virtio video device frontend"),
++                           virDomainVideoVirtioDeviceTypeToString(video->virtiodevice));
++            return -1;
++        }
++
++        if (data->primary && !video->primary) {
++            virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
++                           _("the '%1$s' virtio video device frontend can be only used as primary video device"),
++                           virDomainVideoVirtioDeviceTypeToString(video->virtiodevice));
++            return -1;
++        }
++
++        /* this check deliberately allows downgrade to the non-gl frontend as
++         * that was possible due to a bug in capability checking and the
++         * commandline formatter. More details are explained in
++         * 'qemuDomainDeviceVideoDefPostParse' which selects the frontend */
++        if (data->gl &&
++            !(video->accel && video->accel->accel3d == VIR_TRISTATE_BOOL_YES)) {
++            virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
++                           _("the '%1$s' virtio video device frontend can be only with enabled 3d acceleration"),
++                           virDomainVideoVirtioDeviceTypeToString(video->virtiodevice));
++            return -1;
++        }
++
++        if (data->vhostuser != (video->backend == VIR_DOMAIN_VIDEO_BACKEND_TYPE_VHOSTUSER)) {
++            virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
++                           _("the '%1$s' virtio video device doesn't match the selected vhostuser backend"),
++                           virDomainVideoVirtioDeviceTypeToString(video->virtiodevice));
++            return -1;
++        }
++    }
++
+     if (video->type != VIR_DOMAIN_VIDEO_TYPE_QXL &&
+         video->type != VIR_DOMAIN_VIDEO_TYPE_VIRTIO) {
+         if (!video->primary) {
+@@ -2875,31 +2938,6 @@ qemuValidateDomainDeviceDefVideo(const virDomainVideoDef *video,
+         }
+     }
+ 
+-    if (video->backend == VIR_DOMAIN_VIDEO_BACKEND_TYPE_VHOSTUSER) {
+-        if (video->type == VIR_DOMAIN_VIDEO_TYPE_VIRTIO &&
+-            !virQEMUCapsGet(qemuCaps, QEMU_CAPS_DEVICE_VHOST_USER_GPU)) {
+-            virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
+-                           _("this QEMU does not support 'vhost-user' video device"));
+-            return -1;
+-        }
+-    } else if (video->accel) {
+-        if (video->accel->accel3d == VIR_TRISTATE_BOOL_YES) {
+-            if (video->type != VIR_DOMAIN_VIDEO_TYPE_VIRTIO) {
+-                virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
+-                               _("3d acceleration is supported only with 'virtio' video device"));
+-                return -1;
+-            }
+-
+-            if (!(virQEMUCapsGet(qemuCaps, QEMU_CAPS_VIRTIO_GPU_VIRGL) ||
+-                  virQEMUCapsGet(qemuCaps, QEMU_CAPS_VIRTIO_GPU_GL_PCI) ||
+-                  virQEMUCapsGet(qemuCaps, QEMU_CAPS_VIRTIO_VGA_GL))) {
+-                virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
+-                               _("3d acceleration is not supported by this QEMU binary"));
+-                return -1;
+-            }
+-        }
+-    }
+-
+     if (video->type == VIR_DOMAIN_VIDEO_TYPE_VIRTIO) {
+         if (video->blob != VIR_TRISTATE_SWITCH_ABSENT) {
+             if (!virQEMUCapsGet(qemuCaps, QEMU_CAPS_VIRTIO_GPU_BLOB)) {
+diff --git a/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.args b/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.args
+deleted file mode 100644
+index 297b919b5b..0000000000
+--- a/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.args
++++ /dev/null
+@@ -1,35 +0,0 @@
+-LC_ALL=C \
+-PATH=/bin \
+-HOME=/var/lib/libvirt/qemu/domain--1-QEMUGuest1 \
+-USER=test \
+-LOGNAME=test \
+-XDG_DATA_HOME=/var/lib/libvirt/qemu/domain--1-QEMUGuest1/.local/share \
+-XDG_CACHE_HOME=/var/lib/libvirt/qemu/domain--1-QEMUGuest1/.cache \
+-XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-QEMUGuest1/.config \
+-/usr/bin/qemu-system-x86_64 \
+--name guest=QEMUGuest1,debug-threads=on \
+--S \
+--object '{"qom-type":"secret","id":"masterKey0","format":"raw","file":"/var/lib/libvirt/qemu/domain--1-QEMUGuest1/master-key.aes"}' \
+--machine pc,usb=off,dump-guest-core=off,memory-backend=pc.ram,acpi=off \
+--accel tcg \
+--cpu qemu64 \
+--m size=1048576k \
+--object '{"qom-type":"memory-backend-ram","id":"pc.ram","size":1073741824}' \
+--overcommit mem-lock=off \
+--smp 1,sockets=1,cores=1,threads=1 \
+--uuid c7a5fdbd-edaf-9455-926a-d65c16db1809 \
+--display none \
+--no-user-config \
+--nodefaults \
+--chardev socket,id=charmonitor,fd=1729,server=on,wait=off \
+--mon chardev=charmonitor,id=monitor,mode=control \
+--rtc base=utc \
+--no-shutdown \
+--boot strict=on \
+--device '{"driver":"piix3-usb-uhci","id":"usb","bus":"pci.0","addr":"0x1.0x2"}' \
+--audiodev '{"id":"audio1","driver":"none"}' \
+--device '{"driver":"virtio-vga-gl","id":"video0","max_outputs":1,"bus":"pci.0","addr":"0x2"}' \
+--device '{"driver":"virtio-gpu-pci","id":"video1","max_outputs":1,"bus":"pci.0","addr":"0x4"}' \
+--device '{"driver":"virtio-balloon-pci","id":"balloon0","bus":"pci.0","addr":"0x3"}' \
+--sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
+--msg timestamp=on
+diff --git a/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.err b/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.err
+new file mode 100644
+index 0000000000..b94bf12d69
+--- /dev/null
++++ b/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.err
+@@ -0,0 +1 @@
++unsupported configuration: this QEMU binary lacks any suitable 'virtio' video device frontend
+diff --git a/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.xml b/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.xml
+deleted file mode 100644
+index 587a1c1d0e..0000000000
+--- a/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.xml
++++ /dev/null
+@@ -1,46 +0,0 @@
+-<domain type='qemu'>
+-  <name>QEMUGuest1</name>
+-  <uuid>c7a5fdbd-edaf-9455-926a-d65c16db1809</uuid>
+-  <memory unit='KiB'>1048576</memory>
+-  <currentMemory unit='KiB'>1048576</currentMemory>
+-  <vcpu placement='static'>1</vcpu>
+-  <os>
+-    <type arch='x86_64' machine='pc'>hvm</type>
+-    <boot dev='hd'/>
+-  </os>
+-  <cpu mode='custom' match='exact' check='none'>
+-    <model fallback='forbid'>qemu64</model>
+-  </cpu>
+-  <clock offset='utc'/>
+-  <on_poweroff>destroy</on_poweroff>
+-  <on_reboot>restart</on_reboot>
+-  <on_crash>destroy</on_crash>
+-  <devices>
+-    <emulator>/usr/bin/qemu-system-x86_64</emulator>
+-    <controller type='ide' index='0'>
+-      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x1'/>
+-    </controller>
+-    <controller type='usb' index='0' model='piix3-uhci'>
+-      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x2'/>
+-    </controller>
+-    <controller type='pci' index='0' model='pci-root'/>
+-    <input type='mouse' bus='ps2'/>
+-    <input type='keyboard' bus='ps2'/>
+-    <audio id='1' type='none'/>
+-    <video>
+-      <model type='virtio' heads='1' primary='yes' device='virtio-vga-gl'>
+-        <acceleration accel3d='yes'/>
+-      </model>
+-      <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+-    </video>
+-    <video>
+-      <model type='virtio' heads='1'>
+-        <acceleration accel3d='yes'/>
+-      </model>
+-      <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
+-    </video>
+-    <memballoon model='virtio'>
+-      <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
+-    </memballoon>
+-  </devices>
+-</domain>
+diff --git a/tests/qemuxmlconftest.c b/tests/qemuxmlconftest.c
+index 85cf9960aa..45e9a37794 100644
+--- a/tests/qemuxmlconftest.c
++++ b/tests/qemuxmlconftest.c
+@@ -2800,6 +2800,7 @@ mymain(void)
+                  ARG_CAPS_VER, "latest",
+                  ARG_QEMU_CAPS_DEL, QEMU_CAPS_VIRTIO_GPU_GL_PCI, QEMU_CAPS_LAST,
+                  ARG_PARSEFLAGS, VIR_DOMAIN_DEF_PARSE_ABI_UPDATE,
++                 ARG_FLAGS, FLAG_EXPECT_PARSE_ERROR,
+                  ARG_END);
+     DO_TEST_CAPS_LATEST("video-virtio-edid-none");
+     DO_TEST_CAPS_LATEST("video-virtio-edid-off");
+-- 
+2.55.0

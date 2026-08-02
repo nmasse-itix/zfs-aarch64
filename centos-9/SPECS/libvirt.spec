@@ -287,7 +287,7 @@
 Summary: Library providing a simple virtualization API
 Name: libvirt
 Version: 11.10.0
-Release: 14%{?dist}%{?extra_release}
+Release: 16%{?dist}%{?extra_release}
 License: GPL-2.0-or-later AND LGPL-2.1-only AND LGPL-2.1-or-later AND OFL-1.1
 URL: https://libvirt.org/
 
@@ -415,6 +415,26 @@ Patch117: libvirt-virsh-Add-supported-cpu-features-option-for-domcapabilities.pa
 Patch118: libvirt-domaincapstest-Test-SUPPORTED_CPU_FEATURES-flag.patch
 Patch119: libvirt-qemu_capabilities-Fix-domain-capabilities-on-AMD-CPUs.patch
 Patch120: libvirt-qemu-Ensure-proper-shutdown-ordering-of-virtlockd-virtlogd-daemons.patch
+Patch121: libvirt-qemu-capabilities-Apply-capability_filters-configration-option-on-all-capabilities.patch
+Patch122: libvirt-qemu-capabilities-Export-virQEMUCapsNewCopy-outside-of-qemu_capspriv.patch
+Patch123: libvirt-qemu-Allow-reuse-of-qemuProcessStartUpdateCustomCaps.patch
+Patch124: libvirt-qemu-validate-Validate-VM-config-with-qemuCaps-influenced-by-qemu-capabilities.patch
+Patch125: libvirt-qemu-postparse-Process-VM-config-with-qemuCaps-influenced-by-qemu-capabilities.patch
+Patch126: libvirt-virQEMUCapsCacheLookupDefault-Fix-error-message-when-no-emulators-are-installed.patch
+Patch127: libvirt-qemuxmlconfdata-un-symlink-video-virtio-vga-gpu-gl-output.patch
+Patch128: libvirt-qemuxmlconftest-Add-video-virtio-vga-invocation-with-QEMU_CAPS_DEVICE_VIRTIO_VGA-disabled.patch
+Patch129: libvirt-qemuxmlconftest-Add-test-cases-for-configs-asking-for-virtio-gpu-gl-or-virtio-vga-gl-without-the-capability.patch
+Patch130: libvirt-qemuxmlconftest-Add-invocation-of-video-virtio-vga-gpu-gl-with-missing-caps-and-VIR_DOMAIN_DEF_PARSE_ABI_UPDATE.patch
+Patch131: libvirt-qemustatusxml2xml-Add-test-case-capturing-virtio-video-device.patch
+Patch132: libvirt-virDomainVideoDefFormat-Use-virXMLFormatElement-instead-of-custom-formatter.patch
+Patch133: libvirt-conf-Add-fields-for-recording-actually-selected-virtio-video-device.patch
+Patch134: libvirt-qemuxmlconftest-Add-test-case-for-specifying-virtio-gpu-where-virtio-vga-would-be-picked.patch
+Patch135: libvirt-qemuDeviceVideoGetModel-Directly-return-picked-model.patch
+Patch136: libvirt-qemu-postparse-Fill-in-selected-virtio-video-frondend-device-in-the-XML.patch
+Patch137: libvirt-qemuValidateDomainDeviceDefVideo-Fix-checks-of-virtio-video-devices.patch
+Patch138: libvirt-qemuDeviceVideoGetModel-Remove-logic-for-selecting-virtio-devices.patch
+Patch139: libvirt-qemuDeviceVideoGetModel-Simplify-by-relying-on-checks-from-qemuValidateDomainDeviceDefVideo.patch
+Patch140: libvirt-qemu-Remove-qemuDomainSupportsVideoVga.patch
 
 
 Requires: libvirt-daemon = %{version}-%{release}
@@ -2806,6 +2826,31 @@ exit 0
 %endif
 
 %changelog
+* Fri Jul 24 2026 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-16
+- Live migration fails when virtio-vga becomes available, video device switches from virtio-gpu-pci to virtio-vga on target (RHEL-177646)
+
+* Fri Jul 17 2026 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-15
+- qemu: capabilities: Apply 'capability_filters' configration option on all capabilities (RHEL-177646)
+- qemu: capabilities: Export 'virQEMUCapsNewCopy' outside of 'qemu_capspriv' (RHEL-177646)
+- qemu: Allow reuse of 'qemuProcessStartUpdateCustomCaps' (RHEL-177646)
+- qemu: validate: Validate VM config with qemuCaps influenced by <qemu:capabilities> (RHEL-177646)
+- qemu: postparse: Process VM config with qemuCaps influenced by <qemu:capabilities> (RHEL-177646)
+- virQEMUCapsCacheLookupDefault: Fix error message when no emulators are installed (RHEL-177646)
+- qemuxmlconfdata: un-symlink 'video-virtio-vga-gpu-gl' output (RHEL-177646)
+- qemuxmlconftest: Add 'video-virtio-vga' invocation with QEMU_CAPS_DEVICE_VIRTIO_VGA disabled (RHEL-177646)
+- qemuxmlconftest: Add test cases for configs asking for 'virtio-gpu-gl' or 'virtio-vga-gl' without the capability (RHEL-177646)
+- qemuxmlconftest: Add invocation of 'video-virtio-vga-gpu-gl' with missing caps and VIR_DOMAIN_DEF_PARSE_ABI_UPDATE (RHEL-177646)
+- qemustatusxml2xml: Add test case capturing virtio video device (RHEL-177646)
+- virDomainVideoDefFormat: Use 'virXMLFormatElement' instead of custom formatter (RHEL-177646)
+- conf: Add fields for recording actually-selected virtio video device (RHEL-177646)
+- qemuxmlconftest: Add test case for specifying 'virtio-gpu' where 'virtio-vga' would be picked (RHEL-177646)
+- qemuDeviceVideoGetModel: Directly return picked model (RHEL-177646)
+- qemu: postparse: Fill in selected virtio video frondend device in the XML (RHEL-177646)
+- qemuValidateDomainDeviceDefVideo: Fix checks of virtio video devices (RHEL-177646)
+- qemuDeviceVideoGetModel: Remove logic for selecting 'virtio' devices (RHEL-177646)
+- qemuDeviceVideoGetModel: Simplify by relying on checks from 'qemuValidateDomainDeviceDefVideo' (RHEL-177646)
+- qemu: Remove 'qemuDomainSupportsVideoVga' (RHEL-177646)
+
 * Wed Jul  1 2026 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-14
 - distro: Update URL in plans.fmf
 - qemu: Ensure proper shutdown ordering of virtlockd/virtlogd daemons (RHEL-180876)

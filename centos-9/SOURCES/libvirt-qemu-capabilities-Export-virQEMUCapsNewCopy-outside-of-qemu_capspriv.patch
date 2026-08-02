@@ -1,0 +1,66 @@
+From 173a0b7768999f9be2eb0e16bad6a3eaf12fbb74 Mon Sep 17 00:00:00 2001
+Message-ID: <173a0b7768999f9be2eb0e16bad6a3eaf12fbb74.1784297531.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Thu, 11 Jun 2026 12:12:42 +0200
+Subject: [PATCH] qemu: capabilities: Export 'virQEMUCapsNewCopy' outside of
+ 'qemu_capspriv'
+
+Upcoming patch will add a function which will need to optionally copy
+passed capabilities for modification. Export 'virQEMUCapsNewCopy'
+outside of tests.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 1bbefb6409d43969505db7a71999943e40aa9c9d)
+
+https://redhat.atlassian.net/browse/RHEL-186019
+
+https://redhat.atlassian.net/browse/RHEL-177646 (rhel-9.9)
+---
+ src/qemu/qemu_capabilities.c | 3 ++-
+ src/qemu/qemu_capabilities.h | 2 ++
+ src/qemu/qemu_capspriv.h     | 2 --
+ 3 files changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/src/qemu/qemu_capabilities.c b/src/qemu/qemu_capabilities.c
+index 83ec1e2769..6dd7284505 100644
+--- a/src/qemu/qemu_capabilities.c
++++ b/src/qemu/qemu_capabilities.c
+@@ -2082,7 +2082,8 @@ virQEMUCapsAccelCopy(virQEMUCapsAccel *dst,
+ }
+ 
+ 
+-virQEMUCaps *virQEMUCapsNewCopy(virQEMUCaps *qemuCaps)
++virQEMUCaps *
++virQEMUCapsNewCopy(virQEMUCaps *qemuCaps)
+ {
+     g_autoptr(virQEMUCaps) ret = virQEMUCapsNewBinary(qemuCaps->binary);
+     size_t i;
+diff --git a/src/qemu/qemu_capabilities.h b/src/qemu/qemu_capabilities.h
+index 8701c76b6d..334e98aac4 100644
+--- a/src/qemu/qemu_capabilities.h
++++ b/src/qemu/qemu_capabilities.h
+@@ -876,6 +876,8 @@ virQEMUCaps *virQEMUCapsCacheLookupDefault(virFileCache *cache,
+                                              virDomainVirtType *retVirttype,
+                                              const char **retMachine);
+ 
++virQEMUCaps *virQEMUCapsNewCopy(virQEMUCaps *qemuCaps);
++
+ virCaps *virQEMUCapsInit(virFileCache *cache);
+ 
+ int virQEMUCapsGetDefaultVersion(virCaps *caps,
+diff --git a/src/qemu/qemu_capspriv.h b/src/qemu/qemu_capspriv.h
+index 9dca15d09b..3dfff2e3d8 100644
+--- a/src/qemu/qemu_capspriv.h
++++ b/src/qemu/qemu_capspriv.h
+@@ -25,8 +25,6 @@
+ 
+ #pragma once
+ 
+-virQEMUCaps *virQEMUCapsNewCopy(virQEMUCaps *qemuCaps);
+-
+ virQEMUCaps *
+ virQEMUCapsNewForBinaryInternal(virArch hostArch,
+                                 const char *binary,
+-- 
+2.55.0

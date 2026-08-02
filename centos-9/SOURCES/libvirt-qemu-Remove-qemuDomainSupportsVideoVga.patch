@@ -1,0 +1,64 @@
+From 5b39266bbc99576fec79c1dc9e24823a9aaa3602 Mon Sep 17 00:00:00 2001
+Message-ID: <5b39266bbc99576fec79c1dc9e24823a9aaa3602.1784297532.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Tue, 9 Jun 2026 22:58:54 +0200
+Subject: [PATCH] qemu: Remove 'qemuDomainSupportsVideoVga'
+
+The function is unused remove it.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit a95619316406b43457c0fb1436031042d5e25bec)
+
+https://redhat.atlassian.net/browse/RHEL-186019
+
+https://redhat.atlassian.net/browse/RHEL-177646 (rhel-9.9)
+---
+ src/qemu/qemu_domain.c | 17 -----------------
+ src/qemu/qemu_domain.h |  3 ---
+ 2 files changed, 20 deletions(-)
+
+diff --git a/src/qemu/qemu_domain.c b/src/qemu/qemu_domain.c
+index 7699d1000f..78587e2574 100644
+--- a/src/qemu/qemu_domain.c
++++ b/src/qemu/qemu_domain.c
+@@ -9267,23 +9267,6 @@ qemuDomainVcpuPersistOrder(virDomainDef *def)
+ }
+ 
+ 
+-bool
+-qemuDomainSupportsVideoVga(const virDomainVideoDef *video,
+-                           virQEMUCaps *qemuCaps)
+-{
+-    if (video->type == VIR_DOMAIN_VIDEO_TYPE_VIRTIO) {
+-        if (video->backend == VIR_DOMAIN_VIDEO_BACKEND_TYPE_VHOSTUSER) {
+-            if (!virQEMUCapsGet(qemuCaps, QEMU_CAPS_DEVICE_VHOST_USER_VGA))
+-                return false;
+-        } else if (!virQEMUCapsGet(qemuCaps, QEMU_CAPS_DEVICE_VIRTIO_VGA)) {
+-            return false;
+-        }
+-    }
+-
+-    return true;
+-}
+-
+-
+ /**
+  * qemuDomainNeedsVFIO:
+  * @def: domain definition to check
+diff --git a/src/qemu/qemu_domain.h b/src/qemu/qemu_domain.h
+index ff26885ffe..a8bf301d51 100644
+--- a/src/qemu/qemu_domain.h
++++ b/src/qemu/qemu_domain.h
+@@ -985,9 +985,6 @@ bool qemuDomainVcpuHotplugIsInOrder(virDomainDef *def)
+ void qemuDomainVcpuPersistOrder(virDomainDef *def)
+     ATTRIBUTE_NONNULL(1);
+ 
+-bool qemuDomainSupportsVideoVga(const virDomainVideoDef *video,
+-                                virQEMUCaps *qemuCaps);
+-
+ bool qemuDomainNeedsVFIO(const virDomainDef *def);
+ 
+ int qemuDomainGetHostdevPath(virDomainHostdevDef *dev,
+-- 
+2.55.0

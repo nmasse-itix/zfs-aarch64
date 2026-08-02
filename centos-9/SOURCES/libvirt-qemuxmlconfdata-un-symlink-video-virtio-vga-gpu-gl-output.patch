@@ -1,0 +1,84 @@
+From c33268a59a91cb38dd22e94bd3a735fc7d3859d9 Mon Sep 17 00:00:00 2001
+Message-ID: <c33268a59a91cb38dd22e94bd3a735fc7d3859d9.1784297532.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Wed, 10 Jun 2026 16:57:06 +0200
+Subject: [PATCH] qemuxmlconfdata: un-symlink 'video-virtio-vga-gpu-gl' output
+
+Upcoming patches will add additional testing for various virtio-*-gl
+devices, including filling of the default model. The output file needs
+to not influnece the input for this test to work properly.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit c490360c2590983707d3cf3d2bb011830b014ff7)
+
+https://redhat.atlassian.net/browse/RHEL-186019
+
+https://redhat.atlassian.net/browse/RHEL-177646 (rhel-9.9)
+---
+ .../video-virtio-vga-gpu-gl.x86_64-latest.xml | 47 ++++++++++++++++++-
+ 1 file changed, 46 insertions(+), 1 deletion(-)
+ mode change 120000 => 100644 tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.xml
+
+diff --git a/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.xml b/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.xml
+deleted file mode 120000
+index 34e32ab8ba..0000000000
+--- a/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.xml
++++ /dev/null
+@@ -1 +0,0 @@
+-video-virtio-vga-gpu-gl.xml
+\ No newline at end of file
+diff --git a/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.xml b/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.xml
+new file mode 100644
+index 0000000000..991141c643
+--- /dev/null
++++ b/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.xml
+@@ -0,0 +1,46 @@
++<domain type='qemu'>
++  <name>QEMUGuest1</name>
++  <uuid>c7a5fdbd-edaf-9455-926a-d65c16db1809</uuid>
++  <memory unit='KiB'>1048576</memory>
++  <currentMemory unit='KiB'>1048576</currentMemory>
++  <vcpu placement='static'>1</vcpu>
++  <os>
++    <type arch='x86_64' machine='pc'>hvm</type>
++    <boot dev='hd'/>
++  </os>
++  <cpu mode='custom' match='exact' check='none'>
++    <model fallback='forbid'>qemu64</model>
++  </cpu>
++  <clock offset='utc'/>
++  <on_poweroff>destroy</on_poweroff>
++  <on_reboot>restart</on_reboot>
++  <on_crash>destroy</on_crash>
++  <devices>
++    <emulator>/usr/bin/qemu-system-x86_64</emulator>
++    <controller type='ide' index='0'>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x1'/>
++    </controller>
++    <controller type='usb' index='0' model='piix3-uhci'>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x2'/>
++    </controller>
++    <controller type='pci' index='0' model='pci-root'/>
++    <input type='mouse' bus='ps2'/>
++    <input type='keyboard' bus='ps2'/>
++    <audio id='1' type='none'/>
++    <video>
++      <model type='virtio' heads='1' primary='yes'>
++        <acceleration accel3d='yes'/>
++      </model>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
++    </video>
++    <video>
++      <model type='virtio' heads='1'>
++        <acceleration accel3d='yes'/>
++      </model>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
++    </video>
++    <memballoon model='virtio'>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
++    </memballoon>
++  </devices>
++</domain>
+-- 
+2.55.0

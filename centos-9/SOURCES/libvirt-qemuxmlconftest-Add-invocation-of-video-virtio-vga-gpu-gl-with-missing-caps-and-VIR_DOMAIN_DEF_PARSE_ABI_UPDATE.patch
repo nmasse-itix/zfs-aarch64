@@ -1,0 +1,255 @@
+From 3480a65aecf0c5e4f1988a02b007c2d86fc1409c Mon Sep 17 00:00:00 2001
+Message-ID: <3480a65aecf0c5e4f1988a02b007c2d86fc1409c.1784297532.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Wed, 10 Jun 2026 16:31:44 +0200
+Subject: [PATCH] qemuxmlconftest: Add invocation of 'video-virtio-vga-gpu-gl'
+ with missing caps and VIR_DOMAIN_DEF_PARSE_ABI_UPDATE
+
+Similarly to previous patch add testing of 'virtio-gpu-gl' or
+'virtio-vga-gl' with missing the respective capabilities, but this time
+allowing VIR_DOMAIN_DEF_PARSE_ABI_UPDATE.
+
+This will later on show that in case when the fallback can't be honoured
+the code will not pick a device that doesn't support acceleration (the
+non-gl variant).
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit c10a7f2bafe15e3eb8f14407b23d8683a4a11446)
+
+https://redhat.atlassian.net/browse/RHEL-186019
+
+ Conflicts:
+ - tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.args
+ - tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_VGA_GL-disabled-ABI_UPDATE.args
+   Context; patch tweaking monitor FD passing in tests not backported
+
+https://redhat.atlassian.net/browse/RHEL-177646 (rhel-9.9)
+---
+ ...VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.args | 35 ++++++++++++++
+ ..._VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.xml | 46 +++++++++++++++++++
+ ...APS_VIRTIO_VGA_GL-disabled-ABI_UPDATE.args | 35 ++++++++++++++
+ ...CAPS_VIRTIO_VGA_GL-disabled-ABI_UPDATE.xml | 46 +++++++++++++++++++
+ tests/qemuxmlconftest.c                       | 12 +++++
+ 5 files changed, 174 insertions(+)
+ create mode 100644 tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.args
+ create mode 100644 tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.xml
+ create mode 100644 tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_VGA_GL-disabled-ABI_UPDATE.args
+ create mode 100644 tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_VGA_GL-disabled-ABI_UPDATE.xml
+
+diff --git a/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.args b/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.args
+new file mode 100644
+index 0000000000..297b919b5b
+--- /dev/null
++++ b/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.args
+@@ -0,0 +1,35 @@
++LC_ALL=C \
++PATH=/bin \
++HOME=/var/lib/libvirt/qemu/domain--1-QEMUGuest1 \
++USER=test \
++LOGNAME=test \
++XDG_DATA_HOME=/var/lib/libvirt/qemu/domain--1-QEMUGuest1/.local/share \
++XDG_CACHE_HOME=/var/lib/libvirt/qemu/domain--1-QEMUGuest1/.cache \
++XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-QEMUGuest1/.config \
++/usr/bin/qemu-system-x86_64 \
++-name guest=QEMUGuest1,debug-threads=on \
++-S \
++-object '{"qom-type":"secret","id":"masterKey0","format":"raw","file":"/var/lib/libvirt/qemu/domain--1-QEMUGuest1/master-key.aes"}' \
++-machine pc,usb=off,dump-guest-core=off,memory-backend=pc.ram,acpi=off \
++-accel tcg \
++-cpu qemu64 \
++-m size=1048576k \
++-object '{"qom-type":"memory-backend-ram","id":"pc.ram","size":1073741824}' \
++-overcommit mem-lock=off \
++-smp 1,sockets=1,cores=1,threads=1 \
++-uuid c7a5fdbd-edaf-9455-926a-d65c16db1809 \
++-display none \
++-no-user-config \
++-nodefaults \
++-chardev socket,id=charmonitor,fd=1729,server=on,wait=off \
++-mon chardev=charmonitor,id=monitor,mode=control \
++-rtc base=utc \
++-no-shutdown \
++-boot strict=on \
++-device '{"driver":"piix3-usb-uhci","id":"usb","bus":"pci.0","addr":"0x1.0x2"}' \
++-audiodev '{"id":"audio1","driver":"none"}' \
++-device '{"driver":"virtio-vga-gl","id":"video0","max_outputs":1,"bus":"pci.0","addr":"0x2"}' \
++-device '{"driver":"virtio-gpu-pci","id":"video1","max_outputs":1,"bus":"pci.0","addr":"0x4"}' \
++-device '{"driver":"virtio-balloon-pci","id":"balloon0","bus":"pci.0","addr":"0x3"}' \
++-sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
++-msg timestamp=on
+diff --git a/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.xml b/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.xml
+new file mode 100644
+index 0000000000..991141c643
+--- /dev/null
++++ b/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE.xml
+@@ -0,0 +1,46 @@
++<domain type='qemu'>
++  <name>QEMUGuest1</name>
++  <uuid>c7a5fdbd-edaf-9455-926a-d65c16db1809</uuid>
++  <memory unit='KiB'>1048576</memory>
++  <currentMemory unit='KiB'>1048576</currentMemory>
++  <vcpu placement='static'>1</vcpu>
++  <os>
++    <type arch='x86_64' machine='pc'>hvm</type>
++    <boot dev='hd'/>
++  </os>
++  <cpu mode='custom' match='exact' check='none'>
++    <model fallback='forbid'>qemu64</model>
++  </cpu>
++  <clock offset='utc'/>
++  <on_poweroff>destroy</on_poweroff>
++  <on_reboot>restart</on_reboot>
++  <on_crash>destroy</on_crash>
++  <devices>
++    <emulator>/usr/bin/qemu-system-x86_64</emulator>
++    <controller type='ide' index='0'>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x1'/>
++    </controller>
++    <controller type='usb' index='0' model='piix3-uhci'>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x2'/>
++    </controller>
++    <controller type='pci' index='0' model='pci-root'/>
++    <input type='mouse' bus='ps2'/>
++    <input type='keyboard' bus='ps2'/>
++    <audio id='1' type='none'/>
++    <video>
++      <model type='virtio' heads='1' primary='yes'>
++        <acceleration accel3d='yes'/>
++      </model>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
++    </video>
++    <video>
++      <model type='virtio' heads='1'>
++        <acceleration accel3d='yes'/>
++      </model>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
++    </video>
++    <memballoon model='virtio'>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
++    </memballoon>
++  </devices>
++</domain>
+diff --git a/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_VGA_GL-disabled-ABI_UPDATE.args b/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_VGA_GL-disabled-ABI_UPDATE.args
+new file mode 100644
+index 0000000000..d649dc06f8
+--- /dev/null
++++ b/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_VGA_GL-disabled-ABI_UPDATE.args
+@@ -0,0 +1,35 @@
++LC_ALL=C \
++PATH=/bin \
++HOME=/var/lib/libvirt/qemu/domain--1-QEMUGuest1 \
++USER=test \
++LOGNAME=test \
++XDG_DATA_HOME=/var/lib/libvirt/qemu/domain--1-QEMUGuest1/.local/share \
++XDG_CACHE_HOME=/var/lib/libvirt/qemu/domain--1-QEMUGuest1/.cache \
++XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-QEMUGuest1/.config \
++/usr/bin/qemu-system-x86_64 \
++-name guest=QEMUGuest1,debug-threads=on \
++-S \
++-object '{"qom-type":"secret","id":"masterKey0","format":"raw","file":"/var/lib/libvirt/qemu/domain--1-QEMUGuest1/master-key.aes"}' \
++-machine pc,usb=off,dump-guest-core=off,memory-backend=pc.ram,acpi=off \
++-accel tcg \
++-cpu qemu64 \
++-m size=1048576k \
++-object '{"qom-type":"memory-backend-ram","id":"pc.ram","size":1073741824}' \
++-overcommit mem-lock=off \
++-smp 1,sockets=1,cores=1,threads=1 \
++-uuid c7a5fdbd-edaf-9455-926a-d65c16db1809 \
++-display none \
++-no-user-config \
++-nodefaults \
++-chardev socket,id=charmonitor,fd=1729,server=on,wait=off \
++-mon chardev=charmonitor,id=monitor,mode=control \
++-rtc base=utc \
++-no-shutdown \
++-boot strict=on \
++-device '{"driver":"piix3-usb-uhci","id":"usb","bus":"pci.0","addr":"0x1.0x2"}' \
++-audiodev '{"id":"audio1","driver":"none"}' \
++-device '{"driver":"virtio-vga","id":"video0","max_outputs":1,"bus":"pci.0","addr":"0x2"}' \
++-device '{"driver":"virtio-gpu-gl-pci","id":"video1","max_outputs":1,"bus":"pci.0","addr":"0x4"}' \
++-device '{"driver":"virtio-balloon-pci","id":"balloon0","bus":"pci.0","addr":"0x3"}' \
++-sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
++-msg timestamp=on
+diff --git a/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_VGA_GL-disabled-ABI_UPDATE.xml b/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_VGA_GL-disabled-ABI_UPDATE.xml
+new file mode 100644
+index 0000000000..991141c643
+--- /dev/null
++++ b/tests/qemuxmlconfdata/video-virtio-vga-gpu-gl.x86_64-latest.QEMU_CAPS_VIRTIO_VGA_GL-disabled-ABI_UPDATE.xml
+@@ -0,0 +1,46 @@
++<domain type='qemu'>
++  <name>QEMUGuest1</name>
++  <uuid>c7a5fdbd-edaf-9455-926a-d65c16db1809</uuid>
++  <memory unit='KiB'>1048576</memory>
++  <currentMemory unit='KiB'>1048576</currentMemory>
++  <vcpu placement='static'>1</vcpu>
++  <os>
++    <type arch='x86_64' machine='pc'>hvm</type>
++    <boot dev='hd'/>
++  </os>
++  <cpu mode='custom' match='exact' check='none'>
++    <model fallback='forbid'>qemu64</model>
++  </cpu>
++  <clock offset='utc'/>
++  <on_poweroff>destroy</on_poweroff>
++  <on_reboot>restart</on_reboot>
++  <on_crash>destroy</on_crash>
++  <devices>
++    <emulator>/usr/bin/qemu-system-x86_64</emulator>
++    <controller type='ide' index='0'>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x1'/>
++    </controller>
++    <controller type='usb' index='0' model='piix3-uhci'>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x2'/>
++    </controller>
++    <controller type='pci' index='0' model='pci-root'/>
++    <input type='mouse' bus='ps2'/>
++    <input type='keyboard' bus='ps2'/>
++    <audio id='1' type='none'/>
++    <video>
++      <model type='virtio' heads='1' primary='yes'>
++        <acceleration accel3d='yes'/>
++      </model>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
++    </video>
++    <video>
++      <model type='virtio' heads='1'>
++        <acceleration accel3d='yes'/>
++      </model>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
++    </video>
++    <memballoon model='virtio'>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
++    </memballoon>
++  </devices>
++</domain>
+diff --git a/tests/qemuxmlconftest.c b/tests/qemuxmlconftest.c
+index 8424bdf709..44df46f35c 100644
+--- a/tests/qemuxmlconftest.c
++++ b/tests/qemuxmlconftest.c
+@@ -2783,11 +2783,23 @@ mymain(void)
+                  ARG_CAPS_VER, "latest",
+                  ARG_QEMU_CAPS_DEL, QEMU_CAPS_VIRTIO_VGA_GL, QEMU_CAPS_LAST,
+                  ARG_END);
++    DO_TEST_FULL("video-virtio-vga-gpu-gl", ".x86_64-latest.QEMU_CAPS_VIRTIO_VGA_GL-disabled-ABI_UPDATE",
++                 ARG_CAPS_ARCH, "x86_64",
++                 ARG_CAPS_VER, "latest",
++                 ARG_QEMU_CAPS_DEL, QEMU_CAPS_VIRTIO_VGA_GL, QEMU_CAPS_LAST,
++                 ARG_PARSEFLAGS, VIR_DOMAIN_DEF_PARSE_ABI_UPDATE,
++                 ARG_END);
+     DO_TEST_FULL("video-virtio-vga-gpu-gl", ".x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled",
+                  ARG_CAPS_ARCH, "x86_64",
+                  ARG_CAPS_VER, "latest",
+                  ARG_QEMU_CAPS_DEL, QEMU_CAPS_VIRTIO_GPU_GL_PCI, QEMU_CAPS_LAST,
+                  ARG_END);
++    DO_TEST_FULL("video-virtio-vga-gpu-gl", ".x86_64-latest.QEMU_CAPS_VIRTIO_GPU_GL_PCI-disabled-ABI_UPDATE",
++                 ARG_CAPS_ARCH, "x86_64",
++                 ARG_CAPS_VER, "latest",
++                 ARG_QEMU_CAPS_DEL, QEMU_CAPS_VIRTIO_GPU_GL_PCI, QEMU_CAPS_LAST,
++                 ARG_PARSEFLAGS, VIR_DOMAIN_DEF_PARSE_ABI_UPDATE,
++                 ARG_END);
+     DO_TEST_CAPS_LATEST("video-virtio-edid-none");
+     DO_TEST_CAPS_LATEST("video-virtio-edid-off");
+     DO_TEST_CAPS_LATEST("video-virtio-edid-on");
+-- 
+2.55.0

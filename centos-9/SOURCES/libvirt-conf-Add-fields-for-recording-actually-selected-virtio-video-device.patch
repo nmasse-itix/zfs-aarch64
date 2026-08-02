@@ -1,0 +1,211 @@
+From ef0dfcf0dea53cc1d8aabc08942a7091c9dbf30c Mon Sep 17 00:00:00 2001
+Message-ID: <ef0dfcf0dea53cc1d8aabc08942a7091c9dbf30c.1784297532.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Mon, 8 Jun 2026 16:55:05 +0200
+Subject: [PATCH] conf: Add fields for recording actually-selected virtio video
+ device
+
+QEMU's commandline generator picks for virtio video between various
+actual device models not only based on the XML definition but also
+capabilities present. Since none of the devices is actually ABI
+compatible we need to record the actually selected device in the XML.
+
+Introduce 'device' attribute:
+
+      <video>
+        <model type='virtio' heads='1' primary='yes' device='virtio-gpu'/>
+
+which will record the actually selected model so that we can preserve
+ABI across restarts on deployment changes but more importantly across
+migrations where the deployment differs.
+
+The code specifically avoids an ABI stability check for the new field
+because there are already possibly broken configurations that the users
+may want to fix by picking the proper model which could be forbidden.
+
+Users are instructed to not set the field in the XML.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit b6f7c2d3db28626d4799d00c299e33dae07c5201)
+
+https://redhat.atlassian.net/browse/RHEL-186019
+
+https://redhat.atlassian.net/browse/RHEL-177646 (rhel-9.9)
+---
+ docs/formatdomain.rst             |  8 +++++++
+ src/conf/domain_conf.c            | 35 +++++++++++++++++++++++++++++++
+ src/conf/domain_conf.h            | 15 +++++++++++++
+ src/conf/schemas/domaincommon.rng | 18 +++++++++++++++-
+ src/libvirt_private.syms          |  1 +
+ 5 files changed, 76 insertions(+), 1 deletion(-)
+
+diff --git a/docs/formatdomain.rst b/docs/formatdomain.rst
+index 225152e0f2..8e7577f3b7 100644
+--- a/docs/formatdomain.rst
++++ b/docs/formatdomain.rst
+@@ -7295,6 +7295,14 @@ A video device.
+    guest. The ``edid`` attribute is only valid for model types ``vga``, ``bochs``,
+    and ``virtio``.
+ 
++   :since:`Since 12.5.0` the ``virtio`` video model has an additional attribute
++   ``device``, which records the specific virtio device model which was picked
++   for the configuration, to preserve guest ABI and migration compatibility.
++   Users do not need to set this attribute as aprropriate value is picked and
++   filled in automatically. Accepted values are ``virtio-vga``, ``virtio-gpu``,
++   ``virtio-vga-gl``, and ``virtio-gpu-gl``, but not all combinations of config
++   and this field make sense.
++
+ ``acceleration``
+    Configure if video acceleration should be enabled.
+ 
+diff --git a/src/conf/domain_conf.c b/src/conf/domain_conf.c
+index dc19e258dd..47200d27c5 100644
+--- a/src/conf/domain_conf.c
++++ b/src/conf/domain_conf.c
+@@ -909,6 +909,17 @@ VIR_ENUM_IMPL(virDomainVideoVGAConf,
+               "off",
+ );
+ 
++VIR_ENUM_IMPL(virDomainVideoVirtioDevice,
++              VIR_DOMAIN_VIDEO_VIRTIO_DEVICE_LAST,
++              "",
++              "virtio-vga",
++              "virtio-gpu",
++              "virtio-vga-gl",
++              "virtio-gpu-gl",
++              "vhost-user-vga",
++              "vhost-user-gpu",
++);
++
+ VIR_ENUM_IMPL(virDomainInput,
+               VIR_DOMAIN_INPUT_TYPE_LAST,
+               "mouse",
+@@ -13726,6 +13737,14 @@ virDomainVideoModelDefParseXML(virDomainVideoDef *def,
+                               VIR_DOMAIN_VIDEO_TYPE_DEFAULT) < 0)
+         return -1;
+ 
++    if (def->type == VIR_DOMAIN_VIDEO_TYPE_VIRTIO) {
++        if (virXMLPropEnumDefault(node, "device",
++                                  virDomainVideoVirtioDeviceTypeFromString,
++                                  VIR_XML_PROP_NONZERO, &def->virtiodevice,
++                                  VIR_DOMAIN_VIDEO_VIRTIO_DEVICE_DEFAULT) < 0)
++            return -1;
++    }
++
+     if (virXMLPropUInt(node, "ram", 10, VIR_XML_PROP_NONE, &def->ram) < 0)
+         return -1;
+ 
+@@ -21437,6 +21456,18 @@ virDomainVideoDefCheckABIStability(virDomainVideoDef *src,
+         return false;
+     }
+ 
++    /* While 'src->virtiodevice' vs 'dst->virtiodevice' match is considered
++     * guest ABI (both the device looks different to the guest OS and qemu
++     * refuses to migrate into wrong device) we deliberately omit the check
++     * here due to historical reasons.
++     *
++     * The actual values were not recorded in the XML after picking a device
++     * based on capabilities and thus, if the host configuration changes
++     * different defaults can be picked. Users might want to fix their
++     * saveimage or migration by specifying the proper model which will differ
++     * from the one that will be auto-picked via post-parse callback when the
++     * XML is loaded for the first time */
++
+     if (!virDomainVirtioOptionsCheckABIStability(src->virtio, dst->virtio))
+         return false;
+ 
+@@ -27110,6 +27141,10 @@ virDomainVideoDefFormat(virBuffer *buf,
+     if (def->edid != VIR_TRISTATE_SWITCH_ABSENT)
+         virBufferAsprintf(&modelAttrBuf, " edid='%s'", virTristateSwitchTypeToString(def->edid));
+ 
++    if (def->virtiodevice != VIR_DOMAIN_VIDEO_VIRTIO_DEVICE_DEFAULT)
++        virBufferAsprintf(&modelAttrBuf, " device='%s'",
++                          virDomainVideoVirtioDeviceTypeToString(def->virtiodevice));
++
+     virDomainVideoAccelDefFormat(&modelChildBuf, def->accel);
+     virDomainVideoResolutionDefFormat(&modelChildBuf, def->res);
+ 
+diff --git a/src/conf/domain_conf.h b/src/conf/domain_conf.h
+index 8c8c11c0cf..3a1a2fdce1 100644
+--- a/src/conf/domain_conf.h
++++ b/src/conf/domain_conf.h
+@@ -1877,6 +1877,20 @@ typedef enum {
+ 
+ VIR_ENUM_DECL(virDomainVideoVGAConf);
+ 
++typedef enum {
++    VIR_DOMAIN_VIDEO_VIRTIO_DEVICE_DEFAULT = 0,
++    VIR_DOMAIN_VIDEO_VIRTIO_DEVICE_VGA,
++    VIR_DOMAIN_VIDEO_VIRTIO_DEVICE_GPU,
++    VIR_DOMAIN_VIDEO_VIRTIO_DEVICE_VGA_GL,
++    VIR_DOMAIN_VIDEO_VIRTIO_DEVICE_GPU_GL,
++    VIR_DOMAIN_VIDEO_VIRTIO_DEVICE_VHOST_USER_VGA,
++    VIR_DOMAIN_VIDEO_VIRTIO_DEVICE_VHOST_USER_GPU,
++
++    VIR_DOMAIN_VIDEO_VIRTIO_DEVICE_LAST
++} virDomainVideoVirtioDevice;
++
++VIR_ENUM_DECL(virDomainVideoVirtioDevice);
++
+ struct _virDomainVideoAccelDef {
+     virTristateBool accel2d;
+     virTristateBool accel3d;
+@@ -1907,6 +1921,7 @@ struct _virDomainVideoDef {
+     virDomainVideoResolutionDef *res;
+     virTristateSwitch blob;
+     virDomainVideoDriverDef *driver;
++    virDomainVideoVirtioDevice virtiodevice; /* virtio device frontend */
+     virDomainDeviceInfo info;
+     virDomainVirtioOptions *virtio;
+     virDomainVideoBackendType backend;
+diff --git a/src/conf/schemas/domaincommon.rng b/src/conf/schemas/domaincommon.rng
+index 9fde565d94..b8283f129e 100644
+--- a/src/conf/schemas/domaincommon.rng
++++ b/src/conf/schemas/domaincommon.rng
+@@ -4812,7 +4812,6 @@
+                   <value>vmvga</value>
+                   <value>xen</value>
+                   <value>vbox</value>
+-                  <value>virtio</value>
+                   <value>gop</value>
+                   <value>none</value>
+                   <value>bochs</value>
+@@ -4839,6 +4838,23 @@
+                   </attribute>
+                 </optional>
+               </group>
++              <group>
++                <attribute name="type">
++                  <value>virtio</value>
++                </attribute>
++                <optional>
++                  <attribute name="device">
++                    <choice>
++                      <value>virtio-vga</value>
++                      <value>virtio-vga-gl</value>
++                      <value>virtio-gpu</value>
++                      <value>virtio-gpu-gl</value>
++                      <value>vhost-user-vga</value>
++                      <value>vhost-user-gpu</value>
++                    </choice>
++                  </attribute>
++                </optional>
++              </group>
+             </choice>
+             <optional>
+               <attribute name="vram">
+diff --git a/src/libvirt_private.syms b/src/libvirt_private.syms
+index 4a0f9065fa..b9f5056693 100644
+--- a/src/libvirt_private.syms
++++ b/src/libvirt_private.syms
+@@ -728,6 +728,7 @@ virDomainVideoTypeFromString;
+ virDomainVideoTypeToString;
+ virDomainVideoVGAConfTypeFromString;
+ virDomainVideoVGAConfTypeToString;
++virDomainVideoVirtioDeviceTypeToString;
+ virDomainVirtTypeFromString;
+ virDomainVirtTypeToString;
+ virDomainVsockDefEquals;
+-- 
+2.55.0

@@ -1,0 +1,247 @@
+From 2564c0a45ab725c84deb64abc4fb57ad263fad15 Mon Sep 17 00:00:00 2001
+Message-ID: <2564c0a45ab725c84deb64abc4fb57ad263fad15.1784297531.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Thu, 11 Jun 2026 11:33:36 +0200
+Subject: [PATCH] qemu: capabilities: Apply 'capability_filters' configration
+ option on all capabilities
+
+The 'capability_filters' allows admins to globally disable some qemu
+capabilities via the config file.
+
+Until now it was applied only directly when starting the VM, but that is
+too late as the capability is still present when e.g. the post-parse
+code is picking defaults.
+
+Rework the code so that 'capability_filters' is applied directly after
+probing qemu so all existing capabilities will lack the filtered out
+ones.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit b8dfb9551e4cafebea94fc09b2ab51f63dfa8512)
+
+https://redhat.atlassian.net/browse/RHEL-186019
+
+https://redhat.atlassian.net/browse/RHEL-177646 (rhel-9.9)
+---
+ src/qemu/qemu_capabilities.c | 21 ++++++++++++++++++---
+ src/qemu/qemu_capabilities.h |  3 ++-
+ src/qemu/qemu_capspriv.h     |  3 ++-
+ src/qemu/qemu_driver.c       | 23 ++++++++++++++++++++++-
+ src/qemu/qemu_process.c      | 19 +++----------------
+ tests/qemucapsprobe.c        |  3 ++-
+ tests/testutilsqemu.c        |  3 ++-
+ 7 files changed, 51 insertions(+), 24 deletions(-)
+
+diff --git a/src/qemu/qemu_capabilities.c b/src/qemu/qemu_capabilities.c
+index f06f376dd7..83ec1e2769 100644
+--- a/src/qemu/qemu_capabilities.c
++++ b/src/qemu/qemu_capabilities.c
+@@ -4538,6 +4538,11 @@ struct _virQEMUCapsCachePriv {
+     /* cache whether /dev/kvm is usable as runUid:runGuid */
+     virTristateBool kvmUsable;
+     time_t kvmCtime;
++
++    /* qemu.conf allows masking out supported capabilities via
++     * 'capabilities_filter' configuration. 'maskedCaps' if non-NULL
++     * maps out which bits are to be removed */
++    virBitmap *maskedCaps;
+ };
+ typedef struct _virQEMUCapsCachePriv virQEMUCapsCachePriv;
+ 
+@@ -4551,6 +4556,7 @@ virQEMUCapsCachePrivFree(void *privData)
+     g_free(priv->kernelVersion);
+     virCPUDataFree(priv->cpuData);
+     g_free(priv->hostCPUSignature);
++    virBitmapFree(priv->maskedCaps);
+     g_free(priv);
+ }
+ 
+@@ -6110,7 +6116,8 @@ virQEMUCapsNewForBinaryInternal(virArch hostArch,
+                                 const char *hostCPUSignature,
+                                 unsigned int microcodeVersion,
+                                 const char *kernelVersion,
+-                                virCPUData* cpuData)
++                                virCPUData* cpuData,
++                                virBitmap *maskedCaps)
+ {
+     g_autoptr(virQEMUCaps) qemuCaps = virQEMUCapsNewBinary(binary);
+     struct stat sb;
+@@ -6149,6 +6156,10 @@ virQEMUCapsNewForBinaryInternal(virArch hostArch,
+     qemuCaps->libvirtCtime = virGetSelfLastChanged();
+     qemuCaps->libvirtVersion = LIBVIR_VERSION_NUMBER;
+ 
++    /* If we have capabilities masked out via qemu.conf apply them here */
++    if (maskedCaps)
++        virBitmapSubtract(qemuCaps->flags, maskedCaps);
++
+     if (virQEMUCapsGet(qemuCaps, QEMU_CAPS_KVM))
+         virQEMUCapsInitHostCPUModel(qemuCaps, hostArch, VIR_DOMAIN_VIRT_KVM);
+     if (virQEMUCapsGet(qemuCaps, QEMU_CAPS_HVF))
+@@ -6189,7 +6200,8 @@ virQEMUCapsNewData(const char *binary,
+                                            priv->hostCPUSignature,
+                                            virHostCPUGetMicrocodeVersion(priv->hostArch),
+                                            priv->kernelVersion,
+-                                           priv->cpuData);
++                                           priv->cpuData,
++                                           priv->maskedCaps);
+ }
+ 
+ 
+@@ -6228,7 +6240,8 @@ virFileCache *
+ virQEMUCapsCacheNew(const char *libDir,
+                     const char *cacheDir,
+                     uid_t runUid,
+-                    gid_t runGid)
++                    gid_t runGid,
++                    virBitmap *maskedCaps)
+ {
+     g_autofree char *capsCacheDir = NULL;
+     virFileCache *cache = NULL;
+@@ -6258,9 +6271,11 @@ virQEMUCapsCacheNew(const char *libDir,
+         priv->kernelVersion = g_strdup_printf("%s %s", uts.release, uts.version);
+ 
+     priv->cpuData = virCPUDataGetHost();
++    priv->maskedCaps = maskedCaps;
+     return cache;
+ 
+  error:
++    virBitmapFree(maskedCaps);
+     virObjectUnref(cache);
+     return NULL;
+ }
+diff --git a/src/qemu/qemu_capabilities.h b/src/qemu/qemu_capabilities.h
+index 8822bf120b..8701c76b6d 100644
+--- a/src/qemu/qemu_capabilities.h
++++ b/src/qemu/qemu_capabilities.h
+@@ -861,7 +861,8 @@ char * virQEMUCapsGetDefaultEmulator(virArch hostarch,
+ virFileCache *virQEMUCapsCacheNew(const char *libDir,
+                                     const char *cacheDir,
+                                     uid_t uid,
+-                                    gid_t gid);
++                                    gid_t gid,
++                                    virBitmap *maskedCaps);
+ virQEMUCaps *virQEMUCapsCacheLookup(virFileCache *cache,
+                                       const char *binary);
+ virQEMUCaps *virQEMUCapsCacheLookupCopy(virFileCache *cache,
+diff --git a/src/qemu/qemu_capspriv.h b/src/qemu/qemu_capspriv.h
+index 55286d7d29..9dca15d09b 100644
+--- a/src/qemu/qemu_capspriv.h
++++ b/src/qemu/qemu_capspriv.h
+@@ -36,7 +36,8 @@ virQEMUCapsNewForBinaryInternal(virArch hostArch,
+                                 const char *hostCPUSignature,
+                                 unsigned int microcodeVersion,
+                                 const char *kernelVersion,
+-                                virCPUData* cpuData);
++                                virCPUData* cpuData,
++                                virBitmap *maskedCaps);
+ 
+ int virQEMUCapsLoadCache(virArch hostArch,
+                          virQEMUCaps *qemuCaps,
+diff --git a/src/qemu/qemu_driver.c b/src/qemu/qemu_driver.c
+index dcb49a9d42..3c7de45301 100644
+--- a/src/qemu/qemu_driver.c
++++ b/src/qemu/qemu_driver.c
+@@ -538,6 +538,7 @@ qemuStateInitialize(bool privileged,
+     const char *defsecmodel = NULL;
+     g_autoptr(virIdentity) identity = virIdentityGetCurrent();
+     virDomainDriverAutoStartConfig autostartCfg;
++    g_autoptr(virBitmap) maskedCaps = NULL;
+ 
+     qemu_driver = g_new0(virQEMUDriver, 1);
+ 
+@@ -817,10 +818,30 @@ qemuStateInitialize(bool privileged,
+         run_gid = cfg->group;
+     }
+ 
++    if (cfg->capabilityfilters) {
++        int tmp;
++        char **next;
++
++        maskedCaps = virBitmapNew(0);
++
++        for (next = cfg->capabilityfilters; *next; next++) {
++            if ((tmp = virQEMUCapsTypeFromString(*next)) < 0) {
++                virReportError(VIR_ERR_CONF_SYNTAX,
++                               _("invalid capability_filters capability '%1$s'"),
++                               *next);
++                return -1;
++            }
++
++            virBitmapSetBitExpand(maskedCaps, tmp);
++        }
++    }
++
++
+     qemu_driver->qemuCapsCache = virQEMUCapsCacheNew(cfg->libDir,
+                                                      cfg->cacheDir,
+                                                      run_uid,
+-                                                     run_gid);
++                                                     run_gid,
++                                                     g_steal_pointer(&maskedCaps));
+     if (!qemu_driver->qemuCapsCache)
+         goto error;
+ 
+diff --git a/src/qemu/qemu_process.c b/src/qemu/qemu_process.c
+index b56e79ed1c..7d9f754fc2 100644
+--- a/src/qemu/qemu_process.c
++++ b/src/qemu/qemu_process.c
+@@ -5827,25 +5827,12 @@ static int
+ qemuProcessStartUpdateCustomCaps(virDomainObj *vm)
+ {
+     qemuDomainObjPrivate *priv = vm->privateData;
+-    g_autoptr(virQEMUDriverConfig) cfg = virQEMUDriverGetConfig(priv->driver);
+     qemuDomainXmlNsDef *nsdef = vm->def->namespaceData;
+-    char **next;
+-    int tmp;
+-
+-    if (cfg->capabilityfilters) {
+-        for (next = cfg->capabilityfilters; *next; next++) {
+-            if ((tmp = virQEMUCapsTypeFromString(*next)) < 0) {
+-                virReportError(VIR_ERR_INTERNAL_ERROR,
+-                               _("invalid capability_filters capability '%1$s'"),
+-                               *next);
+-                return -1;
+-            }
+-
+-            virQEMUCapsClear(priv->qemuCaps, tmp);
+-        }
+-    }
+ 
+     if (nsdef) {
++        char **next;
++        int tmp;
++
+         for (next = nsdef->capsadd; next && *next; next++) {
+             if ((tmp = virQEMUCapsTypeFromString(*next)) < 0) {
+                 virReportError(VIR_ERR_INTERNAL_ERROR,
+diff --git a/tests/qemucapsprobe.c b/tests/qemucapsprobe.c
+index cd117170ab..8ce5c10dec 100644
+--- a/tests/qemucapsprobe.c
++++ b/tests/qemucapsprobe.c
+@@ -79,7 +79,8 @@ main(int argc, char **argv)
+         return EXIT_FAILURE;
+ 
+     if (!(caps = virQEMUCapsNewForBinaryInternal(VIR_ARCH_NONE, argv[1], "/tmp",
+-                                                 -1, -1, NULL, 0, NULL, NULL)))
++                                                 -1, -1, NULL, 0, NULL, NULL,
++                                                 NULL)))
+         return EXIT_FAILURE;
+ 
+     host = virArchFromHost();
+diff --git a/tests/testutilsqemu.c b/tests/testutilsqemu.c
+index fc51e0e3df..bd797525f0 100644
+--- a/tests/testutilsqemu.c
++++ b/tests/testutilsqemu.c
+@@ -363,7 +363,8 @@ int qemuTestDriverInit(virQEMUDriver *driver)
+ 
+     /* Using /dev/null for libDir and cacheDir automatically produces errors
+      * upon attempt to use any of them */
+-    driver->qemuCapsCache = virQEMUCapsCacheNew("/dev/null", "/dev/null", 0, 0);
++    driver->qemuCapsCache = virQEMUCapsCacheNew("/dev/null", "/dev/null",
++                                                0, 0, NULL);
+     if (!driver->qemuCapsCache)
+         goto error;
+ 
+-- 
+2.55.0

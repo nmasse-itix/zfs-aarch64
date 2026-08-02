@@ -1,0 +1,194 @@
+From 8ceddabb12d1b32fbcffe9697885462af133d309 Mon Sep 17 00:00:00 2001
+Message-ID: <8ceddabb12d1b32fbcffe9697885462af133d309.1784297531.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Thu, 11 Jun 2026 12:00:45 +0200
+Subject: [PATCH] qemu: Allow reuse of 'qemuProcessStartUpdateCustomCaps'
+
+Move and rename the function to 'qemuDomainUpdateCustomCapabilities' and
+modify the arguments so that it will be possible to reuse it also in the
+post-parse and validation code which ought to base decisions on the same
+logic as VM startup would.
+
+Since copying of the qemu capabilities object is very expensive (I've
+observed an almost 4x slowdown of qemuxmlconftest)
+'qemuDomainUpdateCustomCapabilities' copies the capabilities only when
+necessary.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 9ec26e2c4f7c60a1ba62a90948a51a7ac0f582d8)
+
+https://redhat.atlassian.net/browse/RHEL-186019
+
+https://redhat.atlassian.net/browse/RHEL-177646 (rhel-9.9)
+---
+ src/qemu/qemu_domain.c  | 79 +++++++++++++++++++++++++++++++++++++++++
+ src/qemu/qemu_domain.h  |  6 ++++
+ src/qemu/qemu_process.c | 42 +---------------------
+ 3 files changed, 86 insertions(+), 41 deletions(-)
+
+diff --git a/src/qemu/qemu_domain.c b/src/qemu/qemu_domain.c
+index 495cbd4f7d..7699d1000f 100644
+--- a/src/qemu/qemu_domain.c
++++ b/src/qemu/qemu_domain.c
+@@ -11769,3 +11769,82 @@ qemuDomainMachineSupportsFloppy(const char *machine,
+ 
+     return true;
+ }
++
++
++/**
++ * qemuDomainUpdateCustomCapabilities:
++ * @def: domain definition
++ * @qemuCaps: qemu capabilities
++ * @qemuCapsCopy: if non-NULL filled filled with a valid virQEMUCaps pointer (see below)
++ *
++ * Updates @qemuCaps based on the qemu namespace XML config for modifying
++ * capabilities:
++ *
++ *  <domain type='qemu' xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0'>
++ *    <qemu:capabilities>
++ *      <qemu:add capability='blockdev'/>
++ *      <qemu:del capability='drive'/>
++ *    </qemu:capabilities>
++ *  </domain>
++ *
++ *  If @qemuCapsCopy is NULL, @qemuCaps is directly modified.
++ *
++ *  If @qemuCapsCopy is non-NULL, it's always filled with a virQEMUCaps instance
++ *  that the caller needs to unref. The following applies:
++ *   - no caps modification needed: @qemuCaps is ref'd and filled into @qemuCapsCopy
++ *   - caps modifications are needed: @qemuCaps is copied into @qemuCapsCopy and
++ *                                    modifications happen on the copy
++ *
++ *  Returns 0 on success (including when no modification was needed), -1 on
++ *  error and reports libvirt errors.
++ */
++int
++qemuDomainUpdateCustomCapabilities(const virDomainDef *def,
++                                   virQEMUCaps *qemuCaps,
++                                   virQEMUCaps **qemuCapsCopy)
++{
++    qemuDomainXmlNsDef *nsdef = def->namespaceData;
++    char **next;
++    int tmp;
++
++    if (!nsdef ||
++        (!nsdef->capsadd && !nsdef->capsdel)) {
++
++        if (qemuCapsCopy)
++            *qemuCapsCopy = virObjectRef(qemuCaps);
++
++        return 0;
++    }
++
++    if (qemuCapsCopy) {
++        *qemuCapsCopy = virQEMUCapsNewCopy(qemuCaps);
++
++        qemuCaps = *qemuCapsCopy;
++    }
++
++    for (next = nsdef->capsadd; next && *next; next++) {
++        if ((tmp = virQEMUCapsTypeFromString(*next)) < 0) {
++            virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
++                           _("invalid qemu namespace capability '%1$s'"),
++                           *next);
++            return -1;
++        }
++
++        virQEMUCapsSet(qemuCaps, tmp);
++    }
++
++    for (next = nsdef->capsdel; next && *next; next++) {
++        if ((tmp = virQEMUCapsTypeFromString(*next)) < 0) {
++            virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
++                           _("invalid qemu namespace capability '%1$s'"),
++                           *next);
++            return -1;
++        }
++
++        virQEMUCapsClear(qemuCaps, tmp);
++    }
++
++    virQEMUCapsInitProcessCapsInterlock(qemuCaps);
++
++    return 0;
++}
+diff --git a/src/qemu/qemu_domain.h b/src/qemu/qemu_domain.h
+index 8cd221062c..ff26885ffe 100644
+--- a/src/qemu/qemu_domain.h
++++ b/src/qemu/qemu_domain.h
+@@ -1197,3 +1197,9 @@ qemuDomainMachineSupportsFloppy(const char *machine,
+ 
+ virObject *
+ qemuDomainHostdevPrivateNew(void);
++
++int
++qemuDomainUpdateCustomCapabilities(const virDomainDef *def,
++                                   virQEMUCaps *qemuCaps,
++                                   virQEMUCaps **qemuCapsCopy)
++    ATTRIBUTE_NONNULL(1) ATTRIBUTE_NONNULL(2) G_GNUC_WARN_UNUSED_RESULT;
+diff --git a/src/qemu/qemu_process.c b/src/qemu/qemu_process.c
+index 7d9f754fc2..1540c74087 100644
+--- a/src/qemu/qemu_process.c
++++ b/src/qemu/qemu_process.c
+@@ -5823,43 +5823,6 @@ qemuProcessStartValidate(virQEMUDriver *driver,
+ }
+ 
+ 
+-static int
+-qemuProcessStartUpdateCustomCaps(virDomainObj *vm)
+-{
+-    qemuDomainObjPrivate *priv = vm->privateData;
+-    qemuDomainXmlNsDef *nsdef = vm->def->namespaceData;
+-
+-    if (nsdef) {
+-        char **next;
+-        int tmp;
+-
+-        for (next = nsdef->capsadd; next && *next; next++) {
+-            if ((tmp = virQEMUCapsTypeFromString(*next)) < 0) {
+-                virReportError(VIR_ERR_INTERNAL_ERROR,
+-                               _("invalid qemu namespace capability '%1$s'"),
+-                               *next);
+-                return -1;
+-            }
+-
+-            virQEMUCapsSet(priv->qemuCaps, tmp);
+-        }
+-
+-        for (next = nsdef->capsdel; next && *next; next++) {
+-            if ((tmp = virQEMUCapsTypeFromString(*next)) < 0) {
+-                virReportError(VIR_ERR_INTERNAL_ERROR,
+-                               _("invalid qemu namespace capability '%1$s'"),
+-                               *next);
+-                return -1;
+-            }
+-
+-            virQEMUCapsClear(priv->qemuCaps, tmp);
+-        }
+-    }
+-
+-    return 0;
+-}
+-
+-
+ /**
+  * qemuProcessPrepareQEMUCaps:
+  * @vm: domain object
+@@ -5883,12 +5846,9 @@ qemuProcessPrepareQEMUCaps(virDomainObj *vm,
+         return -1;
+ 
+     /* Update qemu capabilities according to lists passed in via namespace */
+-    if (qemuProcessStartUpdateCustomCaps(vm) < 0)
++    if (qemuDomainUpdateCustomCapabilities(vm->def, priv->qemuCaps, NULL) < 0)
+         return -1;
+ 
+-    /* re-process capability lockouts since we might have removed capabilities */
+-    virQEMUCapsInitProcessCapsInterlock(priv->qemuCaps);
+-
+     return 0;
+ }
+ 
+-- 
+2.55.0
