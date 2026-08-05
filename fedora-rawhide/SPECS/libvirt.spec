@@ -31,7 +31,10 @@
 %define arches_numad            %{arches_x86} %{power64} aarch64
 %define arches_ch               x86_64 aarch64
 
-# The hypervisor drivers that run in libvirtd
+# The monolithic libvirtd
+%define with_libvirtd      0%{!?_without_libvirtd:1}
+
+# The hypervisor drivers that run in monolithic libvirtd, or a modular daemon
 %define with_lxc           0%{!?_without_lxc:1}
 %define with_libxl         0%{!?_without_libxl:1}
 %define with_vbox          0%{!?_without_vbox:1}
@@ -286,8 +289,8 @@
 
 Summary: Library providing a simple virtualization API
 Name: libvirt
-Version: 12.5.0
-Release: 2%{?dist}
+Version: 12.6.0
+Release: 1%{?dist}
 License: GPL-2.0-or-later AND LGPL-2.1-only AND LGPL-2.1-or-later AND OFL-1.1
 URL: https://libvirt.org/
 
@@ -296,7 +299,11 @@ URL: https://libvirt.org/
 %endif
 Source: https://download.libvirt.org/%{?mainturl}libvirt-%{version}.tar.xz
 
+%if %{with_libvirtd}
 Requires: libvirt-daemon = %{version}-%{release}
+%else
+Obsoletes: libvirt-daemon < %(version)-%(release)
+%endif
 Requires: libvirt-daemon-config-network = %{version}-%{release}
 Requires: libvirt-daemon-config-nwfilter = %{version}-%{release}
 %if %{with_libxl}
@@ -1173,6 +1180,12 @@ echo "This RPM requires either Fedora >= %{min_fedora} or RHEL >= %{min_rhel}"
 exit 1
 %endif
 
+%if %{with_libvirtd}
+    %define arg_libvirtd -Dlibvirtd=enabled
+%else
+    %define arg_libvirtd -Dlibvirtd=disabled
+%endif
+
 %if %{with_qemu}
     %define arg_qemu -Ddriver_qemu=enabled
 %else
@@ -1356,6 +1369,7 @@ export SOURCE_DATE_EPOCH=$(stat --printf='%Y' %{_specdir}/libvirt.spec)
            -Dsasl=enabled \
            -Dpolkit=enabled \
            -Ddriver_libvirtd=enabled \
+           %{?arg_libvirtd} \
            -Ddriver_remote=enabled \
            -Ddriver_test=enabled \
            %{?arg_esx} \
@@ -2067,6 +2081,7 @@ exit 0
 %doc AUTHORS.rst NEWS.rst README.rst
 %doc libvirt-docs/*
 
+    %if %{with_libvirtd}
 %files daemon
 %{_unitdir}/libvirtd.service
 %{_unitdir}/libvirtd.socket
@@ -2083,6 +2098,7 @@ exit 0
 %{_datadir}/augeas/lenses/tests/test_libvirtd.aug
 %attr(0755, root, root) %{_sbindir}/libvirtd
 %{_mandir}/man8/libvirtd.8*
+    %endif
 
 %files daemon-common
 %{_unitdir}/virt-guest-shutdown.target
@@ -2692,10 +2708,15 @@ exit 0
 %{mingw64_mandir}/man7/virkey*.7*
 %endif
 
-
 %changelog
+* Mon Aug  3 2026 Daniel P. Berrangé <berrange@redhat.com> - 12.6.0-1
+- Update to 12.6.0
+
 * Thu Jul 16 2026 Fedora Release Engineering <releng@fedoraproject.org> - 12.5.0-2
 - Rebuilt for https://fedoraproject.org/wiki/Fedora_45_Mass_Rebuild
+
+* Wed Jul  1 2026 Daniel P. Berrangé <berrange@redhat.com> - 12.5.0-1
+- Update to 12.5.0
 
 * Mon Jun 01 2026 Cole Robinson <crobinso@redhat.com> - 12.4.0-1
 - Rebase to version 12.4.0
