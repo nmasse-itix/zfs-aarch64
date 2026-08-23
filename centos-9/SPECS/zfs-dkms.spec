@@ -12,7 +12,7 @@
 
 Name:           %{module}-dkms
 
-Version:        2.2.10
+Version:        2.2.11
 Release:        1%{?dist}
 Summary:        Kernel module(s) (dkms)
 
