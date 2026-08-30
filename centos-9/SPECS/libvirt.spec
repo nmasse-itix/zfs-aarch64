@@ -287,7 +287,7 @@
 Summary: Library providing a simple virtualization API
 Name: libvirt
 Version: 11.10.0
-Release: 16%{?dist}%{?extra_release}
+Release: 18%{?dist}%{?extra_release}
 License: GPL-2.0-or-later AND LGPL-2.1-only AND LGPL-2.1-or-later AND OFL-1.1
 URL: https://libvirt.org/
 
@@ -435,6 +435,28 @@ Patch137: libvirt-qemuValidateDomainDeviceDefVideo-Fix-checks-of-virtio-video-de
 Patch138: libvirt-qemuDeviceVideoGetModel-Remove-logic-for-selecting-virtio-devices.patch
 Patch139: libvirt-qemuDeviceVideoGetModel-Simplify-by-relying-on-checks-from-qemuValidateDomainDeviceDefVideo.patch
 Patch140: libvirt-qemu-Remove-qemuDomainSupportsVideoVga.patch
+Patch141: libvirt-conf-schemas-Allow-.-in-schema-for-CPU-flag-name.patch
+Patch142: libvirt-tests-capabilityschemadata-Add-a-real-test-example.patch
+Patch143: libvirt-util-virFileChownFiles-do-not-follow-symlinks.patch
+Patch144: libvirt-qemu-Always-assume-support-for-QEMU_CAPS_SET_ACTION.patch
+Patch145: libvirt-qemu-Remove-unused-qemuProcessRebootAllowed.patch
+Patch146: libvirt-qemu-monitor-Remove-support-for-watchdog-set-action.patch
+Patch147: libvirt-qemu-Remove-allowReboot-field.patch
+Patch148: libvirt-qemu-capabilities-Retire-QEMU_CAPS_SET_ACTION.patch
+Patch149: libvirt-qemuProcessSetupLifecycleActions-Prepare-to-handle-other-actions.patch
+Patch150: libvirt-qemuDomainModifyLifecycleActionLive-Prepare-to-handle-other-actions.patch
+Patch151: libvirt-processGuestPanicEvent-Don-t-pass-panic-action-via-parameter.patch
+Patch152: libvirt-conf-Use-proper-enum-types-for-onReboot-onPoweroff-onCrash-and-onLockFailure.patch
+Patch153: libvirt-qemuMonitorGuestPanicEventInfoFormatMsg-Directly-return-message.patch
+Patch154: libvirt-qemuProcessGuestPanicEventInfo-Fold-into-only-caller.patch
+Patch155: libvirt-qemu-processGuestPanicEvent-Split-individual-steps-under-separate-conditions.patch
+Patch156: libvirt-Add-support-for-keeping-VM-running-when-panic-notifier-is-used.patch
+Patch157: libvirt-qemu-Fix-proper-ordering-of-virtlockd-shutdown.patch
+Patch158: libvirt-Add-guest-device-info-to-virDomainGetGuestInfo.patch
+Patch159: libvirt-qemu_agent-Introduce-guest-get-devices.patch
+Patch160: libvirt-qemuagenttest-Introduce-GetGuestDeviceInfo-test-case.patch
+Patch161: libvirt-qemu-Implement-device-info-for-virDomainGetGuestInfo-API.patch
+Patch162: libvirt-virsh-Add-support-for-VIR_DOMAIN_GUEST_INFO_DEVICES.patch
 
 
 Requires: libvirt-daemon = %{version}-%{release}
@@ -2826,6 +2848,32 @@ exit 0
 %endif
 
 %changelog
+* Wed Aug 19 2026 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-18
+- qemu: Always assume support for 'QEMU_CAPS_SET_ACTION' (RHEL-242546)
+- qemu: Remove unused 'qemuProcessRebootAllowed' (RHEL-242546)
+- qemu: monitor: Remove support for 'watchdog-set-action' (RHEL-242546)
+- qemu: Remove 'allowReboot' field (RHEL-242546)
+- qemu: capabilities: Retire QEMU_CAPS_SET_ACTION (RHEL-242546)
+- qemuProcessSetupLifecycleActions: Prepare to handle other actions (RHEL-242546)
+- qemuDomainModifyLifecycleActionLive: Prepare to handle other actions (RHEL-242546)
+- processGuestPanicEvent: Don't pass panic action via parameter (RHEL-242546)
+- conf: Use proper enum types for 'onReboot', 'onPoweroff', 'onCrash', and 'onLockFailure' (RHEL-242546)
+- qemuMonitorGuestPanicEventInfoFormatMsg: Directly return message (RHEL-242546)
+- qemuProcessGuestPanicEventInfo: Fold into only caller (RHEL-242546)
+- qemu: processGuestPanicEvent: Split individual steps under separate conditions (RHEL-242546)
+- Add support for keeping VM running when panic notifier is used (RHEL-242546)
+- qemu: Fix proper ordering of 'virtlockd' shutdown (RHEL-180876)
+- Add guest device info to virDomainGetGuestInfo (RHEL-243300)
+- qemu_agent: Introduce guest-get-devices (RHEL-243300)
+- qemuagenttest: Introduce GetGuestDeviceInfo test case (RHEL-243300)
+- qemu: Implement device info for virDomainGetGuestInfo() API (RHEL-243300)
+- virsh: Add support for VIR_DOMAIN_GUEST_INFO_DEVICES (RHEL-243300)
+
+* Fri Aug 14 2026 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-17
+- conf: schemas: Allow '.' in schema for CPU flag name (RHEL-222551)
+- tests: capabilityschemadata: Add a real test example (RHEL-222551)
+- util: virFileChownFiles: do not follow symlinks (CVE-2026-63622)
+
 * Fri Jul 24 2026 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-16
 - Live migration fails when virtio-vga becomes available, video device switches from virtio-gpu-pci to virtio-vga on target (RHEL-177646)
 

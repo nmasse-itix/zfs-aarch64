@@ -1,0 +1,88 @@
+From da0e42a5461bc4457f2c05eb4aeb1b40143e4288 Mon Sep 17 00:00:00 2001
+Message-ID: <da0e42a5461bc4457f2c05eb4aeb1b40143e4288.1787144643.git.jdenemar@redhat.com>
+From: Michal Privoznik <mprivozn@redhat.com>
+Date: Wed, 12 Aug 2026 15:11:20 +0200
+Subject: [PATCH] virsh: Add support for VIR_DOMAIN_GUEST_INFO_DEVICES
+
+The virDomainGetGuestInfo() API is exposed as 'guestinfo'
+command. Introduce new --devices option for it to reflect
+introduction of VIR_DOMAIN_GUEST_INFO_DEVICES type.
+
+Signed-off-by: Michal Privoznik <mprivozn@redhat.com>
+Reviewed-by: Peter Krempa <pkrempa@redhat.com>
+(cherry picked from commit a634a99a07cf510658939164b6982297789025b8)
+Resolves: https://redhat.atlassian.net/browse/RHEL-243300
+Signed-off-by: Michal Privoznik <mprivozn@redhat.com>
+---
+ docs/manpages/virsh.rst | 17 +++++++++++++----
+ tools/virsh-domain.c    |  6 ++++++
+ 2 files changed, 19 insertions(+), 4 deletions(-)
+
+diff --git a/docs/manpages/virsh.rst b/docs/manpages/virsh.rst
+index 2936df6a73..d8c6c716df 100644
+--- a/docs/manpages/virsh.rst
++++ b/docs/manpages/virsh.rst
+@@ -3227,7 +3227,7 @@ guestinfo
+ ::
+ 
+    guestinfo domain [--user] [--os] [--timezone] [--hostname] [--filesystem]
+-      [--disk] [--interface]
++      [--disk] [--interface] [--devices]
+ 
+ Print information about the guest from the point of view of the guest agent.
+ Note that this command requires a guest agent to be configured and running in
+@@ -3239,9 +3239,9 @@ Success is always reported in this case.
+ 
+ You can limit the types of information that are returned by specifying one or
+ more flags.  Available information types flags are *--user*, *--os*,
+-*--timezone*, *--hostname*, *--filesystem*, *--disk*, *--interface* and *--load*.
+-If an explicitly requested information type is not supported by the guest agent
+-at that point, the processes will provide an exit code of 1.
++*--timezone*, *--hostname*, *--filesystem*, *--disk*, *--interface*, *--load*
++and *--devices*.  If an explicitly requested information type is not supported
++by the guest agent at that point, the processes will provide an exit code of 1.
+ 
+ Note that depending on the hypervisor type and the version of the guest agent
+ running within the domain, not all of the following information may be
+@@ -3324,6 +3324,15 @@ returned:
+ * ``load.5m``  - average load in guest for last 5 minutes
+ * ``load.15m`` - average load in guest for last 15 minutes
+ 
++*--devices* returns:
++* ``device.count`` - the number of devices that info is returned for
++* ``device.<num>.driverName`` - name of the driver associated with device
++* ``device.<num>.driverDate`` - driver release date in seconds since the epoch
++* ``device.<num>.driverVersion`` - version of the driver associated with the device
++* ``device.<num>.idType`` - device identification type (e.g. pci)
++* ``device.<num>.pciVendor`` - vendor ID for PCI device (in decimal)
++* ``device.<num>.pciDevice`` - device ID for PCI device (in decimal)
++
+ 
+ guestvcpus
+ ----------
+diff --git a/tools/virsh-domain.c b/tools/virsh-domain.c
+index 536c0350c7..7b3e476beb 100644
+--- a/tools/virsh-domain.c
++++ b/tools/virsh-domain.c
+@@ -13583,6 +13583,10 @@ static const vshCmdOptDef opts_guestinfo[] = {
+      .type = VSH_OT_BOOL,
+      .help = N_("report load averages information"),
+     },
++    {.name = "devices",
++     .type = VSH_OT_BOOL,
++     .help = N_("report devices information"),
++    },
+     {.name = NULL}
+ };
+ 
+@@ -13612,6 +13616,8 @@ cmdGuestInfo(vshControl *ctl, const vshCmd *cmd)
+         types |= VIR_DOMAIN_GUEST_INFO_INTERFACES;
+     if (vshCommandOptBool(cmd, "load"))
+         types |= VIR_DOMAIN_GUEST_INFO_LOAD;
++    if (vshCommandOptBool(cmd, "devices"))
++        types |= VIR_DOMAIN_GUEST_INFO_DEVICES;
+ 
+     if (!(dom = virshCommandOptDomain(ctl, cmd, NULL)))
+         return false;
+-- 
+2.55.0

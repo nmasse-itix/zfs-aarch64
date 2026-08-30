@@ -1,0 +1,103 @@
+From 00e93e0ba0770169ffb3797c24ee0cc2b1199990 Mon Sep 17 00:00:00 2001
+Message-ID: <00e93e0ba0770169ffb3797c24ee0cc2b1199990.1787144643.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Wed, 22 Jul 2026 17:05:00 +0200
+Subject: [PATCH] qemuDomainModifyLifecycleActionLive: Prepare to handle other
+ actions
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Rework the code so that it'll be possible to easily extend it to set
+other lifecycle actions in qemu.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Ján Tomko <jtomko@redhat.com>
+(cherry picked from commit 79b6d701c7719fbe5e5db8531ff6460edfbed171)
+
+https://redhat.atlassian.net/browse/RHEL-242546
+---
+ src/qemu/qemu_driver.c | 55 ++++++++++++++++++++++++------------------
+ 1 file changed, 32 insertions(+), 23 deletions(-)
+
+diff --git a/src/qemu/qemu_driver.c b/src/qemu/qemu_driver.c
+index e24ac26f59..410cfad066 100644
+--- a/src/qemu/qemu_driver.c
++++ b/src/qemu/qemu_driver.c
+@@ -19244,42 +19244,51 @@ qemuDomainModifyLifecycleActionLive(virDomainObj *vm,
+                                     virDomainLifecycle type,
+                                     virDomainLifecycleAction action)
+ {
+-    qemuMonitorActionReboot monReboot = QEMU_MONITOR_ACTION_REBOOT_KEEP;
++    qemuMonitorActionShutdown shutdown = QEMU_MONITOR_ACTION_SHUTDOWN_KEEP;
++    qemuMonitorActionReboot reboot = QEMU_MONITOR_ACTION_REBOOT_KEEP;
++    qemuMonitorActionWatchdog watchdog = QEMU_MONITOR_ACTION_WATCHDOG_KEEP;
++    qemuMonitorActionPanic panic = QEMU_MONITOR_ACTION_PANIC_KEEP;
+     qemuDomainObjPrivate *priv = vm->privateData;
+     int rc;
+ 
+-    /* For now we only update 'reboot' action here as we want to keep the
+-     * shutdown action as is (we're emulating the outcome anyways)) */
+-    if (type != VIR_DOMAIN_LIFECYCLE_REBOOT ||
+-        vm->def->onReboot == action)
+-        return 0;
++    switch (type) {
++    case VIR_DOMAIN_LIFECYCLE_REBOOT:
++        if (vm->def->onReboot == action)
++            break;
+ 
++        switch (action) {
++        case VIR_DOMAIN_LIFECYCLE_ACTION_DESTROY:
++            reboot = QEMU_MONITOR_ACTION_REBOOT_SHUTDOWN;
++            break;
+ 
+-    switch (action) {
+-    case VIR_DOMAIN_LIFECYCLE_ACTION_DESTROY:
+-        monReboot = QEMU_MONITOR_ACTION_REBOOT_SHUTDOWN;
++        case VIR_DOMAIN_LIFECYCLE_ACTION_RESTART:
++            reboot = QEMU_MONITOR_ACTION_REBOOT_RESET;
++            break;
++
++        case VIR_DOMAIN_LIFECYCLE_ACTION_PRESERVE:
++        case VIR_DOMAIN_LIFECYCLE_ACTION_RESTART_RENAME:
++        case VIR_DOMAIN_LIFECYCLE_ACTION_COREDUMP_DESTROY:
++        case VIR_DOMAIN_LIFECYCLE_ACTION_COREDUMP_RESTART:
++        case VIR_DOMAIN_LIFECYCLE_ACTION_LAST:
++            break;
++        }
+         break;
+ 
+-    case VIR_DOMAIN_LIFECYCLE_ACTION_RESTART:
+-        monReboot = QEMU_MONITOR_ACTION_REBOOT_RESET;
++    case VIR_DOMAIN_LIFECYCLE_POWEROFF:
++    case VIR_DOMAIN_LIFECYCLE_CRASH:
++    case VIR_DOMAIN_LIFECYCLE_LAST:
+         break;
+-
+-    case VIR_DOMAIN_LIFECYCLE_ACTION_PRESERVE:
+-    case VIR_DOMAIN_LIFECYCLE_ACTION_RESTART_RENAME:
+-    case VIR_DOMAIN_LIFECYCLE_ACTION_COREDUMP_DESTROY:
+-    case VIR_DOMAIN_LIFECYCLE_ACTION_COREDUMP_RESTART:
+-    case VIR_DOMAIN_LIFECYCLE_ACTION_LAST:
+-        return 0;
+     }
+ 
++    if (shutdown == QEMU_MONITOR_ACTION_SHUTDOWN_KEEP &&
++        reboot == QEMU_MONITOR_ACTION_REBOOT_KEEP &&
++        watchdog == QEMU_MONITOR_ACTION_WATCHDOG_KEEP &&
++        panic == QEMU_MONITOR_ACTION_PANIC_KEEP)
++        return 0;
+ 
+     qemuDomainObjEnterMonitor(vm);
+ 
+-    rc = qemuMonitorSetAction(priv->mon,
+-                              QEMU_MONITOR_ACTION_SHUTDOWN_KEEP,
+-                              monReboot,
+-                              QEMU_MONITOR_ACTION_WATCHDOG_KEEP,
+-                              QEMU_MONITOR_ACTION_PANIC_KEEP);
++    rc = qemuMonitorSetAction(priv->mon, shutdown, reboot, watchdog, panic);
+ 
+     qemuDomainObjExitMonitor(vm);
+     if (rc < 0)
+-- 
+2.55.0

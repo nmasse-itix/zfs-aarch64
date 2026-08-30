@@ -1,0 +1,69 @@
+From 59314b58539370ba53ed27d2efb1d62a78c56fee Mon Sep 17 00:00:00 2001
+Message-ID: <59314b58539370ba53ed27d2efb1d62a78c56fee.1787144197.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Mon, 20 Jul 2026 13:58:55 +0200
+Subject: [PATCH] processGuestPanicEvent: Don't pass panic action via parameter
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+'processGuestPanicEvent' gets the full domain object; there's no point
+passing it via 'struct qemuProcessEvent'.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Ján Tomko <jtomko@redhat.com>
+(cherry picked from commit 0f18f6813cbd53cab8ccdb00fab098b66b90c0fb)
+
+https://redhat.atlassian.net/browse/RHEL-242545
+---
+ src/qemu/qemu_driver.c  | 6 ++----
+ src/qemu/qemu_process.c | 3 +--
+ 2 files changed, 3 insertions(+), 6 deletions(-)
+
+diff --git a/src/qemu/qemu_driver.c b/src/qemu/qemu_driver.c
+index 269694fac5..b7c1a28d5f 100644
+--- a/src/qemu/qemu_driver.c
++++ b/src/qemu/qemu_driver.c
+@@ -3615,7 +3615,6 @@ qemuProcessGuestPanicEventInfo(virQEMUDriver *driver,
+ static void
+ processGuestPanicEvent(virQEMUDriver *driver,
+                        virDomainObj *vm,
+-                       int action,
+                        qemuMonitorEventPanicInfo *info)
+ {
+     qemuDomainObjPrivate *priv = vm->privateData;
+@@ -3650,7 +3649,7 @@ processGuestPanicEvent(virQEMUDriver *driver,
+         VIR_WARN("Unable to release lease on %s", vm->def->name);
+     VIR_DEBUG("Preserving lock state '%s'", NULLSTR(priv->lockState));
+ 
+-    switch (action) {
++    switch (vm->def->onCrash) {
+     case VIR_DOMAIN_LIFECYCLE_ACTION_COREDUMP_DESTROY:
+         if (doCoreDumpToAutoDumpPath(driver, vm, flags) < 0)
+             goto endjob;
+@@ -4208,8 +4207,7 @@ qemuProcessEventHandler(void *data,
+         processWatchdogEvent(driver, vm, processEvent->action);
+         break;
+     case QEMU_PROCESS_EVENT_GUESTPANIC:
+-        processGuestPanicEvent(driver, vm, processEvent->action,
+-                               processEvent->data);
++        processGuestPanicEvent(driver, vm, processEvent->data);
+         break;
+     case QEMU_PROCESS_EVENT_DEVICE_DELETED:
+         processDeviceDeletedEvent(driver, vm, processEvent->data);
+diff --git a/src/qemu/qemu_process.c b/src/qemu/qemu_process.c
+index 397082ef04..8389819ee4 100644
+--- a/src/qemu/qemu_process.c
++++ b/src/qemu/qemu_process.c
+@@ -1359,8 +1359,7 @@ qemuProcessHandleGuestPanic(qemuMonitor *mon G_GNUC_UNUSED,
+ {
+     virObjectLock(vm);
+ 
+-    qemuProcessEventSubmit(vm, QEMU_PROCESS_EVENT_GUESTPANIC,
+-                           vm->def->onCrash, 0, info);
++    qemuProcessEventSubmit(vm, QEMU_PROCESS_EVENT_GUESTPANIC, 0, 0, info);
+ 
+     virObjectUnlock(vm);
+ }
+-- 
+2.55.0

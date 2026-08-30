@@ -1,0 +1,63 @@
+From efab037086cf55a718cde67573037f28dcadedf2 Mon Sep 17 00:00:00 2001
+Message-ID: <efab037086cf55a718cde67573037f28dcadedf2.1787144643.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Mon, 20 Jul 2026 13:29:50 +0200
+Subject: [PATCH] qemu: Remove unused 'qemuProcessRebootAllowed'
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Ján Tomko <jtomko@redhat.com>
+(cherry picked from commit 8effae01b918f91933a6bd3b5721cb243c50248a)
+
+https://redhat.atlassian.net/browse/RHEL-242546
+---
+ src/qemu/qemu_process.c | 18 ------------------
+ src/qemu/qemu_process.h |  2 --
+ 2 files changed, 20 deletions(-)
+
+diff --git a/src/qemu/qemu_process.c b/src/qemu/qemu_process.c
+index 5dfc9e5db3..369dbab579 100644
+--- a/src/qemu/qemu_process.c
++++ b/src/qemu/qemu_process.c
+@@ -6793,24 +6793,6 @@ qemuProcessPrepareDomainHostdevs(virDomainObj *vm,
+ }
+ 
+ 
+-/**
+- * qemuProcessRebootAllowed:
+- * @def: domain definition
+- *
+- * This function encapsulates the logic which dictated whether '-no-reboot' was
+- * used instead of '-no-shutdown' which is used  QEMU versions which don't
+- * support the 'set-action' QMP command.
+- */
+-bool
+-qemuProcessRebootAllowed(const virDomainDef *def)
+-{
+-    return def->onReboot != VIR_DOMAIN_LIFECYCLE_ACTION_DESTROY ||
+-           def->onPoweroff != VIR_DOMAIN_LIFECYCLE_ACTION_DESTROY ||
+-           (def->onCrash != VIR_DOMAIN_LIFECYCLE_ACTION_DESTROY &&
+-            def->onCrash != VIR_DOMAIN_LIFECYCLE_ACTION_COREDUMP_DESTROY);
+-}
+-
+-
+ static int
+ qemuProcessUpdateSEVInfo(virDomainObj *vm)
+ {
+diff --git a/src/qemu/qemu_process.h b/src/qemu/qemu_process.h
+index dc16622ed9..75a725c4b9 100644
+--- a/src/qemu/qemu_process.h
++++ b/src/qemu/qemu_process.h
+@@ -262,8 +262,6 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC(qemuProcessQMP, qemuProcessQMPFree);
+ 
+ int qemuProcessQMPStart(qemuProcessQMP *proc);
+ 
+-bool qemuProcessRebootAllowed(const virDomainDef *def);
+-
+ void qemuProcessCleanupMigrationJob(virQEMUDriver *driver,
+                                     virDomainObj *vm);
+ 
+-- 
+2.55.0

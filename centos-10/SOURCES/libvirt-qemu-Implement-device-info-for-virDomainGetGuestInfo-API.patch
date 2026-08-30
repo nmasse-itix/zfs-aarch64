@@ -1,0 +1,155 @@
+From ecf217dd9ca44b05970ca04085c156d46fa9e513 Mon Sep 17 00:00:00 2001
+Message-ID: <ecf217dd9ca44b05970ca04085c156d46fa9e513.1787144197.git.jdenemar@redhat.com>
+From: Michal Privoznik <mprivozn@redhat.com>
+Date: Wed, 12 Aug 2026 13:44:48 +0200
+Subject: [PATCH] qemu: Implement device info for virDomainGetGuestInfo() API
+
+Use freshly introduced qemuAgentGetGuestDeviceInfo() to implement
+support of VIR_DOMAIN_GUEST_INFO_DEVICES type of
+virDomainGetGuestInfo() API in the QEMU driver.
+
+Resolves: https://redhat.atlassian.net/browse/RHEL-235731
+Signed-off-by: Michal Privoznik <mprivozn@redhat.com>
+Reviewed-by: Peter Krempa <pkrempa@redhat.com>
+(cherry picked from commit 21a3c6f27cd60e8c00d4c0f6825f9b96e13a7a34)
+Signed-off-by: Michal Privoznik <mprivozn@redhat.com>
+---
+ src/hypervisor/qemu_agent.c | 36 ++++++++++++++++++++++++++++++++++++
+ src/hypervisor/qemu_agent.h |  5 +++++
+ src/libvirt_private.syms    |  1 +
+ src/qemu/qemu_driver.c      | 23 ++++++++++++++++++++++-
+ 4 files changed, 64 insertions(+), 1 deletion(-)
+
+diff --git a/src/hypervisor/qemu_agent.c b/src/hypervisor/qemu_agent.c
+index fbfaafc1bb..f5f50e3c92 100644
+--- a/src/hypervisor/qemu_agent.c
++++ b/src/hypervisor/qemu_agent.c
+@@ -2962,3 +2962,39 @@ qemuAgentGetGuestDeviceInfo(qemuAgent *agent,
+     g_clear_pointer(info, g_free);
+     return -1;
+ }
++
++
++void
++qemuAgentGuestDeviceInfoFormatParams(qemuAgentGuestDeviceInfo **devices,
++                                     size_t ndevices,
++                                     virTypedParamList *list)
++{
++    size_t i;
++
++    virTypedParamListAddUInt(list, ndevices, VIR_DOMAIN_GUEST_INFO_DEVICE_COUNT);
++
++    for (i = 0; i < ndevices; i++) {
++        virTypedParamListAddString(list, devices[i]->driverName,
++                                   VIR_DOMAIN_GUEST_INFO_DEVICE_PREFIX "%zu" VIR_DOMAIN_GUEST_INFO_DEVICE_SUFFIX_DRIVER_NAME, i);
++
++        if (devices[i]->driverDate != -1) {
++            /* Guest agent reports this in nanoseconds, our API in seconds. */
++            virTypedParamListAddLLong(list, devices[i]->driverDate / 1000000000,
++                                      VIR_DOMAIN_GUEST_INFO_DEVICE_PREFIX "%zu" VIR_DOMAIN_GUEST_INFO_DEVICE_SUFFIX_DRIVER_DATE, i);
++        }
++
++        if (devices[i]->driverVersion) {
++            virTypedParamListAddString(list, devices[i]->driverVersion,
++                                       VIR_DOMAIN_GUEST_INFO_DEVICE_PREFIX "%zu" VIR_DOMAIN_GUEST_INFO_DEVICE_SUFFIX_DRIVER_VERSION, i);
++        }
++
++        if (devices[i]->pci) {
++            virTypedParamListAddString(list, "pci",
++                                       VIR_DOMAIN_GUEST_INFO_DEVICE_PREFIX "%zu" VIR_DOMAIN_GUEST_INFO_DEVICE_SUFFIX_ID_TYPE, i);
++            virTypedParamListAddUInt(list, devices[i]->pci->vendorID,
++                                     VIR_DOMAIN_GUEST_INFO_DEVICE_PREFIX "%zu" VIR_DOMAIN_GUEST_INFO_DEVICE_SUFFIX_PCI_VENDOR, i);
++            virTypedParamListAddUInt(list, devices[i]->pci->deviceID,
++                                     VIR_DOMAIN_GUEST_INFO_DEVICE_PREFIX "%zu" VIR_DOMAIN_GUEST_INFO_DEVICE_SUFFIX_PCI_DEVICE, i);
++        }
++    }
++}
+diff --git a/src/hypervisor/qemu_agent.h b/src/hypervisor/qemu_agent.h
+index def4194ab7..ea69524950 100644
+--- a/src/hypervisor/qemu_agent.h
++++ b/src/hypervisor/qemu_agent.h
+@@ -239,3 +239,8 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC(qemuAgentGuestDeviceInfo, qemuAgentGuestDeviceInfo
+ int qemuAgentGetGuestDeviceInfo(qemuAgent *agent,
+                                 qemuAgentGuestDeviceInfo ***info,
+                                 bool report_unsupported);
++
++void
++qemuAgentGuestDeviceInfoFormatParams(qemuAgentGuestDeviceInfo **devices,
++                                     size_t ndevices,
++                                     virTypedParamList *list);
+diff --git a/src/libvirt_private.syms b/src/libvirt_private.syms
+index 0bd8c6f781..6c6cc7b4ff 100644
+--- a/src/libvirt_private.syms
++++ b/src/libvirt_private.syms
+@@ -1735,6 +1735,7 @@ qemuAgentGetTime;
+ qemuAgentGetTimezone;
+ qemuAgentGetUsers;
+ qemuAgentGetVCPUs;
++qemuAgentGuestDeviceInfoFormatParams;
+ qemuAgentGuestDeviceInfoFree;
+ qemuAgentInterfaceFormatParams;
+ qemuAgentNotifyClose;
+diff --git a/src/qemu/qemu_driver.c b/src/qemu/qemu_driver.c
+index c7892161e3..596c5dda67 100644
+--- a/src/qemu/qemu_driver.c
++++ b/src/qemu/qemu_driver.c
+@@ -19990,7 +19990,8 @@ static const unsigned int qemuDomainGetGuestInfoSupportedTypes =
+     VIR_DOMAIN_GUEST_INFO_FILESYSTEM |
+     VIR_DOMAIN_GUEST_INFO_DISKS |
+     VIR_DOMAIN_GUEST_INFO_INTERFACES |
+-    VIR_DOMAIN_GUEST_INFO_LOAD;
++    VIR_DOMAIN_GUEST_INFO_LOAD |
++    VIR_DOMAIN_GUEST_INFO_DEVICES;
+ 
+ static int
+ qemuDomainGetGuestInfoCheckSupport(unsigned int types,
+@@ -20038,6 +20039,8 @@ qemuDomainGetGuestInfo(virDomainPtr dom,
+     double load5m = 0;
+     double load15m = 0;
+     bool format_load = false;
++    qemuAgentGuestDeviceInfo **devices = NULL;
++    size_t ndevices = 0;
+     size_t i;
+     g_autoptr(virTypedParamList) list = virTypedParamListNew();
+ 
+@@ -20117,6 +20120,14 @@ qemuDomainGetGuestInfo(virDomainPtr dom,
+             format_load = true;
+     }
+ 
++    if (supportedTypes & VIR_DOMAIN_GUEST_INFO_DEVICES) {
++        rc = qemuAgentGetGuestDeviceInfo(agent, &devices, report_unsupported);
++        if (rc == -1)
++            goto exitagent;
++        if (rc >= 0)
++            ndevices = rc;
++    }
++
+     qemuDomainObjExitAgent(vm, agent);
+     virDomainObjEndAgentJob(vm);
+ 
+@@ -20149,6 +20160,10 @@ qemuDomainGetGuestInfo(virDomainPtr dom,
+         virTypedParamListAddDouble(list, load15m, VIR_DOMAIN_GUEST_INFO_LOAD_15M);
+     }
+ 
++    if (ndevices > 0) {
++        qemuAgentGuestDeviceInfoFormatParams(devices, ndevices, list);
++    }
++
+     if (virTypedParamListSteal(list, params, nparams) < 0)
+         goto cleanup;
+ 
+@@ -20166,6 +20181,12 @@ qemuDomainGetGuestInfo(virDomainPtr dom,
+             virDomainInterfaceFree(ifaces[i]);
+     }
+     g_free(ifaces);
++    if (devices && ndevices > 0) {
++        for (i = 0; i < ndevices; i++) {
++            qemuAgentGuestDeviceInfoFree(devices[i]);
++        }
++        g_free(devices);
++    }
+ 
+     virDomainObjEndAPI(&vm);
+     return ret;
+-- 
+2.55.0

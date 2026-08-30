@@ -1,0 +1,134 @@
+From fa8e0a8220b8b29c97a77a9d564e68e6a2ddaee1 Mon Sep 17 00:00:00 2001
+Message-ID: <fa8e0a8220b8b29c97a77a9d564e68e6a2ddaee1.1787144197.git.jdenemar@redhat.com>
+From: Michal Privoznik <mprivozn@redhat.com>
+Date: Wed, 12 Aug 2026 15:11:12 +0200
+Subject: [PATCH] Add guest device info to virDomainGetGuestInfo
+
+QEMU guest agent has 'guest-get-devices` command, which returns
+information on guest devices (driver name, version, release date,
+and so on). In this commit the public API part is introduced.
+
+Signed-off-by: Michal Privoznik <mprivozn@redhat.com>
+Reviewed-by: Peter Krempa <pkrempa@redhat.com>
+(cherry picked from commit 3033dae6989083fde1d06427ee2840242cfd8dca)
+Resolves: https://redhat.atlassian.net/browse/RHEL-235731
+Signed-off-by: Michal Privoznik <mprivozn@redhat.com>
+---
+ include/libvirt/libvirt-domain.h | 78 ++++++++++++++++++++++++++++++++
+ src/libvirt-domain.c             |  5 ++
+ 2 files changed, 83 insertions(+)
+
+diff --git a/include/libvirt/libvirt-domain.h b/include/libvirt/libvirt-domain.h
+index f4dfe9fb1a..f9cc06b6e9 100644
+--- a/include/libvirt/libvirt-domain.h
++++ b/include/libvirt/libvirt-domain.h
+@@ -8867,6 +8867,83 @@ int virDomainSetLaunchSecurityState(virDomainPtr domain,
+  */
+ # define VIR_DOMAIN_GUEST_INFO_LOAD_15M "load.15m"
+ 
++/**
++ * VIR_DOMAIN_GUEST_INFO_DEVICE_COUNT:
++ *
++ * The number of guest devices that detailed information is fetched for as
++ * unsigned int.
++ *
++ * Since: 12.7.0
++ */
++# define VIR_DOMAIN_GUEST_INFO_DEVICE_COUNT "device.count"
++
++/**
++ * VIR_DOMAIN_GUEST_INFO_DEVICE_PREFIX:
++ *
++ * The parameter name prefix to access each device entry. Concatenate the
++ * prefix, the entry number formatted as an unsigned integer and one of the
++ * device suffix parameters to form a complete parameter name.
++ *
++ * Since: 12.7.0
++ */
++# define VIR_DOMAIN_GUEST_INFO_DEVICE_PREFIX "device."
++
++/**
++ * VIR_DOMAIN_GUEST_INFO_DEVICE_SUFFIX_DRIVER_NAME:
++ *
++ * Name of the device driver (e.g. ``VirtIO Balloon Driver``) as a string.
++ *
++ * Since: 12.7.0
++ */
++# define VIR_DOMAIN_GUEST_INFO_DEVICE_SUFFIX_DRIVER_NAME ".driverName"
++
++/**
++ * VIR_DOMAIN_GUEST_INFO_DEVICE_SUFFIX_DRIVER_DATE:
++ *
++ * Driver release date in seconds since the epoch (e.g. 1736726400) as long long.
++ *
++ * Since: 12.7.0
++ */
++# define VIR_DOMAIN_GUEST_INFO_DEVICE_SUFFIX_DRIVER_DATE ".driverDate"
++
++/**
++ * VIR_DOMAIN_GUEST_INFO_DEVICE_SUFFIX_DRIVER_VERSION:
++ *
++ * Driver version (e.g. ``100.100.104.27100``) as a string.
++ *
++ * Since: 12.7.0
++ */
++# define VIR_DOMAIN_GUEST_INFO_DEVICE_SUFFIX_DRIVER_VERSION ".driverVersion"
++
++/**
++ * VIR_DOMAIN_GUEST_INFO_DEVICE_SUFFIX_ID_TYPE:
++ *
++ * Device identification (e.g. ``pci``) as a string.
++ *
++ * Since: 12.7.0
++ */
++# define VIR_DOMAIN_GUEST_INFO_DEVICE_SUFFIX_ID_TYPE ".idType"
++
++/**
++ * VIR_DOMAIN_GUEST_INFO_DEVICE_SUFFIX_PCI_VENDOR:
++ *
++ * PCI device (a device with VIR_DOMAIN_GUEST_INFO_DEVICE_SUFFIX_ID_TYPE equal
++ * to ``pci``) vendor id (e.g. 6900) as a unsigned int.
++ *
++ * Since: 12.7.0
++ */
++# define VIR_DOMAIN_GUEST_INFO_DEVICE_SUFFIX_PCI_VENDOR ".pciVendor"
++
++/**
++ * VIR_DOMAIN_GUEST_INFO_DEVICE_SUFFIX_PCI_DEVICE:
++ *
++ * PCI device (a device with VIR_DOMAIN_GUEST_INFO_DEVICE_SUFFIX_ID_TYPE equal
++ * to ``pci``) device id (e.g. 4165) as a unsigned int.
++ *
++ * Since: 12.7.0
++ */
++# define VIR_DOMAIN_GUEST_INFO_DEVICE_SUFFIX_PCI_DEVICE ".pciDevice"
++
+ /**
+  * virDomainGuestInfoTypes:
+  *
+@@ -8881,6 +8958,7 @@ typedef enum {
+     VIR_DOMAIN_GUEST_INFO_DISKS = (1 << 5), /* return disks information (Since: 7.0.0) */
+     VIR_DOMAIN_GUEST_INFO_INTERFACES = (1 << 6), /* return interfaces information (Since: 7.10.0) */
+     VIR_DOMAIN_GUEST_INFO_LOAD = (1 << 7), /* return load averages (Since: 11.2.0) */
++    VIR_DOMAIN_GUEST_INFO_DEVICES = (1 << 8), /* return devices information (Since: 12.7.0) */
+ } virDomainGuestInfoTypes;
+ 
+ int virDomainGetGuestInfo(virDomainPtr domain,
+diff --git a/src/libvirt-domain.c b/src/libvirt-domain.c
+index 4cf1d996b8..396d3727bd 100644
+--- a/src/libvirt-domain.c
++++ b/src/libvirt-domain.c
+@@ -13260,6 +13260,11 @@ virDomainSetVcpu(virDomainPtr domain,
+  *  The VIR_DOMAIN_GUEST_INFO_LOAD_* constants define the known typed parameter
+  *  keys.
+  *
++ * VIR_DOMAIN_GUEST_INFO_DEVICES:
++ *  Returns information on guest devices.
++ *  The VIR_DOMAIN_GUEST_INFO_DEVICE_* constants define the known typed
++ *  parameter keys.
++ *
+  * Using 0 for @types returns all information groups supported by the given
+  * hypervisor.
+  *
+-- 
+2.55.0

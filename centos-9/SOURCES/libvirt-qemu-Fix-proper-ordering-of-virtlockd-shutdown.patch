@@ -1,0 +1,50 @@
+From c2b993df4c9dfa1c8ff49db685761dd59ba72073 Mon Sep 17 00:00:00 2001
+Message-ID: <c2b993df4c9dfa1c8ff49db685761dd59ba72073.1787144643.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Tue, 18 Aug 2026 10:09:06 +0200
+Subject: [PATCH] qemu: Fix proper ordering of 'virtlockd' shutdown
+
+In commit aa1bf13b9caa4ef893cd4fdbaa111d5da73aa120 I attempted to fix
+the ordering of virtlockd and virtlogd during shutdown but I made a typo
+in the name of 'virtlockd.service' (missing 'd').
+
+Fixes: aa1bf13b9caa4ef893cd4fdbaa111d5da73aa120
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Pavel Hrdina <phrdina@redhat.com>
+Reviewed-by: Martin Kletzander <mkletzan@redhat.com>
+(cherry picked from commit 82b39d0580ecb6aa4a6c88eabb85cc6d6bafd559)
+
+https://redhat.atlassian.net/browse/RHEL-180876
+---
+ src/qemu/virtqemud.service.extra.in | 2 +-
+ src/remote/libvirtd.service.in      | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/qemu/virtqemud.service.extra.in b/src/qemu/virtqemud.service.extra.in
+index 3cc2edcfd0..df36890704 100644
+--- a/src/qemu/virtqemud.service.extra.in
++++ b/src/qemu/virtqemud.service.extra.in
+@@ -9,7 +9,7 @@ After=virtlockd.socket
+ # To ensure that our helper daemons are not shut down before the main daemon
+ # shuts down we need also explicit ordering with the .service unit
+ After=virtlogd.service
+-After=virtlock.service
++After=virtlockd.service
+ Wants=systemd-machined.service
+ After=systemd-machined.service
+ After=remote-fs.target
+diff --git a/src/remote/libvirtd.service.in b/src/remote/libvirtd.service.in
+index f26494d646..ccdb8379f3 100644
+--- a/src/remote/libvirtd.service.in
++++ b/src/remote/libvirtd.service.in
+@@ -18,7 +18,7 @@ After=virtlockd.socket
+ # To ensure that our helper daemons are not shut down before the main daemon
+ # shuts down we need also explicit ordering with the .service unit
+ After=virtlogd.service
+-After=virtlock.service
++After=virtlockd.service
+ Wants=systemd-machined.service
+ After=network.target
+ After=dbus.service
+-- 
+2.55.0

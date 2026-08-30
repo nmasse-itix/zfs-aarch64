@@ -1,0 +1,152 @@
+From 59f9683dd189584af437b03fec40006c03be581e Mon Sep 17 00:00:00 2001
+Message-ID: <59f9683dd189584af437b03fec40006c03be581e.1786713643.git.jdenemar@redhat.com>
+From: Nathan Chen <nathanc@nvidia.com>
+Date: Wed, 5 Aug 2026 15:12:57 -0700
+Subject: [PATCH] qemu: introduce QEMU_CAPS_DEVICE_ARM_SMMUV3
+
+The arm-smmuv3 QOM type is reported by qom-list-types on ARM QEMU.
+Register it as QEMU_CAPS_DEVICE_ARM_SMMUV3 so later device-list-properties
+probing for arm-smmuv3 properties can be gated on this capability
+instead of an architecture check.
+
+Reviewed-by: Pavel Hrdina <phrdina@redhat.com>
+Signed-off-by: Nathan Chen <nathanc@nvidia.com>
+(cherry picked from commit 93e0d7845585fd42fc770991e5eb9f365c96d6bb)
+
+Conflicts:
+    src/qemu/qemu_capabilities.c
+    src/qemu/qemu_capabilities.h
+    tests/qemucapabilitiesdata/caps_11.1.0_aarch64.xml
+        - missing upstream commit 248981ff51116e06d3b7be7dbd33559a45261e24
+
+Resolves: https://redhat.atlassian.net/browse/RHEL-138901
+---
+ src/qemu/qemu_capabilities.c                          | 2 ++
+ src/qemu/qemu_capabilities.h                          | 1 +
+ tests/qemucapabilitiesdata/caps_10.0.0_aarch64.xml    | 1 +
+ tests/qemucapabilitiesdata/caps_10.2.0_aarch64.xml    | 1 +
+ tests/qemucapabilitiesdata/caps_11.0.0_aarch64.xml    | 1 +
+ tests/qemucapabilitiesdata/caps_11.1.0_aarch64.xml    | 1 +
+ tests/qemucapabilitiesdata/caps_8.2.0_aarch64.xml     | 1 +
+ tests/qemucapabilitiesdata/caps_8.2.0_armv7l.xml      | 1 +
+ tests/qemucapabilitiesdata/caps_9.2.0_aarch64+hvf.xml | 1 +
+ 9 files changed, 10 insertions(+)
+
+diff --git a/src/qemu/qemu_capabilities.c b/src/qemu/qemu_capabilities.c
+index be57dcad8e..33efc6651b 100644
+--- a/src/qemu/qemu_capabilities.c
++++ b/src/qemu/qemu_capabilities.c
+@@ -767,6 +767,7 @@ VIR_ENUM_IMPL(virQEMUCaps,
+ 
+               /* 495 */
+               "blockdev-mirror.target-is-zero", /* QEMU_CAPS_BLOCKDEV_MIRROR_TARGET_IS_ZERO */
++              "arm-smmuv3", /* QEMU_CAPS_DEVICE_ARM_SMMUV3 */
+     );
+ 
+ 
+@@ -1480,6 +1481,7 @@ struct virQEMUCapsStringFlags virQEMUCapsObjectTypes[] = {
+     { "iommufd", QEMU_CAPS_OBJECT_IOMMUFD },
+     { "uefi-vars-x64", QEMU_CAPS_DEVICE_UEFI_VARS },
+     { "uefi-vars-sysbus", QEMU_CAPS_DEVICE_UEFI_VARS },
++    { "arm-smmuv3", QEMU_CAPS_DEVICE_ARM_SMMUV3 },
+ };
+ 
+ 
+diff --git a/src/qemu/qemu_capabilities.h b/src/qemu/qemu_capabilities.h
+index 3014f3dc5e..e5d589b0c4 100644
+--- a/src/qemu/qemu_capabilities.h
++++ b/src/qemu/qemu_capabilities.h
+@@ -741,6 +741,7 @@ typedef enum { /* virQEMUCapsFlags grouping marker for syntax-check */
+ 
+     /* 495 */
+     QEMU_CAPS_BLOCKDEV_MIRROR_TARGET_IS_ZERO, /* 'blockdev-mirror' supports 'target-is-zero' */
++    QEMU_CAPS_DEVICE_ARM_SMMUV3, /* -device arm-smmuv3 */
+ 
+     QEMU_CAPS_LAST /* this must always be the last item */
+ } virQEMUCapsFlags;
+diff --git a/tests/qemucapabilitiesdata/caps_10.0.0_aarch64.xml b/tests/qemucapabilitiesdata/caps_10.0.0_aarch64.xml
+index b6434e6019..b2a0872853 100644
+--- a/tests/qemucapabilitiesdata/caps_10.0.0_aarch64.xml
++++ b/tests/qemucapabilitiesdata/caps_10.0.0_aarch64.xml
+@@ -166,6 +166,7 @@
+   <flag name='virtio-iommu.aw-bits'/>
+   <flag name='iommufd'/>
+   <flag name='uefi-vars'/>
++  <flag name='arm-smmuv3'/>
+   <version>10000000</version>
+   <microcodeVersion>61700285</microcodeVersion>
+   <package>v10.0.0</package>
+diff --git a/tests/qemucapabilitiesdata/caps_10.2.0_aarch64.xml b/tests/qemucapabilitiesdata/caps_10.2.0_aarch64.xml
+index df3e2a8275..449f2f65c7 100644
+--- a/tests/qemucapabilitiesdata/caps_10.2.0_aarch64.xml
++++ b/tests/qemucapabilitiesdata/caps_10.2.0_aarch64.xml
+@@ -186,6 +186,7 @@
+   <flag name='iommufd'/>
+   <flag name='uefi-vars'/>
+   <flag name='blockdev-mirror.target-is-zero'/>
++  <flag name='arm-smmuv3'/>
+   <version>10002000</version>
+   <microcodeVersion>61700287</microcodeVersion>
+   <package>v10.2.0</package>
+diff --git a/tests/qemucapabilitiesdata/caps_11.0.0_aarch64.xml b/tests/qemucapabilitiesdata/caps_11.0.0_aarch64.xml
+index 3fdc0d6621..b9acf8ac67 100644
+--- a/tests/qemucapabilitiesdata/caps_11.0.0_aarch64.xml
++++ b/tests/qemucapabilitiesdata/caps_11.0.0_aarch64.xml
+@@ -188,6 +188,7 @@
+   <flag name='uefi-vars'/>
+   <flag name='query-block-flat'/>
+   <flag name='blockdev-mirror.target-is-zero'/>
++  <flag name='arm-smmuv3'/>
+   <version>11000000</version>
+   <microcodeVersion>61700286</microcodeVersion>
+   <package>v11.0.0</package>
+diff --git a/tests/qemucapabilitiesdata/caps_11.1.0_aarch64.xml b/tests/qemucapabilitiesdata/caps_11.1.0_aarch64.xml
+index f7dd14a1ad..0595e5f88c 100644
+--- a/tests/qemucapabilitiesdata/caps_11.1.0_aarch64.xml
++++ b/tests/qemucapabilitiesdata/caps_11.1.0_aarch64.xml
+@@ -188,6 +188,7 @@
+   <flag name='uefi-vars'/>
+   <flag name='query-block-flat'/>
+   <flag name='blockdev-mirror.target-is-zero'/>
++  <flag name='arm-smmuv3'/>
+   <version>11000050</version>
+   <microcodeVersion>61700287</microcodeVersion>
+   <package>v11.0.0-1600-g5611a9268d</package>
+diff --git a/tests/qemucapabilitiesdata/caps_8.2.0_aarch64.xml b/tests/qemucapabilitiesdata/caps_8.2.0_aarch64.xml
+index bb70bcaf1f..e026abfd96 100644
+--- a/tests/qemucapabilitiesdata/caps_8.2.0_aarch64.xml
++++ b/tests/qemucapabilitiesdata/caps_8.2.0_aarch64.xml
+@@ -161,6 +161,7 @@
+   <flag name='nvme'/>
+   <flag name='nvme-ns'/>
+   <flag name='usb-bot'/>
++  <flag name='arm-smmuv3'/>
+   <version>8002000</version>
+   <microcodeVersion>61700246</microcodeVersion>
+   <package>v8.2.0</package>
+diff --git a/tests/qemucapabilitiesdata/caps_8.2.0_armv7l.xml b/tests/qemucapabilitiesdata/caps_8.2.0_armv7l.xml
+index 9590bc464a..d3af74bcb3 100644
+--- a/tests/qemucapabilitiesdata/caps_8.2.0_armv7l.xml
++++ b/tests/qemucapabilitiesdata/caps_8.2.0_armv7l.xml
+@@ -168,6 +168,7 @@
+   <flag name='nvme'/>
+   <flag name='nvme-ns'/>
+   <flag name='usb-bot'/>
++  <flag name='arm-smmuv3'/>
+   <version>8002000</version>
+   <microcodeVersion>0</microcodeVersion>
+   <package>qemu-8.2.0-7.fc39</package>
+diff --git a/tests/qemucapabilitiesdata/caps_9.2.0_aarch64+hvf.xml b/tests/qemucapabilitiesdata/caps_9.2.0_aarch64+hvf.xml
+index 9c843f9e5c..8c777c121e 100644
+--- a/tests/qemucapabilitiesdata/caps_9.2.0_aarch64+hvf.xml
++++ b/tests/qemucapabilitiesdata/caps_9.2.0_aarch64+hvf.xml
+@@ -136,6 +136,7 @@
+   <flag name='usb-bot'/>
+   <flag name='acpi-generic-initiator'/>
+   <flag name='virtio-iommu.aw-bits'/>
++  <flag name='arm-smmuv3'/>
+   <version>9002002</version>
+   <microcodeVersion>61700247</microcodeVersion>
+   <package></package>
+-- 
+2.55.0

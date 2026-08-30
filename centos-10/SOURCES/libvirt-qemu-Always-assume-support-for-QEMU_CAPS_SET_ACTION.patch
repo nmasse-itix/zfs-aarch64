@@ -1,0 +1,239 @@
+From e21a75730bd8cdd57b595222ff1af64d012431f8 Mon Sep 17 00:00:00 2001
+Message-ID: <e21a75730bd8cdd57b595222ff1af64d012431f8.1787144196.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Mon, 20 Jul 2026 13:27:20 +0200
+Subject: [PATCH] qemu: Always assume support for 'QEMU_CAPS_SET_ACTION'
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The 'set-action' QMP command was introduced in qemu-6.0 and can't be
+disabled in any way. Oldest qemu we support is qemu-7.2 so all versions
+now have it.
+
+Remove all conditional code which depends on the 'set-action' command.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Ján Tomko <jtomko@redhat.com>
+(cherry picked from commit 771f17c9072c6aacc7bc10e01afc14421512c913)
+
+https://redhat.atlassian.net/browse/RHEL-242545
+---
+ src/qemu/qemu_command.c  | 13 +++----------
+ src/qemu/qemu_driver.c   | 16 ----------------
+ src/qemu/qemu_hotplug.c  | 10 +---------
+ src/qemu/qemu_process.c  | 31 +------------------------------
+ src/qemu/qemu_validate.c | 14 ++------------
+ 5 files changed, 7 insertions(+), 77 deletions(-)
+
+diff --git a/src/qemu/qemu_command.c b/src/qemu/qemu_command.c
+index 2d5eaa1e80..346a7905c5 100644
+--- a/src/qemu/qemu_command.c
++++ b/src/qemu/qemu_command.c
+@@ -6171,16 +6171,9 @@ qemuBuildPMCommandLine(virCommand *cmd,
+ {
+     virQEMUCaps *qemuCaps = priv->qemuCaps;
+ 
+-    if (virQEMUCapsGet(priv->qemuCaps, QEMU_CAPS_SET_ACTION)) {
+-        /* with new qemu we always want '-no-shutdown' on startup and we set
+-         * all the other behaviour later during startup */
+-        virCommandAddArg(cmd, "-no-shutdown");
+-    } else {
+-        if (priv->allowReboot == VIR_TRISTATE_BOOL_NO)
+-            virCommandAddArg(cmd, "-no-reboot");
+-        else
+-            virCommandAddArg(cmd, "-no-shutdown");
+-    }
++    /* with new qemu we always want '-no-shutdown' on startup and we set
++     * all the other behaviour later during startup */
++    virCommandAddArg(cmd, "-no-shutdown");
+ 
+     /* Use old syntax of -no-acpi only if qemu didn't report that it supports the
+      * new syntax */
+diff --git a/src/qemu/qemu_driver.c b/src/qemu/qemu_driver.c
+index 8ec9e1f9c4..b3b853b4c8 100644
+--- a/src/qemu/qemu_driver.c
++++ b/src/qemu/qemu_driver.c
+@@ -19551,9 +19551,6 @@ qemuDomainModifyLifecycleActionLive(virDomainObj *vm,
+     qemuDomainObjPrivate *priv = vm->privateData;
+     int rc;
+ 
+-    if (!virQEMUCapsGet(priv->qemuCaps, QEMU_CAPS_SET_ACTION))
+-        return 0;
+-
+     /* For now we only update 'reboot' action here as we want to keep the
+      * shutdown action as is (we're emulating the outcome anyways)) */
+     if (type != VIR_DOMAIN_LIFECYCLE_REBOOT ||
+@@ -19603,7 +19600,6 @@ qemuDomainSetLifecycleAction(virDomainPtr dom,
+ {
+     virQEMUDriver *driver = dom->conn->privateData;
+     g_autoptr(virQEMUDriverConfig) cfg = virQEMUDriverGetConfig(driver);
+-    qemuDomainObjPrivate *priv;
+     virDomainObj *vm = NULL;
+     virDomainDef *def = NULL;
+     virDomainDef *persistentDef = NULL;
+@@ -19620,8 +19616,6 @@ qemuDomainSetLifecycleAction(virDomainPtr dom,
+     if (!(vm = qemuDomainObjFromDomain(dom)))
+         goto cleanup;
+ 
+-    priv = vm->privateData;
+-
+     if (virDomainSetLifecycleActionEnsureACL(dom->conn, vm->def) < 0)
+         goto cleanup;
+ 
+@@ -19636,16 +19630,6 @@ qemuDomainSetLifecycleAction(virDomainPtr dom,
+         goto endjob;
+ 
+     if (def) {
+-        if (!virQEMUCapsGet(priv->qemuCaps, QEMU_CAPS_SET_ACTION)) {
+-            if (priv->allowReboot == VIR_TRISTATE_BOOL_NO ||
+-                (type == VIR_DOMAIN_LIFECYCLE_REBOOT &&
+-                 def->onReboot != action)) {
+-                virReportError(VIR_ERR_OPERATION_UNSUPPORTED, "%s",
+-                               _("cannot update lifecycle action because QEMU was started with incompatible -no-reboot setting"));
+-                goto endjob;
+-            }
+-        }
+-
+         if (qemuDomainModifyLifecycleActionLive(vm, type, action) < 0)
+             goto endjob;
+ 
+diff --git a/src/qemu/qemu_hotplug.c b/src/qemu/qemu_hotplug.c
+index 5be567b510..8990a716fa 100644
+--- a/src/qemu/qemu_hotplug.c
++++ b/src/qemu/qemu_hotplug.c
+@@ -3061,7 +3061,7 @@ qemuDomainAttachWatchdog(virDomainObj *vm,
+     if (vm->def->nwatchdogs) {
+         /* Domain already has a watchdog and all must have the same action. */
+         rv = 0;
+-    } else if (virQEMUCapsGet(priv->qemuCaps, QEMU_CAPS_SET_ACTION)) {
++    } else {
+         /* QEMU doesn't have a 'dump' action; we tell qemu to 'pause', then
+            libvirt listens for the watchdog event, and we perform the dump
+            ourselves. so convert 'dump' to 'pause' for the qemu cli */
+@@ -3103,14 +3103,6 @@ qemuDomainAttachWatchdog(virDomainObj *vm,
+                                   QEMU_MONITOR_ACTION_REBOOT_KEEP,
+                                   watchdogaction,
+                                   QEMU_MONITOR_ACTION_PANIC_KEEP);
+-    } else {
+-        virDomainWatchdogAction actualAction = watchdog->action;
+-
+-        if (actualAction == VIR_DOMAIN_WATCHDOG_ACTION_DUMP)
+-            actualAction = VIR_DOMAIN_WATCHDOG_ACTION_PAUSE;
+-
+-        rv = qemuMonitorSetWatchdogAction(priv->mon,
+-                                          virDomainWatchdogActionTypeToString(actualAction));
+     }
+ 
+     if (rv >= 0)
+diff --git a/src/qemu/qemu_process.c b/src/qemu/qemu_process.c
+index 4c94ff3c91..646ddda7e9 100644
+--- a/src/qemu/qemu_process.c
++++ b/src/qemu/qemu_process.c
+@@ -6898,24 +6898,6 @@ qemuProcessRebootAllowed(const virDomainDef *def)
+ }
+ 
+ 
+-static void
+-qemuProcessPrepareAllowReboot(virDomainObj *vm)
+-{
+-    virDomainDef *def = vm->def;
+-    qemuDomainObjPrivate *priv = vm->privateData;
+-
+-    /* with 'set-action' QMP command we don't need to keep this around as
+-     * we always update qemu with the proper state */
+-    if (virQEMUCapsGet(priv->qemuCaps, QEMU_CAPS_SET_ACTION))
+-        return;
+-
+-    if (priv->allowReboot != VIR_TRISTATE_BOOL_ABSENT)
+-        return;
+-
+-    priv->allowReboot = virTristateBoolFromBool(qemuProcessRebootAllowed(def));
+-}
+-
+-
+ static int
+ qemuProcessUpdateSEVInfo(virDomainObj *vm)
+ {
+@@ -7087,8 +7069,6 @@ qemuProcessPrepareDomain(virQEMUDriver *driver,
+     /* Track if this domain remembers original owner */
+     priv->rememberOwner = cfg->rememberOwner;
+ 
+-    qemuProcessPrepareAllowReboot(vm);
+-
+     /*
+      * Normally PCI addresses are assigned in the virDomainCreate
+      * or virDomainDefine methods. We might still need to assign
+@@ -8216,9 +8196,6 @@ qemuProcessSetupLifecycleActions(virDomainObj *vm,
+     qemuDomainObjPrivate *priv = vm->privateData;
+     int rc;
+ 
+-    if (!(virQEMUCapsGet(priv->qemuCaps, QEMU_CAPS_SET_ACTION)))
+-        return 0;
+-
+     /* for now we handle only onReboot->destroy here as an alternative to
+      * '-no-reboot' on the commandline */
+     if (vm->def->onReboot != VIR_DOMAIN_LIFECYCLE_ACTION_DESTROY)
+@@ -9909,10 +9886,6 @@ qemuProcessReconnect(void *opaque)
+     if (qemuExtDevicesInitPaths(cfg, obj->def) < 0)
+         goto error;
+ 
+-    /* If we are connecting to a guest started by old libvirt there is no
+-     * allowReboot in status XML and we need to initialize it. */
+-    qemuProcessPrepareAllowReboot(obj);
+-
+     if (qemuHostdevUpdateActiveDomainDevices(driver, obj->def) < 0)
+         goto error;
+ 
+@@ -10147,9 +10120,7 @@ qemuProcessReconnect(void *opaque)
+          * domain crashed; otherwise, if the monitor was started,
+          * then we can blame ourselves, else we failed before the
+          * monitor started so we don't really know. */
+-        if (!priv->mon && tryMonReconn &&
+-            (priv->allowReboot == VIR_TRISTATE_BOOL_YES ||
+-             virQEMUCapsGet(priv->qemuCaps, QEMU_CAPS_SET_ACTION)))
++        if (!priv->mon && tryMonReconn)
+             state = VIR_DOMAIN_SHUTOFF_CRASHED;
+         else if (priv->mon)
+             state = VIR_DOMAIN_SHUTOFF_DAEMON;
+diff --git a/src/qemu/qemu_validate.c b/src/qemu/qemu_validate.c
+index 1093eb8363..61f3bd3278 100644
+--- a/src/qemu/qemu_validate.c
++++ b/src/qemu/qemu_validate.c
+@@ -3658,10 +3658,7 @@ qemuValidateDomainDeviceDefDiskBlkdeviotune(const virDomainDiskDef *disk,
+ 
+ 
+ static int
+-qemuValidateDomainDeviceDefDiskTransient(const virDomainDiskDef *disk,
+-                                         const virDomainDef *def,
+-                                         virQEMUCaps *qemuCaps)
+-
++qemuValidateDomainDeviceDefDiskTransient(const virDomainDiskDef *disk)
+ {
+     virStorageType actualType = virStorageSourceGetActualType(disk->src);
+ 
+@@ -3695,13 +3692,6 @@ qemuValidateDomainDeviceDefDiskTransient(const virDomainDiskDef *disk,
+     }
+ 
+     if (disk->transientShareBacking == VIR_TRISTATE_BOOL_YES) {
+-        if (!virQEMUCapsGet(qemuCaps, QEMU_CAPS_SET_ACTION) &&
+-            !qemuProcessRebootAllowed(def)) {
+-            virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
+-                           _("transient disk backing image sharing with destroy action of lifecycle isn't supported by this QEMU binary"));
+-            return -1;
+-        }
+-
+         /* sharing the backing file requires hotplug of the disk in the qemu driver */
+         switch (disk->bus) {
+         case VIR_DOMAIN_DISK_BUS_USB:
+@@ -3747,7 +3737,7 @@ qemuValidateDomainDeviceDefDisk(const virDomainDiskDef *disk,
+     if (qemuValidateDomainDeviceDefDiskBlkdeviotune(disk, def) < 0)
+         return -1;
+ 
+-    if (qemuValidateDomainDeviceDefDiskTransient(disk, def, qemuCaps) < 0)
++    if (qemuValidateDomainDeviceDefDiskTransient(disk) < 0)
+         return -1;
+ 
+     if (disk->src->shared && !disk->src->readonly &&
+-- 
+2.55.0

@@ -1,0 +1,62 @@
+From 94b9bec5bb85bc828e732e7c88c209b86573c4ab Mon Sep 17 00:00:00 2001
+Message-ID: <94b9bec5bb85bc828e732e7c88c209b86573c4ab.1787144643.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Tue, 21 Jul 2026 14:55:38 +0200
+Subject: [PATCH] qemuProcessGuestPanicEventInfo: Fold into only caller
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Move the code directly to the only place that calls this function.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Ján Tomko <jtomko@redhat.com>
+(cherry picked from commit bf4ace1bca464fe8432c2eb08f5261d6f9bdaf29)
+
+https://redhat.atlassian.net/browse/RHEL-242546
+---
+ src/qemu/qemu_driver.c | 22 +++++++---------------
+ 1 file changed, 7 insertions(+), 15 deletions(-)
+
+diff --git a/src/qemu/qemu_driver.c b/src/qemu/qemu_driver.c
+index ddd6e8f7ac..3fd1215006 100644
+--- a/src/qemu/qemu_driver.c
++++ b/src/qemu/qemu_driver.c
+@@ -3503,19 +3503,6 @@ doCoreDumpToAutoDumpPath(virQEMUDriver *driver,
+ }
+ 
+ 
+-static void
+-qemuProcessGuestPanicEventInfo(virQEMUDriver *driver,
+-                               virDomainObj *vm,
+-                               qemuMonitorEventPanicInfo *info)
+-{
+-    g_autofree char *msg = qemuMonitorGuestPanicEventInfoFormatMsg(info);
+-    g_autofree char *timestamp = virTimeStringNow();
+-
+-    if (msg && timestamp)
+-        qemuDomainLogAppendMessage(driver, vm, "%s: panic %s\n", timestamp, msg);
+-}
+-
+-
+ static void
+ processGuestPanicEvent(virQEMUDriver *driver,
+                        virDomainObj *vm,
+@@ -3536,8 +3523,13 @@ processGuestPanicEvent(virQEMUDriver *driver,
+         goto endjob;
+     }
+ 
+-    if (info)
+-        qemuProcessGuestPanicEventInfo(driver, vm, info);
++    if (info) {
++        g_autofree char *msg = qemuMonitorGuestPanicEventInfoFormatMsg(info);
++        g_autofree char *timestamp = virTimeStringNow();
++
++        if (msg && timestamp)
++            qemuDomainLogAppendMessage(driver, vm, "%s: panic %s\n", timestamp, msg);
++    }
+ 
+     virDomainObjSetState(vm, VIR_DOMAIN_CRASHED, VIR_DOMAIN_CRASHED_PANICKED);
+ 
+-- 
+2.55.0

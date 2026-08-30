@@ -1,0 +1,2225 @@
+From 0be99565981f968a4c7bdc7412a426d3149dc68f Mon Sep 17 00:00:00 2001
+Message-ID: <0be99565981f968a4c7bdc7412a426d3149dc68f.1786713644.git.jdenemar@redhat.com>
+From: Nathan Chen <nathanc@nvidia.com>
+Date: Wed, 5 Aug 2026 15:12:58 -0700
+Subject: [PATCH] qemu: introduce QEMU_CAPS_ARM_SMMUV3_SMMU_PER_BUS
+
+The arm-smmuv3 QOM type appears in qom-list-types on ARM QEMU as far
+back as 8.2 because the type is used for machine-integrated IOMMU
+(-machine virt,iommu=smmuv3). That reply does not indicate support
+for a user-pluggable -device arm-smmuv3.
+
+User-pluggable SMMUv3 with the smmu_per_bus property was added in QEMU
+10.2.0. Probe that property via device-list-properties, gated on
+QEMU_CAPS_DEVICE_SMMUV3, so the capability tracks pluggable device
+support rather than mere QOM visibility.
+
+In qemu_validate.c, an IOMMU with pci_bus set requires
+QEMU_CAPS_ARM_SMMUV3_SMMU_PER_BUS; machine-integrated SMMUv3 without
+pci_bus keeps using QEMU_CAPS_MACHINE_VIRT_IOMMU.
+
+Update caps_8.2.0_aarch64, caps_9.2.0_aarch64, caps_10.0.0_aarch64,
+caps_10.2.0_aarch64, caps_11.0.0_aarch64, caps_8.2.0_armv7l, and
+caps_11.1.0_aarch64 .replies with the arm-smmuv3 device-list-properties
+exchange.
+
+Reviewed-by: Pavel Hrdina <phrdina@redhat.com>
+Signed-off-by: Nathan Chen <nathanc@nvidia.com>
+(cherry picked from commit 9bde1c4049f48237c7795e34048812522e342ad8)
+
+Resolves: https://redhat.atlassian.net/browse/RHEL-138901
+---
+ src/qemu/qemu_capabilities.c                  |   8 +
+ src/qemu/qemu_capabilities.h                  |   1 +
+ src/qemu/qemu_validate.c                      |   8 +
+ .../caps_10.0.0_aarch64.replies               |  79 ++++---
+ .../caps_10.2.0_aarch64.replies               | 167 +++++++------
+ .../caps_10.2.0_aarch64.xml                   |   1 +
+ .../caps_11.0.0_aarch64.replies               | 210 +++++++++++------
+ .../caps_11.0.0_aarch64.xml                   |   1 +
+ .../caps_11.1.0_aarch64.replies               | 221 ++++++++++++------
+ .../caps_11.1.0_aarch64.xml                   |   1 +
+ .../caps_8.2.0_aarch64.replies                |  79 ++++---
+ .../caps_8.2.0_armv7l.replies                 |  79 ++++---
+ .../caps_9.2.0_aarch64+hvf.replies            |  75 ++++--
+ 13 files changed, 627 insertions(+), 303 deletions(-)
+
+diff --git a/src/qemu/qemu_capabilities.c b/src/qemu/qemu_capabilities.c
+index 33efc6651b..a7d121f917 100644
+--- a/src/qemu/qemu_capabilities.c
++++ b/src/qemu/qemu_capabilities.c
+@@ -768,6 +768,7 @@ VIR_ENUM_IMPL(virQEMUCaps,
+               /* 495 */
+               "blockdev-mirror.target-is-zero", /* QEMU_CAPS_BLOCKDEV_MIRROR_TARGET_IS_ZERO */
+               "arm-smmuv3", /* QEMU_CAPS_DEVICE_ARM_SMMUV3 */
++              "arm-smmuv3.smmu_per_bus", /* QEMU_CAPS_ARM_SMMUV3_SMMU_PER_BUS */
+     );
+ 
+ 
+@@ -1645,6 +1646,10 @@ static struct virQEMUCapsDevicePropsFlags virQEMUCapsDevicePropsAMDIOMMU[] = {
+     { "xtsup", QEMU_CAPS_AMD_IOMMU_XTSUP, NULL },
+ };
+ 
++static struct virQEMUCapsDevicePropsFlags virQEMUCapsDevicePropsArmSmmuv3[] = {
++    { "smmu_per_bus", QEMU_CAPS_ARM_SMMUV3_SMMU_PER_BUS, NULL },
++};
++
+ /* see documentation for virQEMUQAPISchemaPathGet for the query format */
+ static struct virQEMUCapsStringFlags virQEMUCapsQMPSchemaQueries[] = {
+     { "blockdev-add/arg-type/+file/drop-cache", QEMU_CAPS_MIGRATION_FILE_DROP_CACHE },
+@@ -1810,6 +1815,9 @@ static virQEMUCapsDeviceTypeProps virQEMUCapsDeviceProps[] = {
+     { "amd-iommu", virQEMUCapsDevicePropsAMDIOMMU,
+       G_N_ELEMENTS(virQEMUCapsDevicePropsAMDIOMMU),
+       QEMU_CAPS_AMD_IOMMU },
++    { "arm-smmuv3", virQEMUCapsDevicePropsArmSmmuv3,
++      G_N_ELEMENTS(virQEMUCapsDevicePropsArmSmmuv3),
++      QEMU_CAPS_DEVICE_ARM_SMMUV3 },
+     { "scsi-block", virQEMUCapsDevicePropsSCSIBlock,
+       G_N_ELEMENTS(virQEMUCapsDevicePropsSCSIBlock),
+       -1 },
+diff --git a/src/qemu/qemu_capabilities.h b/src/qemu/qemu_capabilities.h
+index e5d589b0c4..0dc9836ca9 100644
+--- a/src/qemu/qemu_capabilities.h
++++ b/src/qemu/qemu_capabilities.h
+@@ -742,6 +742,7 @@ typedef enum { /* virQEMUCapsFlags grouping marker for syntax-check */
+     /* 495 */
+     QEMU_CAPS_BLOCKDEV_MIRROR_TARGET_IS_ZERO, /* 'blockdev-mirror' supports 'target-is-zero' */
+     QEMU_CAPS_DEVICE_ARM_SMMUV3, /* -device arm-smmuv3 */
++    QEMU_CAPS_ARM_SMMUV3_SMMU_PER_BUS, /* arm-smmuv3.smmu_per_bus */
+ 
+     QEMU_CAPS_LAST /* this must always be the last item */
+ } virQEMUCapsFlags;
+diff --git a/src/qemu/qemu_validate.c b/src/qemu/qemu_validate.c
+index 439d4b1916..2da99329c5 100644
+--- a/src/qemu/qemu_validate.c
++++ b/src/qemu/qemu_validate.c
+@@ -5711,6 +5711,14 @@ qemuValidateDomainDeviceDefIOMMU(const virDomainIOMMUDef *iommu,
+                            virDomainIOMMUModelTypeToString(iommu->model));
+             return -1;
+         }
++        if (iommu->pci_bus >= 0) {
++            if (!virQEMUCapsGet(qemuCaps, QEMU_CAPS_ARM_SMMUV3_SMMU_PER_BUS)) {
++                virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
++                               _("IOMMU device: Setting pciBus for '%1$s' is not supported with this QEMU binary"),
++                               virDomainIOMMUModelTypeToString(iommu->model));
++                return -1;
++            }
++        }
+         if (!virQEMUCapsGet(qemuCaps, QEMU_CAPS_MACHINE_VIRT_IOMMU)) {
+             virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
+                            _("IOMMU device: '%1$s' is not supported with this QEMU binary"),
+diff --git a/tests/qemucapabilitiesdata/caps_10.0.0_aarch64.replies b/tests/qemucapabilitiesdata/caps_10.0.0_aarch64.replies
+index 0448dcaab9..382b76e021 100644
+--- a/tests/qemucapabilitiesdata/caps_10.0.0_aarch64.replies
++++ b/tests/qemucapabilitiesdata/caps_10.0.0_aarch64.replies
+@@ -32067,17 +32067,44 @@
+ {
+   "execute": "device-list-properties",
+   "arguments": {
+-    "typename": "scsi-block"
++    "typename": "arm-smmuv3"
+   },
+   "id": "libvirt-31"
+ }
+ 
++{
++  "return": [
++    {
++      "name": "primary-bus",
++      "type": "link<PCI>"
++    },
++    {
++      "default-value": 0,
++      "name": "bus_num",
++      "type": "uint8"
++    },
++    {
++      "name": "stage",
++      "type": "str"
++    }
++  ],
++  "id": "libvirt-31"
++}
++
++{
++  "execute": "device-list-properties",
++  "arguments": {
++    "typename": "scsi-block"
++  },
++  "id": "libvirt-32"
++}
++
+ {
+   "error": {
+     "class": "DeviceNotFound",
+     "desc": "The libvirt device dump was not collected for this version+device tuple"
+   },
+-  "id": "libvirt-31"
++  "id": "libvirt-32"
+ }
+ 
+ {
+@@ -32085,7 +32112,7 @@
+   "arguments": {
+     "typename": "scsi-generic"
+   },
+-  "id": "libvirt-32"
++  "id": "libvirt-33"
+ }
+ 
+ {
+@@ -32093,7 +32120,7 @@
+     "class": "DeviceNotFound",
+     "desc": "The libvirt device dump was not collected for this version+device tuple"
+   },
+-  "id": "libvirt-32"
++  "id": "libvirt-33"
+ }
+ 
+ {
+@@ -32101,7 +32128,7 @@
+   "arguments": {
+     "typename": "memory-backend-file"
+   },
+-  "id": "libvirt-33"
++  "id": "libvirt-34"
+ }
+ 
+ {
+@@ -32191,7 +32218,7 @@
+       "type": "bool"
+     }
+   ],
+-  "id": "libvirt-33"
++  "id": "libvirt-34"
+ }
+ 
+ {
+@@ -32199,7 +32226,7 @@
+   "arguments": {
+     "typename": "memory-backend-memfd"
+   },
+-  "id": "libvirt-34"
++  "id": "libvirt-35"
+ }
+ 
+ {
+@@ -32278,7 +32305,7 @@
+       "type": "int"
+     }
+   ],
+-  "id": "libvirt-34"
++  "id": "libvirt-35"
+ }
+ 
+ {
+@@ -32286,7 +32313,7 @@
+   "arguments": {
+     "typename": "max-arm-cpu"
+   },
+-  "id": "libvirt-35"
++  "id": "libvirt-36"
+ }
+ 
+ {
+@@ -32534,12 +32561,12 @@
+       "type": "link<irq>"
+     }
+   ],
+-  "id": "libvirt-35"
++  "id": "libvirt-36"
+ }
+ 
+ {
+   "execute": "query-machines",
+-  "id": "libvirt-36"
++  "id": "libvirt-37"
+ }
+ 
+ {
+@@ -33634,7 +33661,7 @@
+       "default-ram-id": "ram"
+     }
+   ],
+-  "id": "libvirt-36"
++  "id": "libvirt-37"
+ }
+ 
+ {
+@@ -33642,7 +33669,7 @@
+   "arguments": {
+     "typename": "virt-10.0-machine"
+   },
+-  "id": "libvirt-37"
++  "id": "libvirt-38"
+ }
+ 
+ {
+@@ -33889,7 +33916,7 @@
+       "type": "string"
+     }
+   ],
+-  "id": "libvirt-37"
++  "id": "libvirt-38"
+ }
+ 
+ {
+@@ -33897,7 +33924,7 @@
+   "arguments": {
+     "typename": "none-machine"
+   },
+-  "id": "libvirt-38"
++  "id": "libvirt-39"
+ }
+ 
+ {
+@@ -34016,12 +34043,12 @@
+       "type": "bool"
+     }
+   ],
+-  "id": "libvirt-38"
++  "id": "libvirt-39"
+ }
+ 
+ {
+   "execute": "query-cpu-definitions",
+-  "id": "libvirt-39"
++  "id": "libvirt-40"
+ }
+ 
+ {
+@@ -34315,12 +34342,12 @@
+       "deprecated": false
+     }
+   ],
+-  "id": "libvirt-39"
++  "id": "libvirt-40"
+ }
+ 
+ {
+   "execute": "query-command-line-options",
+-  "id": "libvirt-40"
++  "id": "libvirt-41"
+ }
+ 
+ {
+@@ -35787,12 +35814,12 @@
+       "option": "drive"
+     }
+   ],
+-  "id": "libvirt-40"
++  "id": "libvirt-41"
+ }
+ 
+ {
+   "execute": "query-gic-capabilities",
+-  "id": "libvirt-41"
++  "id": "libvirt-42"
+ }
+ 
+ {
+@@ -35808,7 +35835,7 @@
+       "kernel": false
+     }
+   ],
+-  "id": "libvirt-41"
++  "id": "libvirt-42"
+ }
+ 
+ {
+@@ -35819,7 +35846,7 @@
+       "name": "host"
+     }
+   },
+-  "id": "libvirt-42"
++  "id": "libvirt-43"
+ }
+ 
+ {
+@@ -35852,7 +35879,7 @@
+       }
+     }
+   },
+-  "id": "libvirt-42"
++  "id": "libvirt-43"
+ }
+ 
+ {
+@@ -35867,11 +35894,11 @@
+       }
+     }
+   },
+-  "id": "libvirt-43"
++  "id": "libvirt-44"
+ }
+ 
+ {
+-  "id": "libvirt-43",
++  "id": "libvirt-44",
+   "error": {
+     "class": "GenericError",
+     "desc": "Parameter 'model.props.hv-passthrough' is unexpected"
+diff --git a/tests/qemucapabilitiesdata/caps_10.2.0_aarch64.replies b/tests/qemucapabilitiesdata/caps_10.2.0_aarch64.replies
+index 2a5be22ed8..c0cb15aa3a 100644
+--- a/tests/qemucapabilitiesdata/caps_10.2.0_aarch64.replies
++++ b/tests/qemucapabilitiesdata/caps_10.2.0_aarch64.replies
+@@ -33933,11 +33933,44 @@
+ {
+   "execute": "device-list-properties",
+   "arguments": {
+-    "typename": "scsi-block"
++    "typename": "arm-smmuv3"
+   },
+   "id": "libvirt-32"
+ }
+ 
++{
++  "return": [
++    {
++      "name": "primary-bus",
++      "type": "link<PCI>"
++    },
++    {
++      "default-value": 0,
++      "name": "bus_num",
++      "type": "uint8"
++    },
++    {
++      "default-value": false,
++      "name": "smmu_per_bus",
++      "description": "on/off",
++      "type": "bool"
++    },
++    {
++      "name": "stage",
++      "type": "str"
++    }
++  ],
++  "id": "libvirt-32"
++}
++
++{
++  "execute": "device-list-properties",
++  "arguments": {
++    "typename": "scsi-block"
++  },
++  "id": "libvirt-33"
++}
++
+ {
+   "return": [
+     {
+@@ -34008,7 +34041,7 @@
+       "type": "int32"
+     }
+   ],
+-  "id": "libvirt-32"
++  "id": "libvirt-33"
+ }
+ 
+ {
+@@ -34016,7 +34049,7 @@
+   "arguments": {
+     "typename": "scsi-generic"
+   },
+-  "id": "libvirt-33"
++  "id": "libvirt-34"
+ }
+ 
+ {
+@@ -34057,7 +34090,7 @@
+       "type": "int32"
+     }
+   ],
+-  "id": "libvirt-33"
++  "id": "libvirt-34"
+ }
+ 
+ {
+@@ -34065,7 +34098,7 @@
+   "arguments": {
+     "typename": "memory-backend-file"
+   },
+-  "id": "libvirt-34"
++  "id": "libvirt-35"
+ }
+ 
+ {
+@@ -34159,7 +34192,7 @@
+       "type": "bool"
+     }
+   ],
+-  "id": "libvirt-34"
++  "id": "libvirt-35"
+ }
+ 
+ {
+@@ -34167,7 +34200,7 @@
+   "arguments": {
+     "typename": "memory-backend-memfd"
+   },
+-  "id": "libvirt-35"
++  "id": "libvirt-36"
+ }
+ 
+ {
+@@ -34236,7 +34269,7 @@
+       "type": "bool"
+     }
+   ],
+-  "id": "libvirt-35"
++  "id": "libvirt-36"
+ }
+ 
+ {
+@@ -34244,7 +34277,7 @@
+   "arguments": {
+     "typename": "max-arm-cpu"
+   },
+-  "id": "libvirt-36"
++  "id": "libvirt-37"
+ }
+ 
+ {
+@@ -34492,12 +34525,12 @@
+       "type": "link<irq>"
+     }
+   ],
+-  "id": "libvirt-36"
++  "id": "libvirt-37"
+ }
+ 
+ {
+   "execute": "query-machines",
+-  "id": "libvirt-37"
++  "id": "libvirt-38"
+ }
+ 
+ {
+@@ -35539,7 +35572,7 @@
+       "default-ram-id": "ram"
+     }
+   ],
+-  "id": "libvirt-37"
++  "id": "libvirt-38"
+ }
+ 
+ {
+@@ -35547,7 +35580,7 @@
+   "arguments": {
+     "typename": "virt-10.2-machine"
+   },
+-  "id": "libvirt-38"
++  "id": "libvirt-39"
+ }
+ 
+ {
+@@ -35810,7 +35843,7 @@
+       "type": "child<cfi.pflash01>"
+     }
+   ],
+-  "id": "libvirt-38"
++  "id": "libvirt-39"
+ }
+ 
+ {
+@@ -35818,7 +35851,7 @@
+   "arguments": {
+     "typename": "none-machine"
+   },
+-  "id": "libvirt-39"
++  "id": "libvirt-40"
+ }
+ 
+ {
+@@ -35943,12 +35976,12 @@
+       "type": "bool"
+     }
+   ],
+-  "id": "libvirt-39"
++  "id": "libvirt-40"
+ }
+ 
+ {
+   "execute": "query-cpu-definitions",
+-  "id": "libvirt-40"
++  "id": "libvirt-41"
+ }
+ 
+ {
+@@ -36176,12 +36209,12 @@
+       "deprecated": false
+     }
+   ],
+-  "id": "libvirt-40"
++  "id": "libvirt-41"
+ }
+ 
+ {
+   "execute": "query-command-line-options",
+-  "id": "libvirt-41"
++  "id": "libvirt-42"
+ }
+ 
+ {
+@@ -37743,12 +37776,12 @@
+       "option": "drive"
+     }
+   ],
+-  "id": "libvirt-41"
++  "id": "libvirt-42"
+ }
+ 
+ {
+   "execute": "query-gic-capabilities",
+-  "id": "libvirt-42"
++  "id": "libvirt-43"
+ }
+ 
+ {
+@@ -37764,50 +37797,6 @@
+       "kernel": true
+     }
+   ],
+-  "id": "libvirt-42"
+-}
+-
+-{
+-  "execute": "query-cpu-model-expansion",
+-  "arguments": {
+-    "type": "full",
+-    "model": {
+-      "name": "host"
+-    }
+-  },
+-  "id": "libvirt-43"
+-}
+-
+-{
+-  "return": {
+-    "model": {
+-      "name": "host",
+-      "props": {
+-        "sve768": false,
+-        "sve128": false,
+-        "sve1024": false,
+-        "sve1280": false,
+-        "sve896": false,
+-        "sve256": false,
+-        "sve1536": false,
+-        "sve1792": false,
+-        "sve384": false,
+-        "sve": false,
+-        "sve2048": false,
+-        "pauth": false,
+-        "kvm-no-adjvtime": false,
+-        "sve512": false,
+-        "aarch64": true,
+-        "pmu": true,
+-        "sve1920": false,
+-        "sve1152": false,
+-        "kvm-steal-time": true,
+-        "sve640": false,
+-        "sve1408": false,
+-        "sve1664": false
+-      }
+-    }
+-  },
+   "id": "libvirt-43"
+ }
+ 
+@@ -37855,6 +37844,50 @@
+   "id": "libvirt-44"
+ }
+ 
++{
++  "execute": "query-cpu-model-expansion",
++  "arguments": {
++    "type": "full",
++    "model": {
++      "name": "host"
++    }
++  },
++  "id": "libvirt-45"
++}
++
++{
++  "return": {
++    "model": {
++      "name": "host",
++      "props": {
++        "sve768": false,
++        "sve128": false,
++        "sve1024": false,
++        "sve1280": false,
++        "sve896": false,
++        "sve256": false,
++        "sve1536": false,
++        "sve1792": false,
++        "sve384": false,
++        "sve": false,
++        "sve2048": false,
++        "pauth": false,
++        "kvm-no-adjvtime": false,
++        "sve512": false,
++        "aarch64": true,
++        "pmu": true,
++        "sve1920": false,
++        "sve1152": false,
++        "kvm-steal-time": true,
++        "sve640": false,
++        "sve1408": false,
++        "sve1664": false
++      }
++    }
++  },
++  "id": "libvirt-45"
++}
++
+ {
+   "execute": "query-cpu-model-expansion",
+   "arguments": {
+@@ -37867,11 +37900,11 @@
+       }
+     }
+   },
+-  "id": "libvirt-45"
++  "id": "libvirt-46"
+ }
+ 
+ {
+-  "id": "libvirt-45",
++  "id": "libvirt-46",
+   "error": {
+     "class": "GenericError",
+     "desc": "Parameter 'model.props.hv-passthrough' is unexpected"
+diff --git a/tests/qemucapabilitiesdata/caps_10.2.0_aarch64.xml b/tests/qemucapabilitiesdata/caps_10.2.0_aarch64.xml
+index 449f2f65c7..f3d06927f6 100644
+--- a/tests/qemucapabilitiesdata/caps_10.2.0_aarch64.xml
++++ b/tests/qemucapabilitiesdata/caps_10.2.0_aarch64.xml
+@@ -187,6 +187,7 @@
+   <flag name='uefi-vars'/>
+   <flag name='blockdev-mirror.target-is-zero'/>
+   <flag name='arm-smmuv3'/>
++  <flag name='arm-smmuv3.smmu_per_bus'/>
+   <version>10002000</version>
+   <microcodeVersion>61700287</microcodeVersion>
+   <package>v10.2.0</package>
+diff --git a/tests/qemucapabilitiesdata/caps_11.0.0_aarch64.replies b/tests/qemucapabilitiesdata/caps_11.0.0_aarch64.replies
+index fef7dd9730..078716745d 100644
+--- a/tests/qemucapabilitiesdata/caps_11.0.0_aarch64.replies
++++ b/tests/qemucapabilitiesdata/caps_11.0.0_aarch64.replies
+@@ -33845,11 +33845,87 @@
+ {
+   "execute": "device-list-properties",
+   "arguments": {
+-    "typename": "scsi-block"
++    "typename": "arm-smmuv3"
+   },
+   "id": "libvirt-32"
+ }
+ 
++{
++  "return": [
++    {
++      "name": "memory",
++      "type": "link<memory-region>"
++    },
++    {
++      "name": "secure-memory",
++      "type": "link<memory-region>"
++    },
++    {
++      "name": "primary-bus",
++      "type": "link<PCI>"
++    },
++    {
++      "default-value": 0,
++      "name": "bus_num",
++      "type": "uint8"
++    },
++    {
++      "default-value": false,
++      "name": "smmu_per_bus",
++      "description": "on/off",
++      "type": "bool"
++    },
++    {
++      "default-value": "44",
++      "name": "oas",
++      "description": "Specify Output Address Size (for accel=on). Supported values are 44 or 48 bits. Defaults to 44 bits. oas=auto is not supported.",
++      "type": "OasMode"
++    },
++    {
++      "default-value": "on",
++      "name": "ril",
++      "description": "Disable range invalidation support (for accel=on). ril=auto is not supported.",
++      "type": "OnOffAuto"
++    },
++    {
++      "default-value": 0,
++      "name": "msi-gpa",
++      "type": "uint64"
++    },
++    {
++      "default-value": false,
++      "name": "accel",
++      "description": "Enable SMMUv3 accelerator support. Allows host SMMUv3 to be configured in nested mode for vfio-pci dev assignment",
++      "type": "bool"
++    },
++    {
++      "name": "stage",
++      "type": "str"
++    },
++    {
++      "default-value": "0",
++      "name": "ssidsize",
++      "description": "Number of bits used to represent SubstreamIDs (SSIDs). A value of N allows SSIDs in the range [0 .. 2^N - 1]. Valid range is 0-20, where 0 disables SubstreamID support. Defaults to 0. A value greater than 0 is required to enable PASID support. ssidsize=auto is not supported.",
++      "type": "SsidSizeMode"
++    },
++    {
++      "default-value": "off",
++      "name": "ats",
++      "description": "Enable/disable ATS support (for accel=on). Please ensure host platform has ATS support before enabling this. ats=auto is not supported.",
++      "type": "OnOffAuto"
++    }
++  ],
++  "id": "libvirt-32"
++}
++
++{
++  "execute": "device-list-properties",
++  "arguments": {
++    "typename": "scsi-block"
++  },
++  "id": "libvirt-33"
++}
++
+ {
+   "return": [
+     {
+@@ -33926,7 +34002,7 @@
+       "type": "int32"
+     }
+   ],
+-  "id": "libvirt-32"
++  "id": "libvirt-33"
+ }
+ 
+ {
+@@ -33934,7 +34010,7 @@
+   "arguments": {
+     "typename": "scsi-generic"
+   },
+-  "id": "libvirt-33"
++  "id": "libvirt-34"
+ }
+ 
+ {
+@@ -33975,7 +34051,7 @@
+       "type": "int32"
+     }
+   ],
+-  "id": "libvirt-33"
++  "id": "libvirt-34"
+ }
+ 
+ {
+@@ -33983,7 +34059,7 @@
+   "arguments": {
+     "typename": "memory-backend-file"
+   },
+-  "id": "libvirt-34"
++  "id": "libvirt-35"
+ }
+ 
+ {
+@@ -34077,7 +34153,7 @@
+       "type": "bool"
+     }
+   ],
+-  "id": "libvirt-34"
++  "id": "libvirt-35"
+ }
+ 
+ {
+@@ -34085,7 +34161,7 @@
+   "arguments": {
+     "typename": "memory-backend-memfd"
+   },
+-  "id": "libvirt-35"
++  "id": "libvirt-36"
+ }
+ 
+ {
+@@ -34154,7 +34230,7 @@
+       "type": "bool"
+     }
+   ],
+-  "id": "libvirt-35"
++  "id": "libvirt-36"
+ }
+ 
+ {
+@@ -34162,7 +34238,7 @@
+   "arguments": {
+     "typename": "max-arm-cpu"
+   },
+-  "id": "libvirt-36"
++  "id": "libvirt-37"
+ }
+ 
+ {
+@@ -34411,12 +34487,12 @@
+       "type": "link<irq>"
+     }
+   ],
+-  "id": "libvirt-36"
++  "id": "libvirt-37"
+ }
+ 
+ {
+   "execute": "query-machines",
+-  "id": "libvirt-37"
++  "id": "libvirt-38"
+ }
+ 
+ {
+@@ -35466,7 +35542,7 @@
+       "default-ram-id": "ram"
+     }
+   ],
+-  "id": "libvirt-37"
++  "id": "libvirt-38"
+ }
+ 
+ {
+@@ -35474,7 +35550,7 @@
+   "arguments": {
+     "typename": "virt-11.0-machine"
+   },
+-  "id": "libvirt-38"
++  "id": "libvirt-39"
+ }
+ 
+ {
+@@ -35752,7 +35828,7 @@
+       "type": "child<cfi.pflash01>"
+     }
+   ],
+-  "id": "libvirt-38"
++  "id": "libvirt-39"
+ }
+ 
+ {
+@@ -35760,7 +35836,7 @@
+   "arguments": {
+     "typename": "none-machine"
+   },
+-  "id": "libvirt-39"
++  "id": "libvirt-40"
+ }
+ 
+ {
+@@ -35890,12 +35966,12 @@
+       "type": "bool"
+     }
+   ],
+-  "id": "libvirt-39"
++  "id": "libvirt-40"
+ }
+ 
+ {
+   "execute": "query-cpu-definitions",
+-  "id": "libvirt-40"
++  "id": "libvirt-41"
+ }
+ 
+ {
+@@ -36123,12 +36199,12 @@
+       "deprecated": false
+     }
+   ],
+-  "id": "libvirt-40"
++  "id": "libvirt-41"
+ }
+ 
+ {
+   "execute": "query-command-line-options",
+-  "id": "libvirt-41"
++  "id": "libvirt-42"
+ }
+ 
+ {
+@@ -37709,12 +37785,12 @@
+       "option": "drive"
+     }
+   ],
+-  "id": "libvirt-41"
++  "id": "libvirt-42"
+ }
+ 
+ {
+   "execute": "query-gic-capabilities",
+-  "id": "libvirt-42"
++  "id": "libvirt-43"
+ }
+ 
+ {
+@@ -37730,50 +37806,6 @@
+       "kernel": true
+     }
+   ],
+-  "id": "libvirt-42"
+-}
+-
+-{
+-  "execute": "query-cpu-model-expansion",
+-  "arguments": {
+-    "type": "full",
+-    "model": {
+-      "name": "host"
+-    }
+-  },
+-  "id": "libvirt-43"
+-}
+-
+-{
+-  "return": {
+-    "model": {
+-      "name": "host",
+-      "props": {
+-        "sve768": false,
+-        "sve128": false,
+-        "sve1024": false,
+-        "sve1280": false,
+-        "sve896": false,
+-        "sve256": false,
+-        "sve1536": false,
+-        "sve1792": false,
+-        "sve384": false,
+-        "sve": false,
+-        "sve2048": false,
+-        "pauth": false,
+-        "kvm-no-adjvtime": false,
+-        "sve512": false,
+-        "aarch64": true,
+-        "pmu": true,
+-        "sve1920": false,
+-        "sve1152": false,
+-        "kvm-steal-time": true,
+-        "sve640": false,
+-        "sve1408": false,
+-        "sve1664": false
+-      }
+-    }
+-  },
+   "id": "libvirt-43"
+ }
+ 
+@@ -37821,6 +37853,50 @@
+   "id": "libvirt-44"
+ }
+ 
++{
++  "execute": "query-cpu-model-expansion",
++  "arguments": {
++    "type": "full",
++    "model": {
++      "name": "host"
++    }
++  },
++  "id": "libvirt-45"
++}
++
++{
++  "return": {
++    "model": {
++      "name": "host",
++      "props": {
++        "sve768": false,
++        "sve128": false,
++        "sve1024": false,
++        "sve1280": false,
++        "sve896": false,
++        "sve256": false,
++        "sve1536": false,
++        "sve1792": false,
++        "sve384": false,
++        "sve": false,
++        "sve2048": false,
++        "pauth": false,
++        "kvm-no-adjvtime": false,
++        "sve512": false,
++        "aarch64": true,
++        "pmu": true,
++        "sve1920": false,
++        "sve1152": false,
++        "kvm-steal-time": true,
++        "sve640": false,
++        "sve1408": false,
++        "sve1664": false
++      }
++    }
++  },
++  "id": "libvirt-45"
++}
++
+ {
+   "execute": "query-cpu-model-expansion",
+   "arguments": {
+@@ -37833,11 +37909,11 @@
+       }
+     }
+   },
+-  "id": "libvirt-45"
++  "id": "libvirt-46"
+ }
+ 
+ {
+-  "id": "libvirt-45",
++  "id": "libvirt-46",
+   "error": {
+     "class": "GenericError",
+     "desc": "Parameter 'model.props.hv-passthrough' is unexpected"
+diff --git a/tests/qemucapabilitiesdata/caps_11.0.0_aarch64.xml b/tests/qemucapabilitiesdata/caps_11.0.0_aarch64.xml
+index b9acf8ac67..2280800fca 100644
+--- a/tests/qemucapabilitiesdata/caps_11.0.0_aarch64.xml
++++ b/tests/qemucapabilitiesdata/caps_11.0.0_aarch64.xml
+@@ -189,6 +189,7 @@
+   <flag name='query-block-flat'/>
+   <flag name='blockdev-mirror.target-is-zero'/>
+   <flag name='arm-smmuv3'/>
++  <flag name='arm-smmuv3.smmu_per_bus'/>
+   <version>11000000</version>
+   <microcodeVersion>61700286</microcodeVersion>
+   <package>v11.0.0</package>
+diff --git a/tests/qemucapabilitiesdata/caps_11.1.0_aarch64.replies b/tests/qemucapabilitiesdata/caps_11.1.0_aarch64.replies
+index 41cd5496c6..c91d77655d 100644
+--- a/tests/qemucapabilitiesdata/caps_11.1.0_aarch64.replies
++++ b/tests/qemucapabilitiesdata/caps_11.1.0_aarch64.replies
+@@ -33939,11 +33939,98 @@
+ {
+   "execute": "device-list-properties",
+   "arguments": {
+-    "typename": "scsi-block"
++    "typename": "arm-smmuv3"
+   },
+   "id": "libvirt-32"
+ }
+ 
++{
++  "return": [
++    {
++      "name": "memory",
++      "type": "link<memory-region>"
++    },
++    {
++      "name": "secure-memory",
++      "type": "link<memory-region>"
++    },
++    {
++      "name": "primary-bus",
++      "type": "link<PCI>"
++    },
++    {
++      "default-value": 0,
++      "name": "bus_num",
++      "type": "uint8"
++    },
++    {
++      "default-value": false,
++      "name": "smmu_per_bus",
++      "description": "on/off",
++      "type": "bool"
++    },
++    {
++      "default-value": "auto",
++      "name": "cmdqv",
++      "description": "Enable/disable CMDQV support (for accel=on). Valid values are on, off, and auto. Defaults to auto.",
++      "type": "OnOffAuto"
++    },
++    {
++      "default-value": "auto",
++      "name": "ats",
++      "description": "Enable/disable ATS support (for accel=on). Valid values are on, off, and auto. Defaults to auto. Please ensure host platform supports ATS before setting it to on.",
++      "type": "OnOffAuto"
++    },
++    {
++      "default-value": "auto",
++      "name": "oas",
++      "description": "Set Output Address Size in bits (for accel=on). Valid values are 44, 48, and auto. Defaults to auto.Please ensure the value does not exceed the maximum Output Address Size supported by the host platform.",
++      "type": "OasMode"
++    },
++    {
++      "default-value": "auto",
++      "name": "ssidsize",
++      "description": "Set number of bits used to represent SubstreamIDs (SSIDs). Valid values are 0-20 and auto. Defaults to auto. A value of N allows SSIDs in the range [0 .. 2^N - 1]. A value of 0 disables SubstreamID support. A value greater than 0 is required to enable PASID support.Please ensure the value does not exceed the maximum SubstreamID size supported by the host platform.",
++      "type": "SsidSizeMode"
++    },
++    {
++      "default-value": "auto",
++      "name": "ril",
++      "description": "Enable/disable range invalidation support (for accel=on). Valid values are on, off, and auto. Defaults to auto. Any attempt to turn it 'on' while the host does not support it would fail.",
++      "type": "OnOffAuto"
++    },
++    {
++      "default-value": false,
++      "name": "accel",
++      "description": "Enable SMMUv3 accelerator support. Allows host SMMUv3 to be configured in nested mode for vfio-pci dev assignment. Please ensure the host SMMUv3 supports nested translation before enabling.",
++      "type": "bool"
++    },
++    {
++      "name": "stage",
++      "type": "str"
++    },
++    {
++      "default-value": 0,
++      "name": "msi-gpa",
++      "type": "uint64"
++    },
++    {
++      "default-value": 0,
++      "name": "identifier",
++      "type": "uint8"
++    }
++  ],
++  "id": "libvirt-32"
++}
++
++{
++  "execute": "device-list-properties",
++  "arguments": {
++    "typename": "scsi-block"
++  },
++  "id": "libvirt-33"
++}
++
+ {
+   "return": [
+     {
+@@ -34020,7 +34107,7 @@
+       "type": "int32"
+     }
+   ],
+-  "id": "libvirt-32"
++  "id": "libvirt-33"
+ }
+ 
+ {
+@@ -34028,7 +34115,7 @@
+   "arguments": {
+     "typename": "scsi-generic"
+   },
+-  "id": "libvirt-33"
++  "id": "libvirt-34"
+ }
+ 
+ {
+@@ -34069,7 +34156,7 @@
+       "type": "int32"
+     }
+   ],
+-  "id": "libvirt-33"
++  "id": "libvirt-34"
+ }
+ 
+ {
+@@ -34077,7 +34164,7 @@
+   "arguments": {
+     "typename": "memory-backend-file"
+   },
+-  "id": "libvirt-34"
++  "id": "libvirt-35"
+ }
+ 
+ {
+@@ -34171,7 +34258,7 @@
+       "type": "bool"
+     }
+   ],
+-  "id": "libvirt-34"
++  "id": "libvirt-35"
+ }
+ 
+ {
+@@ -34179,7 +34266,7 @@
+   "arguments": {
+     "typename": "memory-backend-memfd"
+   },
+-  "id": "libvirt-35"
++  "id": "libvirt-36"
+ }
+ 
+ {
+@@ -34248,7 +34335,7 @@
+       "type": "bool"
+     }
+   ],
+-  "id": "libvirt-35"
++  "id": "libvirt-36"
+ }
+ 
+ {
+@@ -34256,7 +34343,7 @@
+   "arguments": {
+     "typename": "max-arm-cpu"
+   },
+-  "id": "libvirt-36"
++  "id": "libvirt-37"
+ }
+ 
+ {
+@@ -34511,12 +34598,12 @@
+       "type": "link<irq>"
+     }
+   ],
+-  "id": "libvirt-36"
++  "id": "libvirt-37"
+ }
+ 
+ {
+   "execute": "query-machines",
+-  "id": "libvirt-37"
++  "id": "libvirt-38"
+ }
+ 
+ {
+@@ -35555,7 +35642,7 @@
+       "default-ram-id": "ram"
+     }
+   ],
+-  "id": "libvirt-37"
++  "id": "libvirt-38"
+ }
+ 
+ {
+@@ -35563,7 +35650,7 @@
+   "arguments": {
+     "typename": "virt-11.1-machine"
+   },
+-  "id": "libvirt-38"
++  "id": "libvirt-39"
+ }
+ 
+ {
+@@ -35841,7 +35928,7 @@
+       "type": "child<cfi.pflash01>"
+     }
+   ],
+-  "id": "libvirt-38"
++  "id": "libvirt-39"
+ }
+ 
+ {
+@@ -35849,7 +35936,7 @@
+   "arguments": {
+     "typename": "none-machine"
+   },
+-  "id": "libvirt-39"
++  "id": "libvirt-40"
+ }
+ 
+ {
+@@ -35979,12 +36066,12 @@
+       "type": "bool"
+     }
+   ],
+-  "id": "libvirt-39"
++  "id": "libvirt-40"
+ }
+ 
+ {
+   "execute": "query-cpu-definitions",
+-  "id": "libvirt-40"
++  "id": "libvirt-41"
+ }
+ 
+ {
+@@ -36212,12 +36299,12 @@
+       "deprecated": false
+     }
+   ],
+-  "id": "libvirt-40"
++  "id": "libvirt-41"
+ }
+ 
+ {
+   "execute": "query-command-line-options",
+-  "id": "libvirt-41"
++  "id": "libvirt-42"
+ }
+ 
+ {
+@@ -37810,12 +37897,12 @@
+       "option": "drive"
+     }
+   ],
+-  "id": "libvirt-41"
++  "id": "libvirt-42"
+ }
+ 
+ {
+   "execute": "query-gic-capabilities",
+-  "id": "libvirt-42"
++  "id": "libvirt-43"
+ }
+ 
+ {
+@@ -37831,50 +37918,6 @@
+       "kernel": true
+     }
+   ],
+-  "id": "libvirt-42"
+-}
+-
+-{
+-  "execute": "query-cpu-model-expansion",
+-  "arguments": {
+-    "type": "full",
+-    "model": {
+-      "name": "host"
+-    }
+-  },
+-  "id": "libvirt-43"
+-}
+-
+-{
+-  "return": {
+-    "model": {
+-      "name": "host",
+-      "props": {
+-        "sve768": false,
+-        "sve128": false,
+-        "sve1024": false,
+-        "sve1280": false,
+-        "sve896": false,
+-        "sve256": false,
+-        "sve1536": false,
+-        "sve1792": false,
+-        "sve384": false,
+-        "sve": false,
+-        "sve2048": false,
+-        "pauth": false,
+-        "kvm-no-adjvtime": false,
+-        "sve512": false,
+-        "aarch64": true,
+-        "pmu": true,
+-        "sve1920": false,
+-        "sve1152": false,
+-        "kvm-steal-time": true,
+-        "sve640": false,
+-        "sve1408": false,
+-        "sve1664": false
+-      }
+-    }
+-  },
+   "id": "libvirt-43"
+ }
+ 
+@@ -37922,6 +37965,50 @@
+   "id": "libvirt-44"
+ }
+ 
++{
++  "execute": "query-cpu-model-expansion",
++  "arguments": {
++    "type": "full",
++    "model": {
++      "name": "host"
++    }
++  },
++  "id": "libvirt-45"
++}
++
++{
++  "return": {
++    "model": {
++      "name": "host",
++      "props": {
++        "sve768": false,
++        "sve128": false,
++        "sve1024": false,
++        "sve1280": false,
++        "sve896": false,
++        "sve256": false,
++        "sve1536": false,
++        "sve1792": false,
++        "sve384": false,
++        "sve": false,
++        "sve2048": false,
++        "pauth": false,
++        "kvm-no-adjvtime": false,
++        "sve512": false,
++        "aarch64": true,
++        "pmu": true,
++        "sve1920": false,
++        "sve1152": false,
++        "kvm-steal-time": true,
++        "sve640": false,
++        "sve1408": false,
++        "sve1664": false
++      }
++    }
++  },
++  "id": "libvirt-45"
++}
++
+ {
+   "execute": "query-cpu-model-expansion",
+   "arguments": {
+@@ -37934,11 +38021,11 @@
+       }
+     }
+   },
+-  "id": "libvirt-45"
++  "id": "libvirt-46"
+ }
+ 
+ {
+-  "id": "libvirt-45",
++  "id": "libvirt-46",
+   "error": {
+     "class": "GenericError",
+     "desc": "Parameter 'model.props.hv-passthrough' is unexpected"
+diff --git a/tests/qemucapabilitiesdata/caps_11.1.0_aarch64.xml b/tests/qemucapabilitiesdata/caps_11.1.0_aarch64.xml
+index 0595e5f88c..b4200f35bb 100644
+--- a/tests/qemucapabilitiesdata/caps_11.1.0_aarch64.xml
++++ b/tests/qemucapabilitiesdata/caps_11.1.0_aarch64.xml
+@@ -189,6 +189,7 @@
+   <flag name='query-block-flat'/>
+   <flag name='blockdev-mirror.target-is-zero'/>
+   <flag name='arm-smmuv3'/>
++  <flag name='arm-smmuv3.smmu_per_bus'/>
+   <version>11000050</version>
+   <microcodeVersion>61700287</microcodeVersion>
+   <package>v11.0.0-1600-g5611a9268d</package>
+diff --git a/tests/qemucapabilitiesdata/caps_8.2.0_aarch64.replies b/tests/qemucapabilitiesdata/caps_8.2.0_aarch64.replies
+index 002ca31b9f..c4d0be6029 100644
+--- a/tests/qemucapabilitiesdata/caps_8.2.0_aarch64.replies
++++ b/tests/qemucapabilitiesdata/caps_8.2.0_aarch64.replies
+@@ -31157,17 +31157,44 @@
+ {
+   "execute": "device-list-properties",
+   "arguments": {
+-    "typename": "scsi-block"
++    "typename": "arm-smmuv3"
+   },
+   "id": "libvirt-32"
+ }
+ 
++{
++  "return": [
++    {
++      "name": "primary-bus",
++      "type": "link<PCI>"
++    },
++    {
++      "default-value": 0,
++      "name": "bus_num",
++      "type": "uint8"
++    },
++    {
++      "name": "stage",
++      "type": "str"
++    }
++  ],
++  "id": "libvirt-32"
++}
++
++{
++  "execute": "device-list-properties",
++  "arguments": {
++    "typename": "scsi-block"
++  },
++  "id": "libvirt-33"
++}
++
+ {
+   "error": {
+     "class": "DeviceNotFound",
+     "desc": "The libvirt device dump was not collected for this version+device tuple"
+   },
+-  "id": "libvirt-32"
++  "id": "libvirt-33"
+ }
+ 
+ {
+@@ -31175,7 +31202,7 @@
+   "arguments": {
+     "typename": "scsi-generic"
+   },
+-  "id": "libvirt-33"
++  "id": "libvirt-34"
+ }
+ 
+ {
+@@ -31183,7 +31210,7 @@
+     "class": "DeviceNotFound",
+     "desc": "The libvirt device dump was not collected for this version+device tuple"
+   },
+-  "id": "libvirt-33"
++  "id": "libvirt-34"
+ }
+ 
+ {
+@@ -31191,7 +31218,7 @@
+   "arguments": {
+     "typename": "memory-backend-file"
+   },
+-  "id": "libvirt-34"
++  "id": "libvirt-35"
+ }
+ 
+ {
+@@ -31281,7 +31308,7 @@
+       "type": "bool"
+     }
+   ],
+-  "id": "libvirt-34"
++  "id": "libvirt-35"
+ }
+ 
+ {
+@@ -31289,7 +31316,7 @@
+   "arguments": {
+     "typename": "memory-backend-memfd"
+   },
+-  "id": "libvirt-35"
++  "id": "libvirt-36"
+ }
+ 
+ {
+@@ -31368,7 +31395,7 @@
+       "type": "int"
+     }
+   ],
+-  "id": "libvirt-35"
++  "id": "libvirt-36"
+ }
+ 
+ {
+@@ -31376,7 +31403,7 @@
+   "arguments": {
+     "typename": "max-arm-cpu"
+   },
+-  "id": "libvirt-36"
++  "id": "libvirt-37"
+ }
+ 
+ {
+@@ -31585,12 +31612,12 @@
+       "type": "bool"
+     }
+   ],
+-  "id": "libvirt-36"
++  "id": "libvirt-37"
+ }
+ 
+ {
+   "execute": "query-machines",
+-  "id": "libvirt-37"
++  "id": "libvirt-38"
+ }
+ 
+ {
+@@ -32702,7 +32729,7 @@
+       "default-ram-id": "ram"
+     }
+   ],
+-  "id": "libvirt-37"
++  "id": "libvirt-38"
+ }
+ 
+ {
+@@ -32710,7 +32737,7 @@
+   "arguments": {
+     "typename": "virt-8.2-machine"
+   },
+-  "id": "libvirt-38"
++  "id": "libvirt-39"
+ }
+ 
+ {
+@@ -32946,7 +32973,7 @@
+       "type": "child<cfi.pflash01>"
+     }
+   ],
+-  "id": "libvirt-38"
++  "id": "libvirt-39"
+ }
+ 
+ {
+@@ -32954,7 +32981,7 @@
+   "arguments": {
+     "typename": "none-machine"
+   },
+-  "id": "libvirt-39"
++  "id": "libvirt-40"
+ }
+ 
+ {
+@@ -33067,12 +33094,12 @@
+       "type": "child<container>"
+     }
+   ],
+-  "id": "libvirt-39"
++  "id": "libvirt-40"
+ }
+ 
+ {
+   "execute": "query-cpu-definitions",
+-  "id": "libvirt-40"
++  "id": "libvirt-41"
+ }
+ 
+ {
+@@ -33366,12 +33393,12 @@
+       "deprecated": false
+     }
+   ],
+-  "id": "libvirt-40"
++  "id": "libvirt-41"
+ }
+ 
+ {
+   "execute": "query-command-line-options",
+-  "id": "libvirt-41"
++  "id": "libvirt-42"
+ }
+ 
+ {
+@@ -34736,12 +34763,12 @@
+       "option": "drive"
+     }
+   ],
+-  "id": "libvirt-41"
++  "id": "libvirt-42"
+ }
+ 
+ {
+   "execute": "query-gic-capabilities",
+-  "id": "libvirt-42"
++  "id": "libvirt-43"
+ }
+ 
+ {
+@@ -34757,7 +34784,7 @@
+       "kernel": false
+     }
+   ],
+-  "id": "libvirt-42"
++  "id": "libvirt-43"
+ }
+ 
+ {
+@@ -34768,7 +34795,7 @@
+       "name": "host"
+     }
+   },
+-  "id": "libvirt-43"
++  "id": "libvirt-44"
+ }
+ 
+ {
+@@ -34801,7 +34828,7 @@
+       }
+     }
+   },
+-  "id": "libvirt-43"
++  "id": "libvirt-44"
+ }
+ 
+ {
+@@ -34816,11 +34843,11 @@
+       }
+     }
+   },
+-  "id": "libvirt-44"
++  "id": "libvirt-45"
+ }
+ 
+ {
+-  "id": "libvirt-44",
++  "id": "libvirt-45",
+   "error": {
+     "class": "GenericError",
+     "desc": "Parameter 'hv-passthrough' is unexpected"
+diff --git a/tests/qemucapabilitiesdata/caps_8.2.0_armv7l.replies b/tests/qemucapabilitiesdata/caps_8.2.0_armv7l.replies
+index b8f7b6f68a..51cd48e1d1 100644
+--- a/tests/qemucapabilitiesdata/caps_8.2.0_armv7l.replies
++++ b/tests/qemucapabilitiesdata/caps_8.2.0_armv7l.replies
+@@ -31391,17 +31391,44 @@
+ {
+   "execute": "device-list-properties",
+   "arguments": {
+-    "typename": "scsi-block"
++    "typename": "arm-smmuv3"
+   },
+   "id": "libvirt-32"
+ }
+ 
++{
++  "return": [
++    {
++      "name": "primary-bus",
++      "type": "link<PCI>"
++    },
++    {
++      "default-value": 0,
++      "name": "bus_num",
++      "type": "uint8"
++    },
++    {
++      "name": "stage",
++      "type": "str"
++    }
++  ],
++  "id": "libvirt-32"
++}
++
++{
++  "execute": "device-list-properties",
++  "arguments": {
++    "typename": "scsi-block"
++  },
++  "id": "libvirt-33"
++}
++
+ {
+   "error": {
+     "class": "DeviceNotFound",
+     "desc": "The libvirt device dump was not collected for this version+device tuple"
+   },
+-  "id": "libvirt-32"
++  "id": "libvirt-33"
+ }
+ 
+ {
+@@ -31409,7 +31436,7 @@
+   "arguments": {
+     "typename": "scsi-generic"
+   },
+-  "id": "libvirt-33"
++  "id": "libvirt-34"
+ }
+ 
+ {
+@@ -31417,7 +31444,7 @@
+     "class": "DeviceNotFound",
+     "desc": "The libvirt device dump was not collected for this version+device tuple"
+   },
+-  "id": "libvirt-33"
++  "id": "libvirt-34"
+ }
+ 
+ {
+@@ -31425,7 +31452,7 @@
+   "arguments": {
+     "typename": "memory-backend-file"
+   },
+-  "id": "libvirt-34"
++  "id": "libvirt-35"
+ }
+ 
+ {
+@@ -31519,7 +31546,7 @@
+       "type": "bool"
+     }
+   ],
+-  "id": "libvirt-34"
++  "id": "libvirt-35"
+ }
+ 
+ {
+@@ -31527,7 +31554,7 @@
+   "arguments": {
+     "typename": "memory-backend-memfd"
+   },
+-  "id": "libvirt-35"
++  "id": "libvirt-36"
+ }
+ 
+ {
+@@ -31606,7 +31633,7 @@
+       "type": "int"
+     }
+   ],
+-  "id": "libvirt-35"
++  "id": "libvirt-36"
+ }
+ 
+ {
+@@ -31614,7 +31641,7 @@
+   "arguments": {
+     "typename": "max-arm-cpu"
+   },
+-  "id": "libvirt-36"
++  "id": "libvirt-37"
+ }
+ 
+ {
+@@ -31756,12 +31783,12 @@
+       "type": "link<irq>"
+     }
+   ],
+-  "id": "libvirt-36"
++  "id": "libvirt-37"
+ }
+ 
+ {
+   "execute": "query-machines",
+-  "id": "libvirt-37"
++  "id": "libvirt-38"
+ }
+ 
+ {
+@@ -32819,7 +32846,7 @@
+       "default-ram-id": "ram"
+     }
+   ],
+-  "id": "libvirt-37"
++  "id": "libvirt-38"
+ }
+ 
+ {
+@@ -32827,7 +32854,7 @@
+   "arguments": {
+     "typename": "virt-8.2-machine"
+   },
+-  "id": "libvirt-38"
++  "id": "libvirt-39"
+ }
+ 
+ {
+@@ -33063,7 +33090,7 @@
+       "type": "child<cfi.pflash01>"
+     }
+   ],
+-  "id": "libvirt-38"
++  "id": "libvirt-39"
+ }
+ 
+ {
+@@ -33071,7 +33098,7 @@
+   "arguments": {
+     "typename": "none-machine"
+   },
+-  "id": "libvirt-39"
++  "id": "libvirt-40"
+ }
+ 
+ {
+@@ -33184,12 +33211,12 @@
+       "type": "child<container>"
+     }
+   ],
+-  "id": "libvirt-39"
++  "id": "libvirt-40"
+ }
+ 
+ {
+   "execute": "query-cpu-definitions",
+-  "id": "libvirt-40"
++  "id": "libvirt-41"
+ }
+ 
+ {
+@@ -33411,12 +33438,12 @@
+       "deprecated": false
+     }
+   ],
+-  "id": "libvirt-40"
++  "id": "libvirt-41"
+ }
+ 
+ {
+   "execute": "query-command-line-options",
+-  "id": "libvirt-41"
++  "id": "libvirt-42"
+ }
+ 
+ {
+@@ -34898,12 +34925,12 @@
+       "option": "drive"
+     }
+   ],
+-  "id": "libvirt-41"
++  "id": "libvirt-42"
+ }
+ 
+ {
+   "execute": "query-gic-capabilities",
+-  "id": "libvirt-42"
++  "id": "libvirt-43"
+ }
+ 
+ {
+@@ -34919,7 +34946,7 @@
+       "kernel": false
+     }
+   ],
+-  "id": "libvirt-42"
++  "id": "libvirt-43"
+ }
+ 
+ {
+@@ -34930,11 +34957,11 @@
+       "name": "host"
+     }
+   },
+-  "id": "libvirt-43"
++  "id": "libvirt-44"
+ }
+ 
+ {
+-  "id": "libvirt-43",
++  "id": "libvirt-44",
+   "error": {
+     "class": "GenericError",
+     "desc": "The CPU type 'host' requires KVM"
+@@ -34953,11 +34980,11 @@
+       }
+     }
+   },
+-  "id": "libvirt-44"
++  "id": "libvirt-45"
+ }
+ 
+ {
+-  "id": "libvirt-44",
++  "id": "libvirt-45",
+   "error": {
+     "class": "GenericError",
+     "desc": "The CPU type 'host' requires KVM"
+diff --git a/tests/qemucapabilitiesdata/caps_9.2.0_aarch64+hvf.replies b/tests/qemucapabilitiesdata/caps_9.2.0_aarch64+hvf.replies
+index 14b11c5c30..31b13f865b 100644
+--- a/tests/qemucapabilitiesdata/caps_9.2.0_aarch64+hvf.replies
++++ b/tests/qemucapabilitiesdata/caps_9.2.0_aarch64+hvf.replies
+@@ -30532,17 +30532,44 @@
+ {
+   "execute": "device-list-properties",
+   "arguments": {
+-    "typename": "scsi-block"
++    "typename": "arm-smmuv3"
+   },
+   "id": "libvirt-28"
+ }
+ 
++{
++  "return": [
++    {
++      "name": "primary-bus",
++      "type": "link<PCI>"
++    },
++    {
++      "default-value": 0,
++      "name": "bus_num",
++      "type": "uint8"
++    },
++    {
++      "name": "stage",
++      "type": "str"
++    }
++  ],
++  "id": "libvirt-28"
++}
++
++{
++  "execute": "device-list-properties",
++  "arguments": {
++    "typename": "scsi-block"
++  },
++  "id": "libvirt-29"
++}
++
+ {
+   "error": {
+     "class": "DeviceNotFound",
+     "desc": "The libvirt device dump was not collected for this version+device tuple"
+   },
+-  "id": "libvirt-28"
++  "id": "libvirt-29"
+ }
+ 
+ {
+@@ -30550,7 +30577,7 @@
+   "arguments": {
+     "typename": "scsi-generic"
+   },
+-  "id": "libvirt-29"
++  "id": "libvirt-30"
+ }
+ 
+ {
+@@ -30558,7 +30585,7 @@
+     "class": "DeviceNotFound",
+     "desc": "The libvirt device dump was not collected for this version+device tuple"
+   },
+-  "id": "libvirt-29"
++  "id": "libvirt-30"
+ }
+ 
+ {
+@@ -30566,7 +30593,7 @@
+   "arguments": {
+     "typename": "memory-backend-file"
+   },
+-  "id": "libvirt-30"
++  "id": "libvirt-31"
+ }
+ 
+ {
+@@ -30651,7 +30678,7 @@
+       "type": "bool"
+     }
+   ],
+-  "id": "libvirt-30"
++  "id": "libvirt-31"
+ }
+ 
+ {
+@@ -30659,7 +30686,7 @@
+   "arguments": {
+     "typename": "max-arm-cpu"
+   },
+-  "id": "libvirt-31"
++  "id": "libvirt-32"
+ }
+ 
+ {
+@@ -30816,12 +30843,12 @@
+       "type": "link<irq>"
+     }
+   ],
+-  "id": "libvirt-31"
++  "id": "libvirt-32"
+ }
+ 
+ {
+   "execute": "query-machines",
+-  "id": "libvirt-32"
++  "id": "libvirt-33"
+ }
+ 
+ {
+@@ -31871,7 +31898,7 @@
+       "default-ram-id": "ram"
+     }
+   ],
+-  "id": "libvirt-32"
++  "id": "libvirt-33"
+ }
+ 
+ {
+@@ -31879,7 +31906,7 @@
+   "arguments": {
+     "typename": "virt-9.2-machine"
+   },
+-  "id": "libvirt-33"
++  "id": "libvirt-34"
+ }
+ 
+ {
+@@ -32120,7 +32147,7 @@
+       "type": "child<cfi.pflash01>"
+     }
+   ],
+-  "id": "libvirt-33"
++  "id": "libvirt-34"
+ }
+ 
+ {
+@@ -32128,7 +32155,7 @@
+   "arguments": {
+     "typename": "none-machine"
+   },
+-  "id": "libvirt-34"
++  "id": "libvirt-35"
+ }
+ 
+ {
+@@ -32246,12 +32273,12 @@
+       "type": "child<container>"
+     }
+   ],
+-  "id": "libvirt-34"
++  "id": "libvirt-35"
+ }
+ 
+ {
+   "execute": "query-cpu-definitions",
+-  "id": "libvirt-35"
++  "id": "libvirt-36"
+ }
+ 
+ {
+@@ -32545,12 +32572,12 @@
+       "deprecated": false
+     }
+   ],
+-  "id": "libvirt-35"
++  "id": "libvirt-36"
+ }
+ 
+ {
+   "execute": "query-command-line-options",
+-  "id": "libvirt-36"
++  "id": "libvirt-37"
+ }
+ 
+ {
+@@ -33866,12 +33893,12 @@
+       "option": "drive"
+     }
+   ],
+-  "id": "libvirt-36"
++  "id": "libvirt-37"
+ }
+ 
+ {
+   "execute": "query-gic-capabilities",
+-  "id": "libvirt-37"
++  "id": "libvirt-38"
+ }
+ 
+ {
+@@ -33887,7 +33914,7 @@
+       "kernel": false
+     }
+   ],
+-  "id": "libvirt-37"
++  "id": "libvirt-38"
+ }
+ 
+ {
+@@ -33898,11 +33925,11 @@
+       "name": "host"
+     }
+   },
+-  "id": "libvirt-38"
++  "id": "libvirt-39"
+ }
+ 
+ {
+-  "id": "libvirt-38",
++  "id": "libvirt-39",
+   "error": {
+     "class": "GenericError",
+     "desc": "The CPU type 'host' requires KVM"
+@@ -33921,11 +33948,11 @@
+       }
+     }
+   },
+-  "id": "libvirt-39"
++  "id": "libvirt-40"
+ }
+ 
+ {
+-  "id": "libvirt-39",
++  "id": "libvirt-40",
+   "error": {
+     "class": "GenericError",
+     "desc": "The CPU type 'host' requires KVM"
+-- 
+2.55.0

@@ -1,0 +1,313 @@
+From 0b63c24aa265be78e55210ab5d985e24bdb13499 Mon Sep 17 00:00:00 2001
+Message-ID: <0b63c24aa265be78e55210ab5d985e24bdb13499.1787144196.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Mon, 20 Jul 2026 13:35:07 +0200
+Subject: [PATCH] qemu: Remove 'allowReboot' field
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The value is no longer used. Remove it including the status XML
+handling.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Ján Tomko <jtomko@redhat.com>
+(cherry picked from commit 94bd5174d20fafafc2fa67fae101b78b46ec6196)
+
+https://redhat.atlassian.net/browse/RHEL-242545
+---
+ src/qemu/qemu_domain.c                        | 33 -------------------
+ src/qemu/qemu_domain.h                        | 17 ----------
+ .../qemustatusxml2xmldata/backup-pull-in.xml  |  1 -
+ .../blockjob-blockdev-in.xml                  |  1 -
+ .../blockjob-mirror-in.xml                    |  1 -
+ .../memory-backing-dir-in.xml                 |  1 -
+ .../migration-in-params-in.xml                |  1 -
+ .../migration-out-nbd-bitmaps-in.xml          |  1 -
+ .../migration-out-nbd-out.xml                 |  1 -
+ .../migration-out-nbd-tls-out.xml             |  1 -
+ .../migration-out-params-in.xml               |  1 -
+ tests/qemustatusxml2xmldata/modern-in.xml     |  1 -
+ .../qcow2-data-file-in.xml                    |  1 -
+ .../throttlefilter-out.xml                    |  1 -
+ tests/qemustatusxml2xmldata/upgrade-out.xml   |  1 -
+ .../qemustatusxml2xmldata/vcpus-multi-in.xml  |  1 -
+ 16 files changed, 64 deletions(-)
+
+diff --git a/src/qemu/qemu_domain.c b/src/qemu/qemu_domain.c
+index e1b805d906..a4e5f92840 100644
+--- a/src/qemu/qemu_domain.c
++++ b/src/qemu/qemu_domain.c
+@@ -1946,8 +1946,6 @@ qemuDomainObjPrivateDataClear(qemuDomainObjPrivate *priv)
+ 
+     priv->rememberOwner = false;
+ 
+-    priv->allowReboot = VIR_TRISTATE_BOOL_ABSENT;
+-
+     g_clear_pointer(&priv->migrationCaps, virBitmapFree);
+ 
+     virHashRemoveAll(priv->blockjobs);
+@@ -2621,17 +2619,6 @@ qemuDomainObjPrivateXMLFormatBackups(virBuffer *buf,
+ }
+ 
+ 
+-void
+-qemuDomainObjPrivateXMLFormatAllowReboot(virBuffer *buf,
+-                                         virTristateBool allowReboot)
+-{
+-    if (allowReboot) {
+-        virBufferAsprintf(buf, "<allowReboot value='%s'/>\n",
+-                          virTristateBoolTypeToString(allowReboot));
+-    }
+-}
+-
+-
+ static void
+ qemuDomainObjPrivateXMLFormatPR(virBuffer *buf,
+                                 qemuDomainObjPrivate *priv)
+@@ -2812,8 +2799,6 @@ qemuDomainObjPrivateXMLFormat(virBuffer *buf,
+     if (priv->rememberOwner)
+         virBufferAddLit(buf, "<rememberOwner/>\n");
+ 
+-    qemuDomainObjPrivateXMLFormatAllowReboot(buf, priv->allowReboot);
+-
+     qemuDomainObjPrivateXMLFormatPR(buf, priv);
+ 
+     virBufferAsprintf(buf, "<nodename index='%llu'/>\n", priv->nodenameindex);
+@@ -3302,21 +3287,6 @@ qemuDomainObjPrivateXMLParseBackups(qemuDomainObjPrivate *priv,
+ }
+ 
+ 
+-int
+-qemuDomainObjPrivateXMLParseAllowReboot(xmlXPathContextPtr ctxt,
+-                                        virTristateBool *allowReboot)
+-{
+-    xmlNodePtr node = virXPathNode("./allowReboot", ctxt);
+-
+-    /* Allow value='default' as the input here, because old versions
+-     * of libvirt produced that output and we need to be able to read
+-     * it back to correctly handle running guests on daemon upgrade */
+-    return virXMLPropTristateBoolAllowDefault(node, "value",
+-                                              VIR_XML_PROP_NONE,
+-                                              allowReboot);
+-}
+-
+-
+ static void
+ qemuDomainObjPrivateXMLParsePR(xmlXPathContextPtr ctxt,
+                                bool *prDaemonRunning)
+@@ -3548,9 +3518,6 @@ qemuDomainObjPrivateXMLParse(xmlXPathContextPtr ctxt,
+     priv->chardevStdioLogd = virXPathBoolean("boolean(./chardevStdioLogd)",
+                                              ctxt) == 1;
+ 
+-    if (qemuDomainObjPrivateXMLParseAllowReboot(ctxt, &priv->allowReboot) < 0)
+-        return -1;
+-
+     qemuDomainObjPrivateXMLParsePR(ctxt, &priv->prDaemonRunning);
+ 
+     if (qemuDomainObjPrivateXMLParseBlockjobs(vm, priv, ctxt) < 0)
+diff --git a/src/qemu/qemu_domain.h b/src/qemu/qemu_domain.h
+index 50ab492023..23e99dc68c 100644
+--- a/src/qemu/qemu_domain.h
++++ b/src/qemu/qemu_domain.h
+@@ -134,15 +134,6 @@ struct _qemuDomainObjPrivate {
+     bool fakeReboot;
+     bool fakeReset;
+     bool pausedShutdown;
+-    /* allowReboot:
+-     *
+-     * Unused with new QEMU versions which have QEMU_CAPS_SET_ACTION.
+-     *
+-     * Otherwise if it's set to VIR_TRISTATE_BOOL_YES, QEMU was started with
+-     * -no-shutdown, and if set to VIR_TRISTATE_BOOL_NO qemu was started with
+-     * -no-reboot instead.
+-     */
+-    virTristateBool allowReboot;
+ 
+     unsigned long migMaxBandwidth;
+     char *origname;
+@@ -1010,14 +1001,6 @@ qemuDomainFixupCPUs(virDomainObj *vm,
+ char *
+ qemuDomainGetMachineName(virDomainObj *vm);
+ 
+-void
+-qemuDomainObjPrivateXMLFormatAllowReboot(virBuffer *buf,
+-                                         virTristateBool allowReboot);
+-
+-int
+-qemuDomainObjPrivateXMLParseAllowReboot(xmlXPathContextPtr ctxt,
+-                                        virTristateBool *allowReboot);
+-
+ void
+ qemuDomainPrepareDiskSourceData(virDomainDiskDef *disk,
+                                 virStorageSource *src);
+diff --git a/tests/qemustatusxml2xmldata/backup-pull-in.xml b/tests/qemustatusxml2xmldata/backup-pull-in.xml
+index 2cedcc3cf2..fcaff2e38a 100644
+--- a/tests/qemustatusxml2xmldata/backup-pull-in.xml
++++ b/tests/qemustatusxml2xmldata/backup-pull-in.xml
+@@ -233,7 +233,6 @@
+   <channelTargetDir path='/var/lib/libvirt/qemu/channel/target/domain-4-copy'/>
+   <memoryBackingDir path='/var/lib/libvirt/qemu/ram/4-copy'/>
+   <chardevStdioLogd/>
+-  <allowReboot value='yes'/>
+   <nodename index='0'/>
+   <fdset index='0'/>
+   <blockjobs active='yes'>
+diff --git a/tests/qemustatusxml2xmldata/blockjob-blockdev-in.xml b/tests/qemustatusxml2xmldata/blockjob-blockdev-in.xml
+index 1c45fad370..58afae4168 100644
+--- a/tests/qemustatusxml2xmldata/blockjob-blockdev-in.xml
++++ b/tests/qemustatusxml2xmldata/blockjob-blockdev-in.xml
+@@ -232,7 +232,6 @@
+   <channelTargetDir path='/var/lib/libvirt/qemu/channel/target/domain-4-copy'/>
+   <memoryBackingDir path='/var/lib/libvirt/qemu/ram/4-copy'/>
+   <chardevStdioLogd/>
+-  <allowReboot value='yes'/>
+   <nodename index='0'/>
+   <fdset index='0'/>
+   <blockjobs active='yes'>
+diff --git a/tests/qemustatusxml2xmldata/blockjob-mirror-in.xml b/tests/qemustatusxml2xmldata/blockjob-mirror-in.xml
+index df11e83ced..be85202c02 100644
+--- a/tests/qemustatusxml2xmldata/blockjob-mirror-in.xml
++++ b/tests/qemustatusxml2xmldata/blockjob-mirror-in.xml
+@@ -22,7 +22,6 @@
+   <libDir path='/tmp'/>
+   <channelTargetDir path='/var/lib/libvirt/qemu/channel/target'/>
+   <memoryBackingDir path='/var/lib/libvirt/qemu/ram/1-QEMUGuest1'/>
+-  <allowReboot value='yes'/>
+   <nodename index='0'/>
+   <fdset index='0'/>
+   <blockjobs active='yes'/>
+diff --git a/tests/qemustatusxml2xmldata/memory-backing-dir-in.xml b/tests/qemustatusxml2xmldata/memory-backing-dir-in.xml
+index eea671a41c..a1a1845495 100644
+--- a/tests/qemustatusxml2xmldata/memory-backing-dir-in.xml
++++ b/tests/qemustatusxml2xmldata/memory-backing-dir-in.xml
+@@ -22,7 +22,6 @@
+   <libDir path='/tmp'/>
+   <channelTargetDir path='/var/lib/libvirt/qemu/channel/target'/>
+   <memoryBackingDir path='/some/random/path/1-QEMUGuest1'/>
+-  <allowReboot value='yes'/>
+   <nodename index='0'/>
+   <fdset index='0'/>
+   <blockjobs active='no'/>
+diff --git a/tests/qemustatusxml2xmldata/migration-in-params-in.xml b/tests/qemustatusxml2xmldata/migration-in-params-in.xml
+index 861d8eeadb..986e5455aa 100644
+--- a/tests/qemustatusxml2xmldata/migration-in-params-in.xml
++++ b/tests/qemustatusxml2xmldata/migration-in-params-in.xml
+@@ -256,7 +256,6 @@
+   <channelTargetDir path='/var/lib/libvirt/qemu/channel/target/domain-1-nest'/>
+   <memoryBackingDir path='/var/lib/libvirt/qemu/ram/1-nest'/>
+   <chardevStdioLogd/>
+-  <allowReboot value='yes'/>
+   <nodename index='0'/>
+   <fdset index='0'/>
+   <blockjobs active='no'/>
+diff --git a/tests/qemustatusxml2xmldata/migration-out-nbd-bitmaps-in.xml b/tests/qemustatusxml2xmldata/migration-out-nbd-bitmaps-in.xml
+index 5d76545513..4f1fb07c1b 100644
+--- a/tests/qemustatusxml2xmldata/migration-out-nbd-bitmaps-in.xml
++++ b/tests/qemustatusxml2xmldata/migration-out-nbd-bitmaps-in.xml
+@@ -342,7 +342,6 @@
+   </cpu>
+   <chardevStdioLogd/>
+   <rememberOwner/>
+-  <allowReboot value='yes'/>
+   <nodename index='3'/>
+   <fdset index='0'/>
+   <blockjobs active='yes'>
+diff --git a/tests/qemustatusxml2xmldata/migration-out-nbd-out.xml b/tests/qemustatusxml2xmldata/migration-out-nbd-out.xml
+index 581cf28286..a69d1c4590 100644
+--- a/tests/qemustatusxml2xmldata/migration-out-nbd-out.xml
++++ b/tests/qemustatusxml2xmldata/migration-out-nbd-out.xml
+@@ -259,7 +259,6 @@
+   <channelTargetDir path='/var/lib/libvirt/qemu/channel/target/domain-4-upstream'/>
+   <memoryBackingDir path='/var/lib/libvirt/qemu/ram/4-upstream'/>
+   <chardevStdioLogd/>
+-  <allowReboot value='yes'/>
+   <nodename index='0'/>
+   <fdset index='0'/>
+   <blockjobs active='no'/>
+diff --git a/tests/qemustatusxml2xmldata/migration-out-nbd-tls-out.xml b/tests/qemustatusxml2xmldata/migration-out-nbd-tls-out.xml
+index dacaa3e42f..86a7fbc187 100644
+--- a/tests/qemustatusxml2xmldata/migration-out-nbd-tls-out.xml
++++ b/tests/qemustatusxml2xmldata/migration-out-nbd-tls-out.xml
+@@ -288,7 +288,6 @@
+   <channelTargetDir path='/var/lib/libvirt/qemu/channel/target/domain-3-upstream'/>
+   <memoryBackingDir path='/var/lib/libvirt/qemu/ram/3-upstream'/>
+   <chardevStdioLogd/>
+-  <allowReboot value='yes'/>
+   <nodename index='0'/>
+   <fdset index='0'/>
+   <blockjobs active='no'/>
+diff --git a/tests/qemustatusxml2xmldata/migration-out-params-in.xml b/tests/qemustatusxml2xmldata/migration-out-params-in.xml
+index b914236b62..f4e921ab38 100644
+--- a/tests/qemustatusxml2xmldata/migration-out-params-in.xml
++++ b/tests/qemustatusxml2xmldata/migration-out-params-in.xml
+@@ -270,7 +270,6 @@
+   <channelTargetDir path='/var/lib/libvirt/qemu/channel/target/domain-7-nest'/>
+   <memoryBackingDir path='/var/lib/libvirt/qemu/ram/7-nest'/>
+   <chardevStdioLogd/>
+-  <allowReboot value='yes'/>
+   <nodename index='0'/>
+   <fdset index='0'/>
+   <blockjobs active='no'/>
+diff --git a/tests/qemustatusxml2xmldata/modern-in.xml b/tests/qemustatusxml2xmldata/modern-in.xml
+index 050669f554..422a04f3ca 100644
+--- a/tests/qemustatusxml2xmldata/modern-in.xml
++++ b/tests/qemustatusxml2xmldata/modern-in.xml
+@@ -260,7 +260,6 @@
+   <channelTargetDir path='/var/lib/libvirt/qemu/channel/target/domain-1-upstream'/>
+   <memoryBackingDir path='/var/lib/libvirt/qemu/ram/1-upstream'/>
+   <chardevStdioLogd/>
+-  <allowReboot value='yes'/>
+   <nodename index='123'/>
+   <fdset index='321'/>
+   <blockjobs active='no'/>
+diff --git a/tests/qemustatusxml2xmldata/qcow2-data-file-in.xml b/tests/qemustatusxml2xmldata/qcow2-data-file-in.xml
+index 2675214417..951b4abfbe 100644
+--- a/tests/qemustatusxml2xmldata/qcow2-data-file-in.xml
++++ b/tests/qemustatusxml2xmldata/qcow2-data-file-in.xml
+@@ -22,7 +22,6 @@
+   <libDir path='/tmp'/>
+   <channelTargetDir path='/var/lib/libvirt/qemu/channel/target'/>
+   <memoryBackingDir path='/var/lib/libvirt/qemu/ram/1-QEMUGuest1'/>
+-  <allowReboot value='yes'/>
+   <nodename index='0'/>
+   <fdset index='0'/>
+   <blockjobs active='no'/>
+diff --git a/tests/qemustatusxml2xmldata/throttlefilter-out.xml b/tests/qemustatusxml2xmldata/throttlefilter-out.xml
+index 8751a42cce..eee01c79b1 100644
+--- a/tests/qemustatusxml2xmldata/throttlefilter-out.xml
++++ b/tests/qemustatusxml2xmldata/throttlefilter-out.xml
+@@ -233,7 +233,6 @@
+   <channelTargetDir path='/var/lib/libvirt/qemu/channel/target/domain-4-copy'/>
+   <memoryBackingDir path='/var/lib/libvirt/qemu/ram/4-copy'/>
+   <chardevStdioLogd/>
+-  <allowReboot value='yes'/>
+   <nodename index='0'/>
+   <fdset index='0'/>
+   <blockjobs active='no'/>
+diff --git a/tests/qemustatusxml2xmldata/upgrade-out.xml b/tests/qemustatusxml2xmldata/upgrade-out.xml
+index c7bc7128df..fd1c174200 100644
+--- a/tests/qemustatusxml2xmldata/upgrade-out.xml
++++ b/tests/qemustatusxml2xmldata/upgrade-out.xml
+@@ -258,7 +258,6 @@
+   <channelTargetDir path='/var/lib/libvirt/qemu/channel/target/domain-1-upstream'/>
+   <memoryBackingDir path='/var/lib/libvirt/qemu/ram/1-upstream'/>
+   <chardevStdioLogd/>
+-  <allowReboot value='yes'/>
+   <nodename index='0'/>
+   <fdset index='0'/>
+   <blockjobs active='no'/>
+diff --git a/tests/qemustatusxml2xmldata/vcpus-multi-in.xml b/tests/qemustatusxml2xmldata/vcpus-multi-in.xml
+index 6ee688ce03..1d5b34c2b6 100644
+--- a/tests/qemustatusxml2xmldata/vcpus-multi-in.xml
++++ b/tests/qemustatusxml2xmldata/vcpus-multi-in.xml
+@@ -308,7 +308,6 @@
+   <libDir path='/tmp'/>
+   <channelTargetDir path='/var/lib/libvirt/qemu/channel/target'/>
+   <memoryBackingDir path='/var/lib/libvirt/qemu/ram/1729-QEMUGuest1'/>
+-  <allowReboot value='yes'/>
+   <nodename index='0'/>
+   <fdset index='0'/>
+   <blockjobs active='no'/>
+-- 
+2.55.0

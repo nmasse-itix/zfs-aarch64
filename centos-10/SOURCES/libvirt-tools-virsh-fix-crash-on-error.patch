@@ -1,0 +1,50 @@
+From 90450dd1485b7c9412492d375d92bb578dc5a7f9 Mon Sep 17 00:00:00 2001
+Message-ID: <90450dd1485b7c9412492d375d92bb578dc5a7f9.1786713643.git.jdenemar@redhat.com>
+From: Jim Fehlig <jfehlig@suse.com>
+Date: Tue, 4 Aug 2026 11:27:59 -0600
+Subject: [PATCH] tools: virsh: fix crash on error
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Commit 9899c91515 introduced the potential for a NULL pointer dereference
+crash when the 'ctl' parameter to vshPrintStderr() is NULL. Below is an
+example backtrace of the crash when attempting to detach a non-existent
+disk with 'virsh detach-disk test vdz'
+
+ #0  vshPrintStderr (ctl=0x0, level=4, format=<optimized out>, ap=<optimized out>) at ../tools/vsh.c:2148
+ #1  0x00005555555e6b2c in vshError (ctl=ctl@entry=0x0, format=<optimized out>) at ../tools/vsh.c:2170
+ #2  0x00005555555afec7 in virshFindDisk
+    (doc=doc@entry=0x555555696ee0 "<domain type='kvm' id='1'>\n  <name>test</name>\n  <uuid>9b27a21e-dfa2-4c1e-9d11-2de275aefb03</uuid>\n  <metadata>\n    <libosinfo:libosinfo xmlns:libosinfo=\"http://libosinfo.org/xmlns/libvirt/domain/1."..., path=0x555555651240 "vdz", type=type@entry=0) at ../tools/virsh-domain.c:13055
+ #3  0x00005555555b0151 in cmdDetachDisk (ctl=0x7fffffffdac0, cmd=0x5555556914c0) at ../tools/virsh-domain.c:13231
+ #4  0x00005555555e6ddb in vshCommandRun (ctl=ctl@entry=0x7fffffffdac0, cmd=0x5555556914c0) at ../tools/vsh.c:1383
+ #5  0x000055555559347a in main (argc=<optimized out>, argv=0x7fffffffdeb8) at ../tools/virsh.c:908
+
+Ensure 'ctl' is valid before dereferencing it.
+
+Fixes: 9899c91515d79595d19800ccc895df18eb7bb3f7
+Signed-off-by: Jim Fehlig <jfehlig@suse.com>
+Reviewed-by: Daniel P. Berrangé <berrange@redhat.com>
+(cherry picked from commit c6560a7223927e1e5fa249572750bc376bba67fa)
+
+https://redhat.atlassian.net/browse/RHEL-234911
+Signed-off-by: Ján Tomko <jtomko@redhat.com>
+---
+ tools/vsh.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tools/vsh.c b/tools/vsh.c
+index ccf2f21d64..667cc1a0d2 100644
+--- a/tools/vsh.c
++++ b/tools/vsh.c
+@@ -2145,7 +2145,7 @@ vshPrintStderr(vshControl *ctl,
+     if (ctl)
+         vshOutputLogFile(ctl, level, str);
+ 
+-    if (ctl->stderr_closed)
++    if (ctl && ctl->stderr_closed)
+         return;
+ 
+     /* Most output is to stdout, but if someone ran virsh 2>&1, then
+-- 
+2.55.0

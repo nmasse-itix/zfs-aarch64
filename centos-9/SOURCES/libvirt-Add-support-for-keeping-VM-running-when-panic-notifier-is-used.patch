@@ -1,0 +1,306 @@
+From 64e5603f8ea139cd8b7c61b643a0a02bba5885c3 Mon Sep 17 00:00:00 2001
+Message-ID: <64e5603f8ea139cd8b7c61b643a0a02bba5885c3.1787144643.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Wed, 22 Jul 2026 17:13:15 +0200
+Subject: [PATCH] Add support for keeping VM running when panic notifier is
+ used
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Some guest OSes (e.g. windows) can do an internal crash dump and reboot
+after a crash. They unfortunately notify the OS before doing the crash
+dump though so we need a new possibility for the <on_crash> action to
+keep the VM as is.
+
+This patch introduces 'preserve-running' mode for on_crash and wires it
+up into the qemu driver.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Ján Tomko <jtomko@redhat.com>
+(cherry picked from commit cdea89dd87a10cd94deb3b067bae483d98c558ed)
+
+https://redhat.atlassian.net/browse/RHEL-242546
+---
+ docs/formatdomain.rst                         |  3 ++
+ include/libvirt/libvirt-domain.h              |  1 +
+ src/conf/domain_conf.c                        |  2 ++
+ src/conf/schemas/domaincommon.rng             |  2 ++
+ src/libxl/libxl_conf.c                        |  1 +
+ src/libxl/libxl_domain.c                      |  3 ++
+ src/qemu/qemu_driver.c                        | 34 ++++++++++++++++++-
+ src/qemu/qemu_process.c                       | 18 ++++++++++
+ .../async-teardown.x86_64-latest.xml          |  2 +-
+ tests/qemuxmlconfdata/async-teardown.xml      |  2 +-
+ tests/qemuxmlconftest.c                       |  1 +
+ tools/virsh-domain.c                          |  3 +-
+ 12 files changed, 68 insertions(+), 4 deletions(-)
+
+diff --git a/docs/formatdomain.rst b/docs/formatdomain.rst
+index 8e7577f3b7..b48254f35b 100644
+--- a/docs/formatdomain.rst
++++ b/docs/formatdomain.rst
+@@ -1998,6 +1998,9 @@ The ``on_crash`` event supports these additional actions :since:`since 0.8.4`.
+ ``coredump-restart``
+    The crashed domain's core will be dumped, and then the domain will be
+    restarted with the same configuration
++``preserve-running``
++   The crashed domain will continue to run. This is useful if the guest OS can
++   do an internal crash dump and reboot itself. :since:`Since 12.6.0`
+ 
+ :since:`Since 3.9.0`, the lifecycle events can be configured via the
+ `virDomainSetLifecycleAction <html/libvirt-libvirt-domain.html#virDomainSetLifecycleAction>`__
+diff --git a/include/libvirt/libvirt-domain.h b/include/libvirt/libvirt-domain.h
+index 4d7c0099ef..f469ed428d 100644
+--- a/include/libvirt/libvirt-domain.h
++++ b/include/libvirt/libvirt-domain.h
+@@ -7955,6 +7955,7 @@ typedef enum {
+     VIR_DOMAIN_LIFECYCLE_ACTION_PRESERVE = 3, /* (Since: 3.9.0) */
+     VIR_DOMAIN_LIFECYCLE_ACTION_COREDUMP_DESTROY = 4, /* (Since: 3.9.0) */
+     VIR_DOMAIN_LIFECYCLE_ACTION_COREDUMP_RESTART = 5, /* (Since: 3.9.0) */
++    VIR_DOMAIN_LIFECYCLE_ACTION_PRESERVE_RUNNING = 6, /* (Since: 12.6.0) */
+ 
+ # ifdef VIR_ENUM_SENTINELS
+     VIR_DOMAIN_LIFECYCLE_ACTION_LAST /* (Since: 3.9.0) */
+diff --git a/src/conf/domain_conf.c b/src/conf/domain_conf.c
+index 7097ff7065..048aaa10a6 100644
+--- a/src/conf/domain_conf.c
++++ b/src/conf/domain_conf.c
+@@ -302,6 +302,7 @@ VIR_ENUM_IMPL(virDomainLifecycleAction,
+               "preserve",
+               "coredump-destroy",
+               "coredump-restart",
++              "preserve-running",
+ );
+ 
+ VIR_ENUM_IMPL(virDomainLockFailure,
+@@ -5483,6 +5484,7 @@ virDomainDefLifecycleActionAllowed(virDomainLifecycle type,
+             return true;
+         case VIR_DOMAIN_LIFECYCLE_ACTION_COREDUMP_DESTROY:
+         case VIR_DOMAIN_LIFECYCLE_ACTION_COREDUMP_RESTART:
++        case VIR_DOMAIN_LIFECYCLE_ACTION_PRESERVE_RUNNING:
+             break;
+         }
+         break;
+diff --git a/src/conf/schemas/domaincommon.rng b/src/conf/schemas/domaincommon.rng
+index b8283f129e..f091c87702 100644
+--- a/src/conf/schemas/domaincommon.rng
++++ b/src/conf/schemas/domaincommon.rng
+@@ -4973,6 +4973,7 @@
+       destroy: The domain is cleaned up
+       restart: A new domain is started in place of the old one
+       preserve: The domain will remain in memory until it is destroyed manually
++      preserve-running: Keep the domain as is, let the guest handle the crash.
+       rename-restart: a variant of the previous one but where the old domain is
+                       renamed before being saved to allow a restart
+       coredump-destroy: The crashed domain's core will be dumped, and then the
+@@ -4989,6 +4990,7 @@
+       <value>rename-restart</value>
+       <value>coredump-destroy</value>
+       <value>coredump-restart</value>
++      <value>preserve-running</value>
+     </choice>
+   </define>
+   <!--
+diff --git a/src/libxl/libxl_conf.c b/src/libxl/libxl_conf.c
+index 2b988157fa..c7ca81374b 100644
+--- a/src/libxl/libxl_conf.c
++++ b/src/libxl/libxl_conf.c
+@@ -111,6 +111,7 @@ libxlActionFromVirLifecycle(virDomainLifecycleAction action)
+     case VIR_DOMAIN_LIFECYCLE_ACTION_COREDUMP_RESTART:
+         return LIBXL_ACTION_ON_SHUTDOWN_COREDUMP_RESTART;
+ 
++    case VIR_DOMAIN_LIFECYCLE_ACTION_PRESERVE_RUNNING:
+     case VIR_DOMAIN_LIFECYCLE_ACTION_LAST:
+         break;
+     }
+diff --git a/src/libxl/libxl_domain.c b/src/libxl/libxl_domain.c
+index 9842d6fece..f8b50e2751 100644
+--- a/src/libxl/libxl_domain.c
++++ b/src/libxl/libxl_domain.c
+@@ -503,6 +503,7 @@ libxlDomainShutdownThread(void *opaque)
+         case VIR_DOMAIN_LIFECYCLE_ACTION_PRESERVE:
+         case VIR_DOMAIN_LIFECYCLE_ACTION_COREDUMP_DESTROY:
+         case VIR_DOMAIN_LIFECYCLE_ACTION_COREDUMP_RESTART:
++        case VIR_DOMAIN_LIFECYCLE_ACTION_PRESERVE_RUNNING:
+         case VIR_DOMAIN_LIFECYCLE_ACTION_LAST:
+             goto endjob;
+         }
+@@ -523,6 +524,7 @@ libxlDomainShutdownThread(void *opaque)
+             goto endjob;
+         case VIR_DOMAIN_LIFECYCLE_ACTION_PRESERVE:
+         case VIR_DOMAIN_LIFECYCLE_ACTION_LAST:
++        case VIR_DOMAIN_LIFECYCLE_ACTION_PRESERVE_RUNNING:
+             goto endjob;
+         case VIR_DOMAIN_LIFECYCLE_ACTION_COREDUMP_DESTROY:
+             libxlDomainAutoCoreDump(driver, vm);
+@@ -551,6 +553,7 @@ libxlDomainShutdownThread(void *opaque)
+         case VIR_DOMAIN_LIFECYCLE_ACTION_PRESERVE:
+         case VIR_DOMAIN_LIFECYCLE_ACTION_COREDUMP_DESTROY:
+         case VIR_DOMAIN_LIFECYCLE_ACTION_COREDUMP_RESTART:
++        case VIR_DOMAIN_LIFECYCLE_ACTION_PRESERVE_RUNNING:
+         case VIR_DOMAIN_LIFECYCLE_ACTION_LAST:
+             goto endjob;
+         }
+diff --git a/src/qemu/qemu_driver.c b/src/qemu/qemu_driver.c
+index 7e5c374e4c..adc7054f5e 100644
+--- a/src/qemu/qemu_driver.c
++++ b/src/qemu/qemu_driver.c
+@@ -3548,6 +3548,11 @@ processGuestPanicEvent(virQEMUDriver *driver,
+         qemuDomainSaveStatus(vm);
+         break;
+ 
++    case VIR_DOMAIN_LIFECYCLE_ACTION_PRESERVE_RUNNING:
++        virDomainObjSetState(vm, VIR_DOMAIN_RUNNING, VIR_DOMAIN_RUNNING_CRASHED);
++        qemuDomainSaveStatus(vm);
++        break;
++
+     case VIR_DOMAIN_LIFECYCLE_ACTION_LAST:
+         break;
+     }
+@@ -3565,6 +3570,8 @@ processGuestPanicEvent(virQEMUDriver *driver,
+         VIR_DEBUG("Preserving lock state '%s'", NULLSTR(priv->lockState));
+         break;
+ 
++    case VIR_DOMAIN_LIFECYCLE_ACTION_PRESERVE_RUNNING:
++        /* we need to keep resources locked */
+     case VIR_DOMAIN_LIFECYCLE_ACTION_LAST:
+         break;
+     }
+@@ -3582,6 +3589,7 @@ processGuestPanicEvent(virQEMUDriver *driver,
+     case VIR_DOMAIN_LIFECYCLE_ACTION_RESTART:
+     case VIR_DOMAIN_LIFECYCLE_ACTION_PRESERVE:
+     case VIR_DOMAIN_LIFECYCLE_ACTION_RESTART_RENAME:
++    case VIR_DOMAIN_LIFECYCLE_ACTION_PRESERVE_RUNNING:
+     case VIR_DOMAIN_LIFECYCLE_ACTION_LAST:
+         break;
+     }
+@@ -3608,6 +3616,7 @@ processGuestPanicEvent(virQEMUDriver *driver,
+ 
+     case VIR_DOMAIN_LIFECYCLE_ACTION_PRESERVE:
+     case VIR_DOMAIN_LIFECYCLE_ACTION_RESTART_RENAME:
++    case VIR_DOMAIN_LIFECYCLE_ACTION_PRESERVE_RUNNING:
+     case VIR_DOMAIN_LIFECYCLE_ACTION_LAST:
+         break;
+     }
+@@ -19291,13 +19300,36 @@ qemuDomainModifyLifecycleActionLive(virDomainObj *vm,
+         case VIR_DOMAIN_LIFECYCLE_ACTION_RESTART_RENAME:
+         case VIR_DOMAIN_LIFECYCLE_ACTION_COREDUMP_DESTROY:
+         case VIR_DOMAIN_LIFECYCLE_ACTION_COREDUMP_RESTART:
++        case VIR_DOMAIN_LIFECYCLE_ACTION_PRESERVE_RUNNING:
++        case VIR_DOMAIN_LIFECYCLE_ACTION_LAST:
++            break;
++        }
++        break;
++
++    case VIR_DOMAIN_LIFECYCLE_CRASH:
++        if (vm->def->onCrash == action)
++            break;
++
++        switch (vm->def->onCrash) {
++        case VIR_DOMAIN_LIFECYCLE_ACTION_PRESERVE_RUNNING:
++            panic = QEMU_MONITOR_ACTION_PANIC_NONE;
++            break;
++
++        case VIR_DOMAIN_LIFECYCLE_ACTION_DESTROY:
++        case VIR_DOMAIN_LIFECYCLE_ACTION_RESTART:
++        case VIR_DOMAIN_LIFECYCLE_ACTION_PRESERVE:
++        case VIR_DOMAIN_LIFECYCLE_ACTION_RESTART_RENAME:
++        case VIR_DOMAIN_LIFECYCLE_ACTION_COREDUMP_DESTROY:
++        case VIR_DOMAIN_LIFECYCLE_ACTION_COREDUMP_RESTART:
++            panic = QEMU_MONITOR_ACTION_PANIC_PAUSE;
++            break;
++
+         case VIR_DOMAIN_LIFECYCLE_ACTION_LAST:
+             break;
+         }
+         break;
+ 
+     case VIR_DOMAIN_LIFECYCLE_POWEROFF:
+-    case VIR_DOMAIN_LIFECYCLE_CRASH:
+     case VIR_DOMAIN_LIFECYCLE_LAST:
+         break;
+     }
+diff --git a/src/qemu/qemu_process.c b/src/qemu/qemu_process.c
+index f14c03c458..dfd70c4c35 100644
+--- a/src/qemu/qemu_process.c
++++ b/src/qemu/qemu_process.c
+@@ -8100,6 +8100,24 @@ qemuProcessSetupLifecycleActions(virDomainObj *vm,
+     if (vm->def->onReboot == VIR_DOMAIN_LIFECYCLE_ACTION_DESTROY)
+         reboot = QEMU_MONITOR_ACTION_REBOOT_SHUTDOWN;
+ 
++    switch (vm->def->onCrash) {
++    case VIR_DOMAIN_LIFECYCLE_ACTION_PRESERVE_RUNNING:
++        panic = QEMU_MONITOR_ACTION_PANIC_NONE;
++        break;
++
++    case VIR_DOMAIN_LIFECYCLE_ACTION_DESTROY:
++    case VIR_DOMAIN_LIFECYCLE_ACTION_RESTART:
++    case VIR_DOMAIN_LIFECYCLE_ACTION_PRESERVE:
++    case VIR_DOMAIN_LIFECYCLE_ACTION_RESTART_RENAME:
++    case VIR_DOMAIN_LIFECYCLE_ACTION_COREDUMP_DESTROY:
++    case VIR_DOMAIN_LIFECYCLE_ACTION_COREDUMP_RESTART:
++        panic = QEMU_MONITOR_ACTION_PANIC_PAUSE;
++        break;
++
++    case VIR_DOMAIN_LIFECYCLE_ACTION_LAST:
++        break;
++    }
++
+     if (shutdown == QEMU_MONITOR_ACTION_SHUTDOWN_KEEP &&
+         reboot == QEMU_MONITOR_ACTION_REBOOT_KEEP &&
+         watchdog == QEMU_MONITOR_ACTION_WATCHDOG_KEEP &&
+diff --git a/tests/qemuxmlconfdata/async-teardown.x86_64-latest.xml b/tests/qemuxmlconfdata/async-teardown.x86_64-latest.xml
+index e98308a9b1..1c7c80ae8a 100644
+--- a/tests/qemuxmlconfdata/async-teardown.x86_64-latest.xml
++++ b/tests/qemuxmlconfdata/async-teardown.x86_64-latest.xml
+@@ -17,7 +17,7 @@
+   <clock offset='utc'/>
+   <on_poweroff>destroy</on_poweroff>
+   <on_reboot>restart</on_reboot>
+-  <on_crash>destroy</on_crash>
++  <on_crash>preserve-running</on_crash>
+   <devices>
+     <emulator>/usr/bin/qemu-system-x86_64</emulator>
+     <disk type='block' device='disk'>
+diff --git a/tests/qemuxmlconfdata/async-teardown.xml b/tests/qemuxmlconfdata/async-teardown.xml
+index 70c1eccc55..149b9ed16d 100644
+--- a/tests/qemuxmlconfdata/async-teardown.xml
++++ b/tests/qemuxmlconfdata/async-teardown.xml
+@@ -11,7 +11,7 @@
+   <clock offset='utc'/>
+   <on_poweroff>destroy</on_poweroff>
+   <on_reboot>restart</on_reboot>
+-  <on_crash>destroy</on_crash>
++  <on_crash>preserve-running</on_crash>
+   <features>
+     <async-teardown enabled='yes'/>
+   </features>
+diff --git a/tests/qemuxmlconftest.c b/tests/qemuxmlconftest.c
+index 45e9a37794..ffceac549c 100644
+--- a/tests/qemuxmlconftest.c
++++ b/tests/qemuxmlconftest.c
+@@ -3318,6 +3318,7 @@ mymain(void)
+ 
+     DO_TEST_CAPS_LATEST("crypto-builtin");
+ 
++    /* this test case also tests 'preserve-running' onCrash action */
+     DO_TEST_CAPS_LATEST("async-teardown");
+     DO_TEST_CAPS_ARCH_LATEST("s390-async-teardown", "s390x");
+     DO_TEST_CAPS_ARCH_LATEST("s390-async-teardown-no-attrib", "s390x");
+diff --git a/tools/virsh-domain.c b/tools/virsh-domain.c
+index 6e18d195e6..536c0350c7 100644
+--- a/tools/virsh-domain.c
++++ b/tools/virsh-domain.c
+@@ -6124,7 +6124,8 @@ VIR_ENUM_IMPL(virshDomainLifecycleAction,
+               "rename-restart",
+               "preserve",
+               "coredump-destroy",
+-              "coredump-restart");
++              "coredump-restart",
++              "none");
+ 
+ static bool
+ cmdSetLifecycleAction(vshControl *ctl, const vshCmd *cmd)
+-- 
+2.55.0

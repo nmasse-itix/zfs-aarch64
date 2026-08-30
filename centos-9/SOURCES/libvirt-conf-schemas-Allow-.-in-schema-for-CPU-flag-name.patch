@@ -1,0 +1,38 @@
+From 0c8a9769c18f6da3a91e6186833710d32a8f26d6 Mon Sep 17 00:00:00 2001
+Message-ID: <0c8a9769c18f6da3a91e6186833710d32a8f26d6.1786713428.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Mon, 3 Aug 2026 14:53:25 +0200
+Subject: [PATCH] conf: schemas: Allow '.' in schema for CPU flag name
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Allow '.' so that CPU features such as:
+
+ <feature name='sse4.1'/>
+
+pass schema validation.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Ján Tomko <jtomko@redhat.com>
+(cherry picked from commit 5225c1cb688170bb2748f2f23455da4a7cb8a1bf)
+https://redhat.atlassian.net/browse/RHEL-222551
+---
+ src/conf/schemas/cputypes.rng | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/conf/schemas/cputypes.rng b/src/conf/schemas/cputypes.rng
+index 8edf1d14e3..eef3807f1a 100644
+--- a/src/conf/schemas/cputypes.rng
++++ b/src/conf/schemas/cputypes.rng
+@@ -406,7 +406,7 @@
+           <element name="feature">
+             <attribute name="name">
+               <data type="string">
+-                <param name="pattern">[a-zA-Z0-9\-_]+</param>
++                <param name="pattern">[a-zA-Z0-9\-_.]+</param>
+               </data>
+             </attribute>
+             <empty/>
+-- 
+2.55.0

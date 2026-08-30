@@ -1,0 +1,531 @@
+From a0565bb198bfe6aaf7e91186cfc188e18fcf34d7 Mon Sep 17 00:00:00 2001
+Message-ID: <a0565bb198bfe6aaf7e91186cfc188e18fcf34d7.1787144643.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Mon, 20 Jul 2026 13:43:26 +0200
+Subject: [PATCH] qemu: capabilities: Retire QEMU_CAPS_SET_ACTION
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The capability is no longer used because all qemu versions we support do
+have the 'set-action' command.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Ján Tomko <jtomko@redhat.com>
+(cherry picked from commit 01cb769a183e40a3f820ed9f949cf2d8b8cc3498)
+
+ Conflicts:
+	tests/qemucapabilitiesdata/caps_10.1.0_s390x.xml
+	tests/qemucapabilitiesdata/caps_10.2.0_aarch64.xml
+	tests/qemucapabilitiesdata/caps_11.0.0_aarch64.xml
+	tests/qemucapabilitiesdata/caps_11.0.0_s390x.xml
+	tests/qemucapabilitiesdata/caps_11.1.0_aarch64.xml
+	tests/qemucapabilitiesdata/caps_11.1.0_x86_64.xml
+
+    Capability dump files are not present downstream yet.
+
+        tests/qemucapabilitiesdata/caps_6.2.0_ppc64.xml
+        tests/qemucapabilitiesdata/caps_7.0.0_ppc64.xml
+        tests/qemucapabilitiesdata/caps_7.1.0_ppc64.xml
+        tests/qemucapabilitiesdata/caps_7.1.0_x86_64.xml
+
+    These capability files weren't yet deleted upstream, so this patch
+    removes the flag from there as a downstream fix.
+
+https://redhat.atlassian.net/browse/RHEL-242546
+---
+ src/qemu/qemu_capabilities.c                               | 3 +--
+ src/qemu/qemu_capabilities.h                               | 2 +-
+ tests/qemucapabilitiesdata/caps_10.0.0_aarch64.xml         | 1 -
+ tests/qemucapabilitiesdata/caps_10.0.0_ppc64.xml           | 1 -
+ tests/qemucapabilitiesdata/caps_10.0.0_s390x.xml           | 1 -
+ tests/qemucapabilitiesdata/caps_10.0.0_x86_64+amdsev.xml   | 1 -
+ tests/qemucapabilitiesdata/caps_10.0.0_x86_64.xml          | 1 -
+ tests/qemucapabilitiesdata/caps_10.1.0_x86_64+inteltdx.xml | 1 -
+ tests/qemucapabilitiesdata/caps_10.1.0_x86_64.xml          | 1 -
+ tests/qemucapabilitiesdata/caps_10.2.0_x86_64+mshv.xml     | 1 -
+ tests/qemucapabilitiesdata/caps_10.2.0_x86_64.xml          | 1 -
+ tests/qemucapabilitiesdata/caps_6.2.0_ppc64.xml            | 1 -
+ tests/qemucapabilitiesdata/caps_6.2.0_x86_64.xml           | 1 -
+ tests/qemucapabilitiesdata/caps_7.0.0_ppc64.xml            | 1 -
+ tests/qemucapabilitiesdata/caps_7.0.0_x86_64.xml           | 1 -
+ tests/qemucapabilitiesdata/caps_7.1.0_ppc64.xml            | 1 -
+ tests/qemucapabilitiesdata/caps_7.1.0_x86_64.xml           | 1 -
+ tests/qemucapabilitiesdata/caps_7.2.0_ppc.xml              | 1 -
+ tests/qemucapabilitiesdata/caps_7.2.0_x86_64+hvf.xml       | 1 -
+ tests/qemucapabilitiesdata/caps_7.2.0_x86_64.xml           | 1 -
+ tests/qemucapabilitiesdata/caps_8.0.0_x86_64.xml           | 1 -
+ tests/qemucapabilitiesdata/caps_8.1.0_s390x.xml            | 1 -
+ tests/qemucapabilitiesdata/caps_8.1.0_x86_64.xml           | 1 -
+ tests/qemucapabilitiesdata/caps_8.2.0_aarch64.xml          | 1 -
+ tests/qemucapabilitiesdata/caps_8.2.0_armv7l.xml           | 1 -
+ tests/qemucapabilitiesdata/caps_8.2.0_loongarch64.xml      | 1 -
+ tests/qemucapabilitiesdata/caps_8.2.0_s390x.xml            | 1 -
+ tests/qemucapabilitiesdata/caps_8.2.0_x86_64.xml           | 1 -
+ tests/qemucapabilitiesdata/caps_9.0.0_sparc.xml            | 1 -
+ tests/qemucapabilitiesdata/caps_9.0.0_x86_64.xml           | 1 -
+ tests/qemucapabilitiesdata/caps_9.1.0_riscv64.xml          | 1 -
+ tests/qemucapabilitiesdata/caps_9.1.0_s390x.xml            | 1 -
+ tests/qemucapabilitiesdata/caps_9.1.0_x86_64.xml           | 1 -
+ tests/qemucapabilitiesdata/caps_9.2.0_aarch64+hvf.xml      | 1 -
+ tests/qemucapabilitiesdata/caps_9.2.0_s390x.xml            | 1 -
+ tests/qemucapabilitiesdata/caps_9.2.0_x86_64+amdsev.xml    | 1 -
+ tests/qemucapabilitiesdata/caps_9.2.0_x86_64.xml           | 1 -
+ 37 files changed, 2 insertions(+), 38 deletions(-)
+
+diff --git a/src/qemu/qemu_capabilities.c b/src/qemu/qemu_capabilities.c
+index fc5a428620..e344a05bb4 100644
+--- a/src/qemu/qemu_capabilities.c
++++ b/src/qemu/qemu_capabilities.c
+@@ -643,7 +643,7 @@ VIR_ENUM_IMPL(virQEMUCaps,
+               "confidential-guest-support", /* QEMU_CAPS_MACHINE_CONFIDENTAL_GUEST_SUPPORT */
+               "query-display-options", /* X_QEMU_CAPS_QUERY_DISPLAY_OPTIONS */
+               "s390-pv-guest", /* QEMU_CAPS_S390_PV_GUEST */
+-              "set-action", /* QEMU_CAPS_SET_ACTION */
++              "set-action", /* X_QEMU_CAPS_SET_ACTION */
+               "virtio-blk.queue-size", /* QEMU_CAPS_VIRTIO_BLK_QUEUE_SIZE */
+ 
+               /* 410 */
+@@ -1281,7 +1281,6 @@ struct virQEMUCapsStringFlags virQEMUCapsCommands[] = {
+     { "query-cpu-definitions", QEMU_CAPS_QUERY_CPU_DEFINITIONS },
+     { "query-cpu-model-baseline", QEMU_CAPS_QUERY_CPU_MODEL_BASELINE },
+     { "query-cpu-model-comparison", QEMU_CAPS_QUERY_CPU_MODEL_COMPARISON },
+-    { "set-action", QEMU_CAPS_SET_ACTION },
+     { "query-dirty-rate", QEMU_CAPS_QUERY_DIRTY_RATE },
+     { "sev-inject-launch-secret", QEMU_CAPS_SEV_INJECT_LAUNCH_SECRET },
+     { "calc-dirty-rate", QEMU_CAPS_CALC_DIRTY_RATE },
+diff --git a/src/qemu/qemu_capabilities.h b/src/qemu/qemu_capabilities.h
+index 334e98aac4..b6ccbfe65a 100644
+--- a/src/qemu/qemu_capabilities.h
++++ b/src/qemu/qemu_capabilities.h
+@@ -617,7 +617,7 @@ typedef enum { /* virQEMUCapsFlags grouping marker for syntax-check */
+     QEMU_CAPS_MACHINE_CONFIDENTAL_GUEST_SUPPORT, /* -machine confidential-guest-support */
+     X_QEMU_CAPS_QUERY_DISPLAY_OPTIONS, /* 'query-display-options' qmp command present */
+     QEMU_CAPS_S390_PV_GUEST, /* -object s390-pv-guest,... */
+-    QEMU_CAPS_SET_ACTION, /* 'set-action' QMP command */
++    X_QEMU_CAPS_SET_ACTION, /* 'set-action' QMP command */
+     QEMU_CAPS_VIRTIO_BLK_QUEUE_SIZE, /* virtio-blk-*.queue-size */
+ 
+     /* 410 */
+diff --git a/tests/qemucapabilitiesdata/caps_10.0.0_aarch64.xml b/tests/qemucapabilitiesdata/caps_10.0.0_aarch64.xml
+index bbb8b33cde..9468462bb3 100644
+--- a/tests/qemucapabilitiesdata/caps_10.0.0_aarch64.xml
++++ b/tests/qemucapabilitiesdata/caps_10.0.0_aarch64.xml
+@@ -109,7 +109,6 @@
+   <flag name='acpi-index'/>
+   <flag name='input-linux'/>
+   <flag name='confidential-guest-support'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='virtio-mem-pci'/>
+   <flag name='memory-backend-file.reserve'/>
+diff --git a/tests/qemucapabilitiesdata/caps_10.0.0_ppc64.xml b/tests/qemucapabilitiesdata/caps_10.0.0_ppc64.xml
+index 4b3cded2d1..5aee092b40 100644
+--- a/tests/qemucapabilitiesdata/caps_10.0.0_ppc64.xml
++++ b/tests/qemucapabilitiesdata/caps_10.0.0_ppc64.xml
+@@ -117,7 +117,6 @@
+   <flag name='virtio-gpu-gl-pci'/>
+   <flag name='virtio-vga-gl'/>
+   <flag name='confidential-guest-support'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='memory-backend-file.reserve'/>
+   <flag name='netdev.json'/>
+diff --git a/tests/qemucapabilitiesdata/caps_10.0.0_s390x.xml b/tests/qemucapabilitiesdata/caps_10.0.0_s390x.xml
+index cf00ac4ea0..a40b19a0a1 100644
+--- a/tests/qemucapabilitiesdata/caps_10.0.0_s390x.xml
++++ b/tests/qemucapabilitiesdata/caps_10.0.0_s390x.xml
+@@ -81,7 +81,6 @@
+   <flag name='virtio-gpu-gl-pci'/>
+   <flag name='confidential-guest-support'/>
+   <flag name='s390-pv-guest'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='virtio-mem-pci'/>
+   <flag name='memory-backend-file.reserve'/>
+diff --git a/tests/qemucapabilitiesdata/caps_10.0.0_x86_64+amdsev.xml b/tests/qemucapabilitiesdata/caps_10.0.0_x86_64+amdsev.xml
+index 5acd1a33fd..8e923e7d20 100644
+--- a/tests/qemucapabilitiesdata/caps_10.0.0_x86_64+amdsev.xml
++++ b/tests/qemucapabilitiesdata/caps_10.0.0_x86_64+amdsev.xml
+@@ -145,7 +145,6 @@
+   <flag name='virtio-gpu-gl-pci'/>
+   <flag name='virtio-vga-gl'/>
+   <flag name='confidential-guest-support'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='virtio-mem-pci'/>
+   <flag name='memory-backend-file.reserve'/>
+diff --git a/tests/qemucapabilitiesdata/caps_10.0.0_x86_64.xml b/tests/qemucapabilitiesdata/caps_10.0.0_x86_64.xml
+index 50f58791e6..b561c22242 100644
+--- a/tests/qemucapabilitiesdata/caps_10.0.0_x86_64.xml
++++ b/tests/qemucapabilitiesdata/caps_10.0.0_x86_64.xml
+@@ -145,7 +145,6 @@
+   <flag name='virtio-gpu-gl-pci'/>
+   <flag name='virtio-vga-gl'/>
+   <flag name='confidential-guest-support'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='virtio-mem-pci'/>
+   <flag name='memory-backend-file.reserve'/>
+diff --git a/tests/qemucapabilitiesdata/caps_10.1.0_x86_64+inteltdx.xml b/tests/qemucapabilitiesdata/caps_10.1.0_x86_64+inteltdx.xml
+index e321c352a3..68a9790cf0 100644
+--- a/tests/qemucapabilitiesdata/caps_10.1.0_x86_64+inteltdx.xml
++++ b/tests/qemucapabilitiesdata/caps_10.1.0_x86_64+inteltdx.xml
+@@ -128,7 +128,6 @@
+   <flag name='acpi-index'/>
+   <flag name='input-linux'/>
+   <flag name='confidential-guest-support'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='virtio-mem-pci'/>
+   <flag name='memory-backend-file.reserve'/>
+diff --git a/tests/qemucapabilitiesdata/caps_10.1.0_x86_64.xml b/tests/qemucapabilitiesdata/caps_10.1.0_x86_64.xml
+index 2d52659520..d9223a021c 100644
+--- a/tests/qemucapabilitiesdata/caps_10.1.0_x86_64.xml
++++ b/tests/qemucapabilitiesdata/caps_10.1.0_x86_64.xml
+@@ -147,7 +147,6 @@
+   <flag name='virtio-gpu-gl-pci'/>
+   <flag name='virtio-vga-gl'/>
+   <flag name='confidential-guest-support'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='virtio-mem-pci'/>
+   <flag name='memory-backend-file.reserve'/>
+diff --git a/tests/qemucapabilitiesdata/caps_10.2.0_x86_64+mshv.xml b/tests/qemucapabilitiesdata/caps_10.2.0_x86_64+mshv.xml
+index eb2ab001a6..b28ac95d60 100644
+--- a/tests/qemucapabilitiesdata/caps_10.2.0_x86_64+mshv.xml
++++ b/tests/qemucapabilitiesdata/caps_10.2.0_x86_64+mshv.xml
+@@ -135,7 +135,6 @@
+   <flag name='acpi-index'/>
+   <flag name='input-linux'/>
+   <flag name='confidential-guest-support'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='virtio-mem-pci'/>
+   <flag name='memory-backend-file.reserve'/>
+diff --git a/tests/qemucapabilitiesdata/caps_10.2.0_x86_64.xml b/tests/qemucapabilitiesdata/caps_10.2.0_x86_64.xml
+index c4ea924c1f..ae9f4df6a5 100644
+--- a/tests/qemucapabilitiesdata/caps_10.2.0_x86_64.xml
++++ b/tests/qemucapabilitiesdata/caps_10.2.0_x86_64.xml
+@@ -147,7 +147,6 @@
+   <flag name='virtio-gpu-gl-pci'/>
+   <flag name='virtio-vga-gl'/>
+   <flag name='confidential-guest-support'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='virtio-mem-pci'/>
+   <flag name='memory-backend-file.reserve'/>
+diff --git a/tests/qemucapabilitiesdata/caps_6.2.0_ppc64.xml b/tests/qemucapabilitiesdata/caps_6.2.0_ppc64.xml
+index ff3bbe3a1f..4d235ae6d1 100644
+--- a/tests/qemucapabilitiesdata/caps_6.2.0_ppc64.xml
++++ b/tests/qemucapabilitiesdata/caps_6.2.0_ppc64.xml
+@@ -109,7 +109,6 @@
+   <flag name='acpi-index'/>
+   <flag name='input-linux'/>
+   <flag name='confidential-guest-support'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='memory-backend-file.reserve'/>
+   <flag name='piix4.acpi-root-pci-hotplug'/>
+diff --git a/tests/qemucapabilitiesdata/caps_6.2.0_x86_64.xml b/tests/qemucapabilitiesdata/caps_6.2.0_x86_64.xml
+index 108e75bee8..5adb91b8b2 100644
+--- a/tests/qemucapabilitiesdata/caps_6.2.0_x86_64.xml
++++ b/tests/qemucapabilitiesdata/caps_6.2.0_x86_64.xml
+@@ -147,7 +147,6 @@
+   <flag name='virtio-gpu-gl-pci'/>
+   <flag name='virtio-vga-gl'/>
+   <flag name='confidential-guest-support'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='virtio-mem-pci'/>
+   <flag name='memory-backend-file.reserve'/>
+diff --git a/tests/qemucapabilitiesdata/caps_7.0.0_ppc64.xml b/tests/qemucapabilitiesdata/caps_7.0.0_ppc64.xml
+index 6d4b555cd6..bf04c5a991 100644
+--- a/tests/qemucapabilitiesdata/caps_7.0.0_ppc64.xml
++++ b/tests/qemucapabilitiesdata/caps_7.0.0_ppc64.xml
+@@ -122,7 +122,6 @@
+   <flag name='virtio-gpu-gl-pci'/>
+   <flag name='virtio-vga-gl'/>
+   <flag name='confidential-guest-support'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='memory-backend-file.reserve'/>
+   <flag name='piix4.acpi-root-pci-hotplug'/>
+diff --git a/tests/qemucapabilitiesdata/caps_7.0.0_x86_64.xml b/tests/qemucapabilitiesdata/caps_7.0.0_x86_64.xml
+index 1723e65499..82ca53c5b2 100644
+--- a/tests/qemucapabilitiesdata/caps_7.0.0_x86_64.xml
++++ b/tests/qemucapabilitiesdata/caps_7.0.0_x86_64.xml
+@@ -147,7 +147,6 @@
+   <flag name='virtio-gpu-gl-pci'/>
+   <flag name='virtio-vga-gl'/>
+   <flag name='confidential-guest-support'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='virtio-mem-pci'/>
+   <flag name='memory-backend-file.reserve'/>
+diff --git a/tests/qemucapabilitiesdata/caps_7.1.0_ppc64.xml b/tests/qemucapabilitiesdata/caps_7.1.0_ppc64.xml
+index efd3150659..9201a0a903 100644
+--- a/tests/qemucapabilitiesdata/caps_7.1.0_ppc64.xml
++++ b/tests/qemucapabilitiesdata/caps_7.1.0_ppc64.xml
+@@ -118,7 +118,6 @@
+   <flag name='virtio-gpu-gl-pci'/>
+   <flag name='virtio-vga-gl'/>
+   <flag name='confidential-guest-support'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='memory-backend-file.reserve'/>
+   <flag name='piix4.acpi-root-pci-hotplug'/>
+diff --git a/tests/qemucapabilitiesdata/caps_7.1.0_x86_64.xml b/tests/qemucapabilitiesdata/caps_7.1.0_x86_64.xml
+index 4deaf4fd1c..0a39442be4 100644
+--- a/tests/qemucapabilitiesdata/caps_7.1.0_x86_64.xml
++++ b/tests/qemucapabilitiesdata/caps_7.1.0_x86_64.xml
+@@ -147,7 +147,6 @@
+   <flag name='virtio-gpu-gl-pci'/>
+   <flag name='virtio-vga-gl'/>
+   <flag name='confidential-guest-support'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='virtio-mem-pci'/>
+   <flag name='memory-backend-file.reserve'/>
+diff --git a/tests/qemucapabilitiesdata/caps_7.2.0_ppc.xml b/tests/qemucapabilitiesdata/caps_7.2.0_ppc.xml
+index bc5953f43e..bf67b3d295 100644
+--- a/tests/qemucapabilitiesdata/caps_7.2.0_ppc.xml
++++ b/tests/qemucapabilitiesdata/caps_7.2.0_ppc.xml
+@@ -109,7 +109,6 @@
+   <flag name='input-linux'/>
+   <flag name='virtio-gpu-gl-pci'/>
+   <flag name='confidential-guest-support'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='memory-backend-file.reserve'/>
+   <flag name='piix4.acpi-root-pci-hotplug'/>
+diff --git a/tests/qemucapabilitiesdata/caps_7.2.0_x86_64+hvf.xml b/tests/qemucapabilitiesdata/caps_7.2.0_x86_64+hvf.xml
+index cbfc830f2c..0851162702 100644
+--- a/tests/qemucapabilitiesdata/caps_7.2.0_x86_64+hvf.xml
++++ b/tests/qemucapabilitiesdata/caps_7.2.0_x86_64+hvf.xml
+@@ -146,7 +146,6 @@
+   <flag name='virtio-gpu-gl-pci'/>
+   <flag name='virtio-vga-gl'/>
+   <flag name='confidential-guest-support'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='virtio-mem-pci'/>
+   <flag name='memory-backend-file.reserve'/>
+diff --git a/tests/qemucapabilitiesdata/caps_7.2.0_x86_64.xml b/tests/qemucapabilitiesdata/caps_7.2.0_x86_64.xml
+index 913f96e91a..dda51b35df 100644
+--- a/tests/qemucapabilitiesdata/caps_7.2.0_x86_64.xml
++++ b/tests/qemucapabilitiesdata/caps_7.2.0_x86_64.xml
+@@ -147,7 +147,6 @@
+   <flag name='virtio-gpu-gl-pci'/>
+   <flag name='virtio-vga-gl'/>
+   <flag name='confidential-guest-support'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='virtio-mem-pci'/>
+   <flag name='memory-backend-file.reserve'/>
+diff --git a/tests/qemucapabilitiesdata/caps_8.0.0_x86_64.xml b/tests/qemucapabilitiesdata/caps_8.0.0_x86_64.xml
+index 592df7049b..fcbb68e415 100644
+--- a/tests/qemucapabilitiesdata/caps_8.0.0_x86_64.xml
++++ b/tests/qemucapabilitiesdata/caps_8.0.0_x86_64.xml
+@@ -147,7 +147,6 @@
+   <flag name='virtio-gpu-gl-pci'/>
+   <flag name='virtio-vga-gl'/>
+   <flag name='confidential-guest-support'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='virtio-mem-pci'/>
+   <flag name='memory-backend-file.reserve'/>
+diff --git a/tests/qemucapabilitiesdata/caps_8.1.0_s390x.xml b/tests/qemucapabilitiesdata/caps_8.1.0_s390x.xml
+index 2c540f7f30..65f73d1af8 100644
+--- a/tests/qemucapabilitiesdata/caps_8.1.0_s390x.xml
++++ b/tests/qemucapabilitiesdata/caps_8.1.0_s390x.xml
+@@ -77,7 +77,6 @@
+   <flag name='input-linux'/>
+   <flag name='confidential-guest-support'/>
+   <flag name='s390-pv-guest'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='memory-backend-file.reserve'/>
+   <flag name='netdev.json'/>
+diff --git a/tests/qemucapabilitiesdata/caps_8.1.0_x86_64.xml b/tests/qemucapabilitiesdata/caps_8.1.0_x86_64.xml
+index 9141faa7b9..87b330ff32 100644
+--- a/tests/qemucapabilitiesdata/caps_8.1.0_x86_64.xml
++++ b/tests/qemucapabilitiesdata/caps_8.1.0_x86_64.xml
+@@ -147,7 +147,6 @@
+   <flag name='virtio-gpu-gl-pci'/>
+   <flag name='virtio-vga-gl'/>
+   <flag name='confidential-guest-support'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='virtio-mem-pci'/>
+   <flag name='memory-backend-file.reserve'/>
+diff --git a/tests/qemucapabilitiesdata/caps_8.2.0_aarch64.xml b/tests/qemucapabilitiesdata/caps_8.2.0_aarch64.xml
+index bb70bcaf1f..20eb5f5d50 100644
+--- a/tests/qemucapabilitiesdata/caps_8.2.0_aarch64.xml
++++ b/tests/qemucapabilitiesdata/caps_8.2.0_aarch64.xml
+@@ -115,7 +115,6 @@
+   <flag name='acpi-index'/>
+   <flag name='input-linux'/>
+   <flag name='confidential-guest-support'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='virtio-mem-pci'/>
+   <flag name='memory-backend-file.reserve'/>
+diff --git a/tests/qemucapabilitiesdata/caps_8.2.0_armv7l.xml b/tests/qemucapabilitiesdata/caps_8.2.0_armv7l.xml
+index 9590bc464a..042458fba8 100644
+--- a/tests/qemucapabilitiesdata/caps_8.2.0_armv7l.xml
++++ b/tests/qemucapabilitiesdata/caps_8.2.0_armv7l.xml
+@@ -120,7 +120,6 @@
+   <flag name='input-linux'/>
+   <flag name='virtio-gpu-gl-pci'/>
+   <flag name='confidential-guest-support'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='virtio-mem-pci'/>
+   <flag name='memory-backend-file.reserve'/>
+diff --git a/tests/qemucapabilitiesdata/caps_8.2.0_loongarch64.xml b/tests/qemucapabilitiesdata/caps_8.2.0_loongarch64.xml
+index 640438623a..95eb2dfa21 100644
+--- a/tests/qemucapabilitiesdata/caps_8.2.0_loongarch64.xml
++++ b/tests/qemucapabilitiesdata/caps_8.2.0_loongarch64.xml
+@@ -108,7 +108,6 @@
+   <flag name='acpi-index'/>
+   <flag name='input-linux'/>
+   <flag name='confidential-guest-support'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='memory-backend-file.reserve'/>
+   <flag name='netdev.json'/>
+diff --git a/tests/qemucapabilitiesdata/caps_8.2.0_s390x.xml b/tests/qemucapabilitiesdata/caps_8.2.0_s390x.xml
+index a254e16741..45ab66ec29 100644
+--- a/tests/qemucapabilitiesdata/caps_8.2.0_s390x.xml
++++ b/tests/qemucapabilitiesdata/caps_8.2.0_s390x.xml
+@@ -77,7 +77,6 @@
+   <flag name='input-linux'/>
+   <flag name='confidential-guest-support'/>
+   <flag name='s390-pv-guest'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='memory-backend-file.reserve'/>
+   <flag name='netdev.json'/>
+diff --git a/tests/qemucapabilitiesdata/caps_8.2.0_x86_64.xml b/tests/qemucapabilitiesdata/caps_8.2.0_x86_64.xml
+index 12aa9c23fd..4909957a9a 100644
+--- a/tests/qemucapabilitiesdata/caps_8.2.0_x86_64.xml
++++ b/tests/qemucapabilitiesdata/caps_8.2.0_x86_64.xml
+@@ -147,7 +147,6 @@
+   <flag name='virtio-gpu-gl-pci'/>
+   <flag name='virtio-vga-gl'/>
+   <flag name='confidential-guest-support'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='virtio-mem-pci'/>
+   <flag name='memory-backend-file.reserve'/>
+diff --git a/tests/qemucapabilitiesdata/caps_9.0.0_sparc.xml b/tests/qemucapabilitiesdata/caps_9.0.0_sparc.xml
+index c2710ecab1..44ddfb0f76 100644
+--- a/tests/qemucapabilitiesdata/caps_9.0.0_sparc.xml
++++ b/tests/qemucapabilitiesdata/caps_9.0.0_sparc.xml
+@@ -37,7 +37,6 @@
+   <flag name='rotation-rate'/>
+   <flag name='input-linux'/>
+   <flag name='confidential-guest-support'/>
+-  <flag name='set-action'/>
+   <flag name='memory-backend-file.reserve'/>
+   <flag name='netdev.json'/>
+   <flag name='query-dirty-rate'/>
+diff --git a/tests/qemucapabilitiesdata/caps_9.0.0_x86_64.xml b/tests/qemucapabilitiesdata/caps_9.0.0_x86_64.xml
+index 88bd502fee..956a4c02a0 100644
+--- a/tests/qemucapabilitiesdata/caps_9.0.0_x86_64.xml
++++ b/tests/qemucapabilitiesdata/caps_9.0.0_x86_64.xml
+@@ -147,7 +147,6 @@
+   <flag name='virtio-gpu-gl-pci'/>
+   <flag name='virtio-vga-gl'/>
+   <flag name='confidential-guest-support'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='virtio-mem-pci'/>
+   <flag name='memory-backend-file.reserve'/>
+diff --git a/tests/qemucapabilitiesdata/caps_9.1.0_riscv64.xml b/tests/qemucapabilitiesdata/caps_9.1.0_riscv64.xml
+index 85c013a724..f718abf406 100644
+--- a/tests/qemucapabilitiesdata/caps_9.1.0_riscv64.xml
++++ b/tests/qemucapabilitiesdata/caps_9.1.0_riscv64.xml
+@@ -113,7 +113,6 @@
+   <flag name='virtio-gpu-gl-pci'/>
+   <flag name='virtio-vga-gl'/>
+   <flag name='confidential-guest-support'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='memory-backend-file.reserve'/>
+   <flag name='netdev.json'/>
+diff --git a/tests/qemucapabilitiesdata/caps_9.1.0_s390x.xml b/tests/qemucapabilitiesdata/caps_9.1.0_s390x.xml
+index 3d2692b02c..f54b70359e 100644
+--- a/tests/qemucapabilitiesdata/caps_9.1.0_s390x.xml
++++ b/tests/qemucapabilitiesdata/caps_9.1.0_s390x.xml
+@@ -81,7 +81,6 @@
+   <flag name='virtio-gpu-gl-pci'/>
+   <flag name='confidential-guest-support'/>
+   <flag name='s390-pv-guest'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='memory-backend-file.reserve'/>
+   <flag name='netdev.json'/>
+diff --git a/tests/qemucapabilitiesdata/caps_9.1.0_x86_64.xml b/tests/qemucapabilitiesdata/caps_9.1.0_x86_64.xml
+index 66578099a7..fd75acc8ad 100644
+--- a/tests/qemucapabilitiesdata/caps_9.1.0_x86_64.xml
++++ b/tests/qemucapabilitiesdata/caps_9.1.0_x86_64.xml
+@@ -145,7 +145,6 @@
+   <flag name='virtio-gpu-gl-pci'/>
+   <flag name='virtio-vga-gl'/>
+   <flag name='confidential-guest-support'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='virtio-mem-pci'/>
+   <flag name='memory-backend-file.reserve'/>
+diff --git a/tests/qemucapabilitiesdata/caps_9.2.0_aarch64+hvf.xml b/tests/qemucapabilitiesdata/caps_9.2.0_aarch64+hvf.xml
+index 79784d553f..2a66f36fd2 100644
+--- a/tests/qemucapabilitiesdata/caps_9.2.0_aarch64+hvf.xml
++++ b/tests/qemucapabilitiesdata/caps_9.2.0_aarch64+hvf.xml
+@@ -87,7 +87,6 @@
+   <flag name='rotation-rate'/>
+   <flag name='acpi-index'/>
+   <flag name='confidential-guest-support'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='netdev.json'/>
+   <flag name='query-dirty-rate'/>
+diff --git a/tests/qemucapabilitiesdata/caps_9.2.0_s390x.xml b/tests/qemucapabilitiesdata/caps_9.2.0_s390x.xml
+index 9f95ed891e..21e7f5d957 100644
+--- a/tests/qemucapabilitiesdata/caps_9.2.0_s390x.xml
++++ b/tests/qemucapabilitiesdata/caps_9.2.0_s390x.xml
+@@ -81,7 +81,6 @@
+   <flag name='virtio-gpu-gl-pci'/>
+   <flag name='confidential-guest-support'/>
+   <flag name='s390-pv-guest'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='memory-backend-file.reserve'/>
+   <flag name='netdev.json'/>
+diff --git a/tests/qemucapabilitiesdata/caps_9.2.0_x86_64+amdsev.xml b/tests/qemucapabilitiesdata/caps_9.2.0_x86_64+amdsev.xml
+index 6636346bc5..b275c7f10d 100644
+--- a/tests/qemucapabilitiesdata/caps_9.2.0_x86_64+amdsev.xml
++++ b/tests/qemucapabilitiesdata/caps_9.2.0_x86_64+amdsev.xml
+@@ -146,7 +146,6 @@
+   <flag name='virtio-gpu-gl-pci'/>
+   <flag name='virtio-vga-gl'/>
+   <flag name='confidential-guest-support'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='virtio-mem-pci'/>
+   <flag name='memory-backend-file.reserve'/>
+diff --git a/tests/qemucapabilitiesdata/caps_9.2.0_x86_64.xml b/tests/qemucapabilitiesdata/caps_9.2.0_x86_64.xml
+index dee30415aa..dee685e9bd 100644
+--- a/tests/qemucapabilitiesdata/caps_9.2.0_x86_64.xml
++++ b/tests/qemucapabilitiesdata/caps_9.2.0_x86_64.xml
+@@ -145,7 +145,6 @@
+   <flag name='virtio-gpu-gl-pci'/>
+   <flag name='virtio-vga-gl'/>
+   <flag name='confidential-guest-support'/>
+-  <flag name='set-action'/>
+   <flag name='virtio-blk.queue-size'/>
+   <flag name='virtio-mem-pci'/>
+   <flag name='memory-backend-file.reserve'/>
+-- 
+2.55.0

@@ -1,0 +1,137 @@
+From c85c8ecd53bf4d67b14d7f022813ec7b2801181c Mon Sep 17 00:00:00 2001
+Message-ID: <c85c8ecd53bf4d67b14d7f022813ec7b2801181c.1787144197.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Tue, 21 Jul 2026 10:21:50 +0200
+Subject: [PATCH] conf: Use proper enum types for 'onReboot', 'onPoweroff',
+ 'onCrash', and 'onLockFailure'
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This ensures that 'switch' statements work correctly.
+
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Ján Tomko <jtomko@redhat.com>
+(cherry picked from commit 997b9816dcaef7ed0d7fdbfe4f1b2354b1b82c58)
+
+https://redhat.atlassian.net/browse/RHEL-242545
+---
+ src/conf/domain_conf.c | 10 ++++++----
+ src/conf/domain_conf.h |  9 ++++-----
+ src/libxl/xen_common.c | 10 +++++++---
+ src/qemu/qemu_driver.c |  2 ++
+ 4 files changed, 19 insertions(+), 12 deletions(-)
+
+diff --git a/src/conf/domain_conf.c b/src/conf/domain_conf.c
+index db44ba9a72..d43b8bdd5b 100644
+--- a/src/conf/domain_conf.c
++++ b/src/conf/domain_conf.c
+@@ -14172,21 +14172,23 @@ static int
+ virDomainEventActionParseXML(xmlXPathContextPtr ctxt,
+                              const char *name,
+                              const char *xpath,
+-                             int *val,
+-                             int defaultVal,
++                             unsigned int *val,
++                             unsigned int defaultVal,
+                              virEventActionFromStringFunc convFunc)
+ {
+     g_autofree char *tmp = virXPathString(xpath, ctxt);
++    int tmpval;
+ 
+     if (tmp == NULL) {
+         *val = defaultVal;
+     } else {
+-        *val = convFunc(tmp);
+-        if (*val < 0) {
++        tmpval = convFunc(tmp);
++        if (tmpval < 0) {
+             virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
+                            _("unknown %1$s action: %2$s"), name, tmp);
+             return -1;
+         }
++        *val = tmpval;
+     }
+     return 0;
+ }
+diff --git a/src/conf/domain_conf.h b/src/conf/domain_conf.h
+index 40ea6090f8..2c017738e3 100644
+--- a/src/conf/domain_conf.h
++++ b/src/conf/domain_conf.h
+@@ -3255,12 +3255,11 @@ struct _virDomainDef {
+     virDomainResourceDef *resource;
+     virDomainIdMapDef idmap;
+ 
+-    /* These 3 are based on virDomainLifecycleAction enum flags */
+-    int onReboot;
+-    int onPoweroff;
+-    int onCrash;
++    virDomainLifecycleAction onReboot;
++    virDomainLifecycleAction onPoweroff;
++    virDomainLifecycleAction onCrash;
+ 
+-    int onLockFailure; /* enum virDomainLockFailureAction */
++    virDomainLockFailureAction onLockFailure;
+ 
+     virDomainPowerManagement pm;
+ 
+diff --git a/src/libxl/xen_common.c b/src/libxl/xen_common.c
+index e6a372e078..4b2e47006a 100644
+--- a/src/libxl/xen_common.c
++++ b/src/libxl/xen_common.c
+@@ -336,33 +336,37 @@ xenParseEventsActions(virConf *conf, virDomainDef *def)
+     g_autofree char *on_poweroff = NULL;
+     g_autofree char *on_reboot = NULL;
+     g_autofree char *on_crash = NULL;
++    int tmp;
+ 
+     if (xenConfigGetString(conf, "on_poweroff", &on_poweroff, "destroy") < 0)
+         return -1;
+ 
+-    if ((def->onPoweroff = virDomainLifecycleActionTypeFromString(on_poweroff)) < 0) {
++    if ((tmp = virDomainLifecycleActionTypeFromString(on_poweroff)) < 0) {
+         virReportError(VIR_ERR_INTERNAL_ERROR,
+                        _("unexpected value %1$s for on_poweroff"), on_poweroff);
+         return -1;
+     }
++    def->onPoweroff =  tmp;
+ 
+     if (xenConfigGetString(conf, "on_reboot", &on_reboot, "restart") < 0)
+         return -1;
+ 
+-    if ((def->onReboot = virDomainLifecycleActionTypeFromString(on_reboot)) < 0) {
++    if ((tmp = virDomainLifecycleActionTypeFromString(on_reboot)) < 0) {
+         virReportError(VIR_ERR_INTERNAL_ERROR,
+                        _("unexpected value %1$s for on_reboot"), on_reboot);
+         return -1;
+     }
++    def->onReboot = tmp;
+ 
+     if (xenConfigGetString(conf, "on_crash", &on_crash, "restart") < 0)
+         return -1;
+ 
+-    if ((def->onCrash = virDomainLifecycleActionTypeFromString(on_crash)) < 0) {
++    if ((tmp = virDomainLifecycleActionTypeFromString(on_crash)) < 0) {
+         virReportError(VIR_ERR_INTERNAL_ERROR,
+                        _("unexpected value %1$s for on_crash"), on_crash);
+         return -1;
+     }
++    def->onCrash = tmp;
+ 
+     return 0;
+ }
+diff --git a/src/qemu/qemu_driver.c b/src/qemu/qemu_driver.c
+index b7c1a28d5f..cb9f6fb7bf 100644
+--- a/src/qemu/qemu_driver.c
++++ b/src/qemu/qemu_driver.c
+@@ -3680,6 +3680,8 @@ processGuestPanicEvent(virQEMUDriver *driver,
+         /* the VM is kept around for debugging */
+         break;
+ 
++    case VIR_DOMAIN_LIFECYCLE_ACTION_RESTART_RENAME:
++    case VIR_DOMAIN_LIFECYCLE_ACTION_LAST:
+     default:
+         break;
+     }
+-- 
+2.55.0

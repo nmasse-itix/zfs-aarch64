@@ -1,0 +1,33 @@
+From 1191669a769e280a77107804c6cdbab08e972a1e Mon Sep 17 00:00:00 2001
+Message-ID: <1191669a769e280a77107804c6cdbab08e972a1e.1786713643.git.jdenemar@redhat.com>
+From: Nathan Chen <nathanc@nvidia.com>
+Date: Wed, 5 Aug 2026 15:12:55 -0700
+Subject: [PATCH] conf: Include check for pci_bus in virDomainIOMMUDefEquals()
+
+virDomainIOMMUDefEquals() should check for pci_bus being equal
+across two virDomainIOMMUDef being compared.
+
+Fixes: 4d6419b286af ("qemu: Implement pluggable-device smmuv3")
+Reviewed-by: Pavel Hrdina <phrdina@redhat.com>
+Signed-off-by: Nathan Chen <nathanc@nvidia.com>
+(cherry picked from commit b2bfc6b4c8b7243840750e1e95514a8646482cd4)
+
+Resolves: https://redhat.atlassian.net/browse/RHEL-138901
+---
+ src/conf/domain_conf.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/conf/domain_conf.c b/src/conf/domain_conf.c
+index 17c4a57cd8..94cfb27c1d 100644
+--- a/src/conf/domain_conf.c
++++ b/src/conf/domain_conf.c
+@@ -16849,6 +16849,7 @@ virDomainIOMMUDefEquals(const virDomainIOMMUDef *a,
+         a->iotlb != b->iotlb ||
+         a->aw_bits != b->aw_bits ||
+         a->dma_translation != b->dma_translation ||
++        a->pci_bus != b->pci_bus ||
+         a->xtsup != b->xtsup ||
+         a->pt != b->pt ||
+         a->granule != b->granule)
+-- 
+2.55.0

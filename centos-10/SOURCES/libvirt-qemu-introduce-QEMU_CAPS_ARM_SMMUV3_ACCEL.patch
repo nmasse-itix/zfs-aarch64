@@ -1,0 +1,81 @@
+From 613935cded2347bf61e0461ac8f72f2f99ceb18f Mon Sep 17 00:00:00 2001
+Message-ID: <613935cded2347bf61e0461ac8f72f2f99ceb18f.1786713644.git.jdenemar@redhat.com>
+From: Nathan Chen <nathanc@nvidia.com>
+Date: Wed, 5 Aug 2026 15:12:59 -0700
+Subject: [PATCH] qemu: introduce QEMU_CAPS_ARM_SMMUV3_ACCEL
+
+The arm-smmuv3 accel device property, used for HW-accelerated nested
+SMMUv3, was added in QEMU 11.0.0 on top of the pluggable device
+introduced in 10.2. Probe it alongside smmu_per_bus via
+device-list-properties.
+
+Reviewed-by: Pavel Hrdina <phrdina@redhat.com>
+Signed-off-by: Nathan Chen <nathanc@nvidia.com>
+(cherry picked from commit 90b01b9d3e3b684837190e92257eba15511515b0)
+
+Resolves: https://redhat.atlassian.net/browse/RHEL-138901
+---
+ src/qemu/qemu_capabilities.c                       | 2 ++
+ src/qemu/qemu_capabilities.h                       | 1 +
+ tests/qemucapabilitiesdata/caps_11.0.0_aarch64.xml | 1 +
+ tests/qemucapabilitiesdata/caps_11.1.0_aarch64.xml | 1 +
+ 4 files changed, 5 insertions(+)
+
+diff --git a/src/qemu/qemu_capabilities.c b/src/qemu/qemu_capabilities.c
+index a7d121f917..c60ca02d97 100644
+--- a/src/qemu/qemu_capabilities.c
++++ b/src/qemu/qemu_capabilities.c
+@@ -769,6 +769,7 @@ VIR_ENUM_IMPL(virQEMUCaps,
+               "blockdev-mirror.target-is-zero", /* QEMU_CAPS_BLOCKDEV_MIRROR_TARGET_IS_ZERO */
+               "arm-smmuv3", /* QEMU_CAPS_DEVICE_ARM_SMMUV3 */
+               "arm-smmuv3.smmu_per_bus", /* QEMU_CAPS_ARM_SMMUV3_SMMU_PER_BUS */
++              "arm-smmuv3.accel", /* QEMU_CAPS_ARM_SMMUV3_ACCEL */
+     );
+ 
+ 
+@@ -1648,6 +1649,7 @@ static struct virQEMUCapsDevicePropsFlags virQEMUCapsDevicePropsAMDIOMMU[] = {
+ 
+ static struct virQEMUCapsDevicePropsFlags virQEMUCapsDevicePropsArmSmmuv3[] = {
+     { "smmu_per_bus", QEMU_CAPS_ARM_SMMUV3_SMMU_PER_BUS, NULL },
++    { "accel", QEMU_CAPS_ARM_SMMUV3_ACCEL, NULL },
+ };
+ 
+ /* see documentation for virQEMUQAPISchemaPathGet for the query format */
+diff --git a/src/qemu/qemu_capabilities.h b/src/qemu/qemu_capabilities.h
+index 0dc9836ca9..28085144a2 100644
+--- a/src/qemu/qemu_capabilities.h
++++ b/src/qemu/qemu_capabilities.h
+@@ -743,6 +743,7 @@ typedef enum { /* virQEMUCapsFlags grouping marker for syntax-check */
+     QEMU_CAPS_BLOCKDEV_MIRROR_TARGET_IS_ZERO, /* 'blockdev-mirror' supports 'target-is-zero' */
+     QEMU_CAPS_DEVICE_ARM_SMMUV3, /* -device arm-smmuv3 */
+     QEMU_CAPS_ARM_SMMUV3_SMMU_PER_BUS, /* arm-smmuv3.smmu_per_bus */
++    QEMU_CAPS_ARM_SMMUV3_ACCEL, /* arm-smmuv3.accel */
+ 
+     QEMU_CAPS_LAST /* this must always be the last item */
+ } virQEMUCapsFlags;
+diff --git a/tests/qemucapabilitiesdata/caps_11.0.0_aarch64.xml b/tests/qemucapabilitiesdata/caps_11.0.0_aarch64.xml
+index 2280800fca..ca6def23dc 100644
+--- a/tests/qemucapabilitiesdata/caps_11.0.0_aarch64.xml
++++ b/tests/qemucapabilitiesdata/caps_11.0.0_aarch64.xml
+@@ -190,6 +190,7 @@
+   <flag name='blockdev-mirror.target-is-zero'/>
+   <flag name='arm-smmuv3'/>
+   <flag name='arm-smmuv3.smmu_per_bus'/>
++  <flag name='arm-smmuv3.accel'/>
+   <version>11000000</version>
+   <microcodeVersion>61700286</microcodeVersion>
+   <package>v11.0.0</package>
+diff --git a/tests/qemucapabilitiesdata/caps_11.1.0_aarch64.xml b/tests/qemucapabilitiesdata/caps_11.1.0_aarch64.xml
+index b4200f35bb..306f2981c1 100644
+--- a/tests/qemucapabilitiesdata/caps_11.1.0_aarch64.xml
++++ b/tests/qemucapabilitiesdata/caps_11.1.0_aarch64.xml
+@@ -190,6 +190,7 @@
+   <flag name='blockdev-mirror.target-is-zero'/>
+   <flag name='arm-smmuv3'/>
+   <flag name='arm-smmuv3.smmu_per_bus'/>
++  <flag name='arm-smmuv3.accel'/>
+   <version>11000050</version>
+   <microcodeVersion>61700287</microcodeVersion>
+   <package>v11.0.0-1600-g5611a9268d</package>
+-- 
+2.55.0

@@ -287,7 +287,7 @@
 Summary: Library providing a simple virtualization API
 Name: libvirt
 Version: 12.5.0
-Release: 1%{?dist}%{?extra_release}
+Release: 3%{?dist}%{?extra_release}
 License: GPL-2.0-or-later AND LGPL-2.1-only AND LGPL-2.1-or-later AND OFL-1.1
 URL: https://libvirt.org/
 
@@ -295,6 +295,37 @@ URL: https://libvirt.org/
     %define mainturl stable_updates/
 %endif
 Source: https://download.libvirt.org/%{?mainturl}libvirt-%{version}.tar.xz
+Patch1: libvirt-tools-virsh-fix-crash-on-error.patch
+Patch2: libvirt-conf-Include-check-for-pci_bus-in-virDomainIOMMUDefEquals.patch
+Patch3: libvirt-qemu-introduce-QEMU_CAPS_DEVICE_ARM_SMMUV3.patch
+Patch4: libvirt-qemu-introduce-QEMU_CAPS_ARM_SMMUV3_SMMU_PER_BUS.patch
+Patch5: libvirt-qemu-introduce-QEMU_CAPS_ARM_SMMUV3_ACCEL.patch
+Patch6: libvirt-qemu-Add-support-for-HW-accelerated-nested-SMMUv3.patch
+Patch7: libvirt-tests-qemuxmlconfdata-provide-HW-accel-smmuv3-sample-XML-and-CLI-args.patch
+Patch8: libvirt-conf-schemas-Allow-.-in-schema-for-CPU-flag-name.patch
+Patch9: libvirt-tests-capabilityschemadata-Add-a-real-test-example.patch
+Patch10: libvirt-util-virFileChownFiles-do-not-follow-symlinks.patch
+Patch11: libvirt-qemu-Always-assume-support-for-QEMU_CAPS_SET_ACTION.patch
+Patch12: libvirt-qemu-Remove-unused-qemuProcessRebootAllowed.patch
+Patch13: libvirt-qemu-monitor-Remove-support-for-watchdog-set-action.patch
+Patch14: libvirt-qemu-Remove-allowReboot-field.patch
+Patch15: libvirt-qemu-capabilities-Retire-QEMU_CAPS_SET_ACTION.patch
+Patch16: libvirt-qemuProcessSetupLifecycleActions-Prepare-to-handle-other-actions.patch
+Patch17: libvirt-qemuDomainModifyLifecycleActionLive-Prepare-to-handle-other-actions.patch
+Patch18: libvirt-processGuestPanicEvent-Don-t-pass-panic-action-via-parameter.patch
+Patch19: libvirt-conf-Use-proper-enum-types-for-onReboot-onPoweroff-onCrash-and-onLockFailure.patch
+Patch20: libvirt-qemuMonitorGuestPanicEventInfoFormatMsg-Directly-return-message.patch
+Patch21: libvirt-qemuProcessGuestPanicEventInfo-Fold-into-only-caller.patch
+Patch22: libvirt-qemu-processGuestPanicEvent-Split-individual-steps-under-separate-conditions.patch
+Patch23: libvirt-Add-support-for-keeping-VM-running-when-panic-notifier-is-used.patch
+Patch24: libvirt-qemu-Fix-proper-ordering-of-virtlockd-shutdown.patch
+Patch25: libvirt-qemu-move-qemuAgent-InfoFormatParams-to-hypervisor-qemu_agent.c.patch
+Patch26: libvirt-Add-guest-device-info-to-virDomainGetGuestInfo.patch
+Patch27: libvirt-qemu_agent-Introduce-guest-get-devices.patch
+Patch28: libvirt-qemuagenttest-Introduce-GetGuestDeviceInfo-test-case.patch
+Patch29: libvirt-qemu-Implement-device-info-for-virDomainGetGuestInfo-API.patch
+Patch30: libvirt-virsh-Add-support-for-VIR_DOMAIN_GUEST_INFO_DEVICES.patch
+
 
 Requires: libvirt-daemon = %{version}-%{release}
 Requires: libvirt-daemon-config-network = %{version}-%{release}
@@ -1160,6 +1191,9 @@ MinGW Windows libvirt virtualization library.
 
 %prep
 %autosetup -S git_am -N
+
+%autopatch
+
 
 %build
 %if 0%{?fedora} >= %{min_fedora} || 0%{?rhel} >= %{min_rhel}
@@ -2693,6 +2727,40 @@ exit 0
 %endif
 
 %changelog
+* Wed Aug 19 2026 Jiri Denemark <jdenemar@redhat.com> - 12.5.0-3
+- qemu: Always assume support for 'QEMU_CAPS_SET_ACTION' (RHEL-242545)
+- qemu: Remove unused 'qemuProcessRebootAllowed' (RHEL-242545)
+- qemu: monitor: Remove support for 'watchdog-set-action' (RHEL-242545)
+- qemu: Remove 'allowReboot' field (RHEL-242545)
+- qemu: capabilities: Retire QEMU_CAPS_SET_ACTION (RHEL-242545)
+- qemuProcessSetupLifecycleActions: Prepare to handle other actions (RHEL-242545)
+- qemuDomainModifyLifecycleActionLive: Prepare to handle other actions (RHEL-242545)
+- processGuestPanicEvent: Don't pass panic action via parameter (RHEL-242545)
+- conf: Use proper enum types for 'onReboot', 'onPoweroff', 'onCrash', and 'onLockFailure' (RHEL-242545)
+- qemuMonitorGuestPanicEventInfoFormatMsg: Directly return message (RHEL-242545)
+- qemuProcessGuestPanicEventInfo: Fold into only caller (RHEL-242545)
+- qemu: processGuestPanicEvent: Split individual steps under separate conditions (RHEL-242545)
+- Add support for keeping VM running when panic notifier is used (RHEL-242545)
+- qemu: Fix proper ordering of 'virtlockd' shutdown (RHEL-185108)
+- qemu: move qemuAgent*InfoFormatParams to hypervisor/qemu_agent.c (RHEL-235731)
+- Add guest device info to virDomainGetGuestInfo (RHEL-235731)
+- qemu_agent: Introduce guest-get-devices (RHEL-235731)
+- qemuagenttest: Introduce GetGuestDeviceInfo test case (RHEL-235731)
+- qemu: Implement device info for virDomainGetGuestInfo() API (RHEL-235731)
+- virsh: Add support for VIR_DOMAIN_GUEST_INFO_DEVICES (RHEL-235731)
+
+* Fri Aug 14 2026 Jiri Denemark <jdenemar@redhat.com> - 12.5.0-2
+- tools: virsh: fix crash on error (RHEL-234911)
+- conf: Include check for pci_bus in virDomainIOMMUDefEquals() (RHEL-138901)
+- qemu: introduce QEMU_CAPS_DEVICE_ARM_SMMUV3 (RHEL-138901)
+- qemu: introduce QEMU_CAPS_ARM_SMMUV3_SMMU_PER_BUS (RHEL-138901)
+- qemu: introduce QEMU_CAPS_ARM_SMMUV3_ACCEL (RHEL-138901)
+- qemu: Add support for HW-accelerated nested SMMUv3 (RHEL-138901)
+- tests: qemuxmlconfdata: provide HW-accel smmuv3 sample XML and CLI args (RHEL-138901)
+- conf: schemas: Allow '.' in schema for CPU flag name (RHEL-222549)
+- tests: capabilityschemadata: Add a real test example (RHEL-222549)
+- util: virFileChownFiles: do not follow symlinks (CVE-2026-63622)
+
 * Wed Jul  1 2026 Jiri Denemark <jdenemar@redhat.com> - 12.5.0-1
 - Rebased to libvirt-12.5.0 (RHEL-156861)
 - The rebase also fixes the following bugs:

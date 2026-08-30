@@ -1,0 +1,371 @@
+From 311945c34f1188283be6c71b5c2ddd9e967977ff Mon Sep 17 00:00:00 2001
+Message-ID: <311945c34f1188283be6c71b5c2ddd9e967977ff.1786713644.git.jdenemar@redhat.com>
+From: Nathan Chen <nathanc@nvidia.com>
+Date: Wed, 5 Aug 2026 15:13:00 -0700
+Subject: [PATCH] qemu: Add support for HW-accelerated nested SMMUv3
+
+Add support for enabling HW-accelerated nested SMMUv3 via <accel>
+attribute and its additional attributes for ATS, SSID, RIL, and OAS
+configuration.
+
+Validate the domain iommu accel attribute in qemu_validate.c when
+QEMU lacks this capability. Checking accel is sufficient because ats,
+ril, ssidsize, and oas were introduced in the same QEMU release, and
+it only makes sense to backport accel, ats, ril, ssidsize, and oas
+all together.
+
+Reviewed-by: Pavel Hrdina <phrdina@redhat.com>
+Signed-off-by: Nathan Chen <nathanc@nvidia.com>
+(cherry picked from commit d4605d8279d73bf8d2b8031d49f453529738ef34)
+
+Resolves: https://redhat.atlassian.net/browse/RHEL-138901
+---
+ docs/formatdomain.rst             | 38 +++++++++++++++
+ src/conf/domain_conf.c            | 79 +++++++++++++++++++++++++++++++
+ src/conf/domain_conf.h            |  5 ++
+ src/conf/domain_validate.c        | 27 ++++++++++-
+ src/conf/schemas/domaincommon.rng | 25 ++++++++++
+ src/qemu/qemu_command.c           | 15 ++++++
+ src/qemu/qemu_validate.c          | 12 +++++
+ 7 files changed, 200 insertions(+), 1 deletion(-)
+
+diff --git a/docs/formatdomain.rst b/docs/formatdomain.rst
+index a861f9f177..1e8c81c3a5 100644
+--- a/docs/formatdomain.rst
++++ b/docs/formatdomain.rst
+@@ -9426,6 +9426,44 @@ Examples:
+       The ``pciBus`` attribute notes the index of the controller that an
+       IOMMU device is attached to. (QEMU/KVM and ``smmuv3`` model only)
+ 
++   ``accel``
++      The ``accel`` attribute with possible values ``on`` and ``off`` can
++      be used to enable hardware acceleration support for smmuv3 IOMMU
++      devices.
++      :since:`Since 12.7.0` (QEMU/KVM and ``smmuv3`` model only)
++
++   ``ats``
++      The ``ats`` attribute with possible values ``on`` and ``off`` can be
++      used to enable reporting Address Translation Services capability to
++      the guest for smmuv3 IOMMU devices with ``accel`` set to ``on``, if
++      the host SMMUv3 supports ATS and the associated passthrough device
++      supports ATS. If ``accel`` is enabled and ``ats`` is not configured,
++      the hypervisor default value is used.
++      :since:`Since 12.7.0` (QEMU/KVM and ``smmuv3`` model only)
++
++   ``ril``
++      The ``ril`` attribute with possible values ``on`` and ``off`` can be
++      used to report whether Range Invalidation for IOMMU devices with
++      ``accel`` set to ``on`` is compatible with host SMMUv3 support. If
++      ``accel`` is enabled and ``ril`` is not configured, the hypervisor
++      default value is used.
++      :since:`Since 12.7.0` (QEMU/KVM and ``smmuv3`` model only)
++
++   ``ssidsize``
++      The ``ssidsize`` attribute sets the number of bits used to
++      represent SubstreamIDs. A value of N allows SSIDs in the range
++      [0 .. 2^N - 1]. The valid range is 0-20, and a value greater than 0
++      is required for enabling PASID support, as doing so advertises PASID
++      capability to the vIOMMU. If ``accel`` is enabled and ``ssidsize`` is
++      not configured, the hypervisor default value is used.
++      :since:`Since 12.7.0` (QEMU/KVM and ``smmuv3`` model only)
++
++   ``oas``
++      The ``oas`` attribute sets the output address size in units of bits.
++      If ``accel`` is enabled and ``oas`` is not configured, the hypervisor
++      default value is used.
++      :since:`Since 12.7.0` (QEMU/KVM and ``smmuv3`` model only)
++
+ In case of ``virtio`` IOMMU device, the ``driver`` element can optionally
+ contain ``granule`` subelement that allows to choose which granule will be
+ used by default. It is useful when running guests with different page size
+diff --git a/src/conf/domain_conf.c b/src/conf/domain_conf.c
+index 94cfb27c1d..db44ba9a72 100644
+--- a/src/conf/domain_conf.c
++++ b/src/conf/domain_conf.c
+@@ -2863,6 +2863,10 @@ virDomainIOMMUDefNew(void)
+ 
+     iommu->pci_bus = -1;
+ 
++    iommu->ssid_size = -1;
++
++    iommu->oas = -1;
++
+     return g_steal_pointer(&iommu);
+ }
+ 
+@@ -14746,6 +14750,26 @@ virDomainIOMMUDefParseXML(virDomainXMLOption *xmlopt,
+                           &iommu->pci_bus, -1) < 0)
+             return NULL;
+ 
++        if (virXMLPropTristateSwitch(driver, "accel", VIR_XML_PROP_NONE,
++                                     &iommu->accel) < 0)
++            return NULL;
++
++        if (virXMLPropTristateSwitch(driver, "ats", VIR_XML_PROP_NONE,
++                                     &iommu->ats) < 0)
++            return NULL;
++
++        if (virXMLPropTristateSwitch(driver, "ril", VIR_XML_PROP_NONE,
++                                     &iommu->ril) < 0)
++            return NULL;
++
++        if (virXMLPropInt(driver, "ssidsize", 10, VIR_XML_PROP_NONE,
++                          &iommu->ssid_size, -1) < 0)
++            return NULL;
++
++        if (virXMLPropInt(driver, "oas", 10, VIR_XML_PROP_NONE,
++                          &iommu->oas, -1) < 0)
++            return NULL;
++
+         if ((granule = virXPathNode("./driver/granule", ctxt))) {
+             g_autofree char *mode = virXMLPropString(granule, "mode");
+             unsigned long long size;
+@@ -16850,6 +16874,11 @@ virDomainIOMMUDefEquals(const virDomainIOMMUDef *a,
+         a->aw_bits != b->aw_bits ||
+         a->dma_translation != b->dma_translation ||
+         a->pci_bus != b->pci_bus ||
++        a->accel != b->accel ||
++        a->ats != b->ats ||
++        a->ril != b->ril ||
++        a->ssid_size != b->ssid_size ||
++        a->oas != b->oas ||
+         a->xtsup != b->xtsup ||
+         a->pt != b->pt ||
+         a->granule != b->granule)
+@@ -22734,6 +22763,36 @@ virDomainIOMMUDefCheckABIStability(virDomainIOMMUDef *src,
+                        dst->pci_bus, src->pci_bus);
+         return false;
+     }
++    if (src->accel != dst->accel) {
++        virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
++                       _("Target domain IOMMU device accel value '%1$d' does not match source '%2$d'"),
++                       dst->accel, src->accel);
++        return false;
++    }
++    if (src->ats != dst->ats) {
++        virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
++                       _("Target domain IOMMU device ATS value '%1$d' does not match source '%2$d'"),
++                       dst->ats, src->ats);
++        return false;
++    }
++    if (src->ril != dst->ril) {
++        virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
++                       _("Target domain IOMMU device ril value '%1$d' does not match source '%2$d'"),
++                       dst->ril, src->ril);
++        return false;
++    }
++    if (src->ssid_size != dst->ssid_size) {
++        virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
++                       _("Target domain IOMMU device ssid_size value '%1$d' does not match source '%2$d'"),
++                       dst->ssid_size, src->ssid_size);
++        return false;
++    }
++    if (src->oas != dst->oas) {
++        virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
++                       _("Target domain IOMMU device oas value '%1$d' does not match source '%2$d'"),
++                       dst->oas, src->oas);
++        return false;
++    }
+     if (src->dma_translation != dst->dma_translation) {
+         virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
+                        _("Target domain IOMMU device dma translation '%1$s' does not match source '%2$s'"),
+@@ -29204,6 +29263,26 @@ virDomainIOMMUDefFormat(virBuffer *buf,
+         virBufferAsprintf(&driverAttrBuf, " pciBus='%d'",
+                           iommu->pci_bus);
+     }
++    if (iommu->accel != VIR_TRISTATE_SWITCH_ABSENT) {
++        virBufferAsprintf(&driverAttrBuf, " accel='%s'",
++                          virTristateSwitchTypeToString(iommu->accel));
++    }
++    if (iommu->ats != VIR_TRISTATE_SWITCH_ABSENT) {
++        virBufferAsprintf(&driverAttrBuf, " ats='%s'",
++                          virTristateSwitchTypeToString(iommu->ats));
++    }
++    if (iommu->ril != VIR_TRISTATE_SWITCH_ABSENT) {
++        virBufferAsprintf(&driverAttrBuf, " ril='%s'",
++                          virTristateSwitchTypeToString(iommu->ril));
++    }
++    if (iommu->ssid_size >= 0) {
++        virBufferAsprintf(&driverAttrBuf, " ssidsize='%d'",
++                          iommu->ssid_size);
++    }
++    if (iommu->oas >= 0) {
++        virBufferAsprintf(&driverAttrBuf, " oas='%d'",
++                          iommu->oas);
++    }
+     if (iommu->granule != 0) {
+         if (iommu->granule == -1) {
+             virBufferAddLit(&driverChildBuf, "<granule mode='host'/>\n");
+diff --git a/src/conf/domain_conf.h b/src/conf/domain_conf.h
+index 0c6c79c413..40ea6090f8 100644
+--- a/src/conf/domain_conf.h
++++ b/src/conf/domain_conf.h
+@@ -3105,6 +3105,11 @@ struct _virDomainIOMMUDef {
+     virTristateSwitch xtsup;
+     virTristateSwitch pt;
+     int granule; /* -1 means 'host', 0 unset, page size in KiB otherwise */
++    virTristateSwitch accel;
++    virTristateSwitch ats;
++    virTristateSwitch ril;
++    int ssid_size;
++    int oas;
+ };
+ 
+ typedef enum {
+diff --git a/src/conf/domain_validate.c b/src/conf/domain_validate.c
+index 3946f92182..710a891904 100644
+--- a/src/conf/domain_validate.c
++++ b/src/conf/domain_validate.c
+@@ -3203,6 +3203,16 @@ virDomainIOMMUDefValidate(const virDomainIOMMUDef *iommu)
+                            virDomainIOMMUModelTypeToString(iommu->model));
+             return -1;
+         }
++        if (iommu->accel != VIR_TRISTATE_SWITCH_ON &&
++            (iommu->ats != VIR_TRISTATE_SWITCH_ABSENT ||
++             iommu->ril != VIR_TRISTATE_SWITCH_ABSENT ||
++             iommu->ssid_size >= 0 ||
++             iommu->oas >= 0)) {
++            virReportError(VIR_ERR_XML_ERROR,
++                           _("accel must be enabled for iommu model '%1$s' when setting ats, ril, ssidsize, or oas"),
++                           virDomainIOMMUModelTypeToString(iommu->model));
++            return -1;
++        }
+         break;
+     case VIR_DOMAIN_IOMMU_MODEL_VIRTIO:
+         if (iommu->intremap != VIR_TRISTATE_SWITCH_ABSENT ||
+@@ -3210,7 +3220,12 @@ virDomainIOMMUDefValidate(const virDomainIOMMUDef *iommu)
+             iommu->eim != VIR_TRISTATE_SWITCH_ABSENT ||
+             iommu->iotlb != VIR_TRISTATE_SWITCH_ABSENT ||
+             iommu->dma_translation != VIR_TRISTATE_SWITCH_ABSENT ||
+-            iommu->pci_bus >= 0) {
++            iommu->pci_bus >= 0 ||
++            iommu->accel != VIR_TRISTATE_SWITCH_ABSENT ||
++            iommu->ats != VIR_TRISTATE_SWITCH_ABSENT ||
++            iommu->ril != VIR_TRISTATE_SWITCH_ABSENT ||
++            iommu->ssid_size >= 0 ||
++            iommu->oas >= 0) {
+             virReportError(VIR_ERR_XML_ERROR,
+                            _("iommu model '%1$s' doesn't support some additional attributes"),
+                            virDomainIOMMUModelTypeToString(iommu->model));
+@@ -3233,6 +3248,11 @@ virDomainIOMMUDefValidate(const virDomainIOMMUDef *iommu)
+             iommu->aw_bits != 0 ||
+             iommu->dma_translation != VIR_TRISTATE_SWITCH_ABSENT ||
+             iommu->pci_bus >= 0 ||
++            iommu->accel != VIR_TRISTATE_SWITCH_ABSENT ||
++            iommu->ats != VIR_TRISTATE_SWITCH_ABSENT ||
++            iommu->ril != VIR_TRISTATE_SWITCH_ABSENT ||
++            iommu->ssid_size >= 0 ||
++            iommu->oas >= 0 ||
+             iommu->granule != 0) {
+             virReportError(VIR_ERR_XML_ERROR,
+                            _("iommu model '%1$s' doesn't support some additional attributes"),
+@@ -3245,6 +3265,11 @@ virDomainIOMMUDefValidate(const virDomainIOMMUDef *iommu)
+         if (iommu->pt != VIR_TRISTATE_SWITCH_ABSENT ||
+             iommu->xtsup != VIR_TRISTATE_SWITCH_ABSENT ||
+             iommu->pci_bus >= 0 ||
++            iommu->accel != VIR_TRISTATE_SWITCH_ABSENT ||
++            iommu->ats != VIR_TRISTATE_SWITCH_ABSENT ||
++            iommu->ril != VIR_TRISTATE_SWITCH_ABSENT ||
++            iommu->ssid_size >= 0 ||
++            iommu->oas >= 0 ||
+             iommu->granule != 0) {
+             virReportError(VIR_ERR_XML_ERROR,
+                            _("iommu model '%1$s' doesn't support some additional attributes"),
+diff --git a/src/conf/schemas/domaincommon.rng b/src/conf/schemas/domaincommon.rng
+index 121e4e06a6..c7d7ebc876 100644
+--- a/src/conf/schemas/domaincommon.rng
++++ b/src/conf/schemas/domaincommon.rng
+@@ -6454,6 +6454,31 @@
+                 <empty/>
+               </element>
+             </optional>
++            <optional>
++              <attribute name="accel">
++                <ref name="virOnOff"/>
++              </attribute>
++            </optional>
++            <optional>
++              <attribute name="ats">
++                <ref name="virOnOff"/>
++              </attribute>
++            </optional>
++            <optional>
++              <attribute name="ril">
++                <ref name="virOnOff"/>
++              </attribute>
++            </optional>
++            <optional>
++              <attribute name="ssidsize">
++                <data type="int"/>
++              </attribute>
++            </optional>
++            <optional>
++              <attribute name="oas">
++                <data type="int"/>
++              </attribute>
++            </optional>
+           </element>
+         </optional>
+         <optional>
+diff --git a/src/qemu/qemu_command.c b/src/qemu/qemu_command.c
+index e726dc661c..2d5eaa1e80 100644
+--- a/src/qemu/qemu_command.c
++++ b/src/qemu/qemu_command.c
+@@ -6276,6 +6276,8 @@ qemuBuildPCINestedSmmuv3DevProps(const virDomainDef *def,
+ {
+     g_autoptr(virJSONValue) props = NULL;
+     g_autofree char *bus = NULL;
++    g_autofree char *ssidsizeStr = NULL;
++    g_autofree char *oasStr = NULL;
+     virPCIDeviceAddress addr = { .bus = iommu->pci_bus };
+ 
+     bus = qemuBuildDeviceAddressPCIGetBus(def, &addr);
+@@ -6286,10 +6288,23 @@ qemuBuildPCINestedSmmuv3DevProps(const virDomainDef *def,
+         return NULL;
+     }
+ 
++    if (iommu->ssid_size >= 0) {
++        ssidsizeStr = g_strdup_printf("%u", iommu->ssid_size);
++    }
++
++    if (iommu->oas >= 0) {
++        oasStr = g_strdup_printf("%u", iommu->oas);
++    }
++
+     if (virJSONValueObjectAdd(&props,
+                               "s:driver", "arm-smmuv3",
+                               "s:primary-bus", bus,
+                               "s:id", iommu->info.alias,
++                              "T:accel", iommu->accel,
++                              "S:ats", qemuOnOffAuto(iommu->ats),
++                              "S:ril", qemuOnOffAuto(iommu->ril),
++                              "S:ssidsize", ssidsizeStr,
++                              "S:oas", oasStr,
+                               NULL) < 0)
+         return NULL;
+ 
+diff --git a/src/qemu/qemu_validate.c b/src/qemu/qemu_validate.c
+index 2da99329c5..1093eb8363 100644
+--- a/src/qemu/qemu_validate.c
++++ b/src/qemu/qemu_validate.c
+@@ -5827,6 +5827,18 @@ qemuValidateDomainDeviceDefIOMMU(const virDomainIOMMUDef *iommu,
+         return -1;
+     }
+ 
++    /* While QEMU_CAPS_ARM_SMMUV3_ACCEL tracks the .accel attribute of
++     * arm-smmuv3 it is also a good indicator of .ats, .ril, .ssidsize, and
++     * .oas attributes as all of them were introduced in the same release,
++     * and these features are meant to be backported all together. */
++    if (iommu->model == VIR_DOMAIN_IOMMU_MODEL_SMMUV3 &&
++        iommu->accel != VIR_TRISTATE_SWITCH_ABSENT &&
++        !virQEMUCapsGet(qemuCaps, QEMU_CAPS_ARM_SMMUV3_ACCEL)) {
++        virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
++                       _("iommu: accel is not supported with this QEMU binary"));
++        return -1;
++    }
++
+     if (iommu->granule > 0) {
+         /* QEMU supports only 4KiB, 8KiB, 16KiB and 64KiB granule size */
+         if (!(iommu->granule == 4 ||
+-- 
+2.55.0
