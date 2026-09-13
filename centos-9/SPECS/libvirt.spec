@@ -287,7 +287,7 @@
 Summary: Library providing a simple virtualization API
 Name: libvirt
 Version: 11.10.0
-Release: 18%{?dist}%{?extra_release}
+Release: 19%{?dist}%{?extra_release}
 License: GPL-2.0-or-later AND LGPL-2.1-only AND LGPL-2.1-or-later AND OFL-1.1
 URL: https://libvirt.org/
 
@@ -457,6 +457,7 @@ Patch159: libvirt-qemu_agent-Introduce-guest-get-devices.patch
 Patch160: libvirt-qemuagenttest-Introduce-GetGuestDeviceInfo-test-case.patch
 Patch161: libvirt-qemu-Implement-device-info-for-virDomainGetGuestInfo-API.patch
 Patch162: libvirt-virsh-Add-support-for-VIR_DOMAIN_GUEST_INFO_DEVICES.patch
+Patch163: libvirt-remote-Fix-integer-overflow-in-RPC-handler-for-virNodeGetFreePages-CVE-2026-18917.patch
 
 
 Requires: libvirt-daemon = %{version}-%{release}
@@ -2848,6 +2849,9 @@ exit 0
 %endif
 
 %changelog
+* Mon Aug 31 2026 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-19
+- remote: Fix integer overflow in RPC handler for virNodeGetFreePages (CVE-2026-18917) (CVE-2026-18917, RHEL-245281)
+
 * Wed Aug 19 2026 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-18
 - qemu: Always assume support for 'QEMU_CAPS_SET_ACTION' (RHEL-242546)
 - qemu: Remove unused 'qemuProcessRebootAllowed' (RHEL-242546)
