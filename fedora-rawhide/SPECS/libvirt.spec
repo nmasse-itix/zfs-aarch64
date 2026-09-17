@@ -290,7 +290,7 @@
 Summary: Library providing a simple virtualization API
 Name: libvirt
 Version: 12.7.0
-Release: 2%{?dist}
+Release: 3%{?dist}
 License: GPL-2.0-or-later AND LGPL-2.1-only AND LGPL-2.1-or-later AND OFL-1.1
 URL: https://libvirt.org/
 
@@ -2709,6 +2709,9 @@ exit 0
 %endif
 
 %changelog
+* Wed Sep 16 2026 Sandro Mani <manisandro@gmail.com> - 12.7.0-3
+- Rebuild (mingw-libxml2)
+
 * Thu Sep 10 2026 Zbigniew Jędrzejewski-Szmek <zbyszek@in.waw.pl> - 12.7.0-2
 - Rebuilt for libxml-2.5.4
 
