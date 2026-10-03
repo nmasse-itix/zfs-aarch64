@@ -289,8 +289,8 @@
 
 Summary: Library providing a simple virtualization API
 Name: libvirt
-Version: 12.7.0
-Release: 3%{?dist}
+Version: 12.8.0
+Release: 1%{?dist}
 License: GPL-2.0-or-later AND LGPL-2.1-only AND LGPL-2.1-or-later AND OFL-1.1
 URL: https://libvirt.org/
 
@@ -616,8 +616,12 @@ bridge capabilities.
 Summary: Nwfilter driver plugin for the libvirtd daemon
 Requires: libvirt-daemon-common = %{version}-%{release}
 Requires: libvirt-libs = %{version}-%{release}
+    %if %{prefer_nftables}
+Requires: nftables
+    %else
 Requires: iptables
 Requires: ebtables
+    %endif
 
 %description daemon-driver-nwfilter
 The nwfilter driver plugin for the libvirtd daemon, providing
@@ -2243,6 +2247,9 @@ exit 0
 %config(noreplace) %{_sysconfdir}/libvirt/virtnwfilterd.conf
 %{_datadir}/augeas/lenses/virtnwfilterd.aug
 %{_datadir}/augeas/lenses/tests/test_virtnwfilterd.aug
+%config(noreplace) %{_sysconfdir}/libvirt/nwfilter.conf
+%{_datadir}/augeas/lenses/libvirtd_nwfilter.aug
+%{_datadir}/augeas/lenses/tests/test_libvirtd_nwfilter.aug
 %{_unitdir}/virtnwfilterd.service
 %{_unitdir}/virtnwfilterd.socket
 %{_unitdir}/virtnwfilterd-ro.socket
@@ -2708,7 +2715,11 @@ exit 0
 %{mingw64_mandir}/man7/virkey*.7*
 %endif
 
+
 %changelog
+* Thu Oct 01 2026 Cole Robinson <crobinso@redhat.com> - 12.8.0-1
+- Update to 12.8.0 release
+
 * Wed Sep 16 2026 Sandro Mani <manisandro@gmail.com> - 12.7.0-3
 - Rebuild (mingw-libxml2)
 
