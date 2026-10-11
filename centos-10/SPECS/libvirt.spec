@@ -31,7 +31,10 @@
 %define arches_numad            %{arches_x86} %{power64} aarch64
 %define arches_ch               x86_64 aarch64
 
-# The hypervisor drivers that run in libvirtd
+# The monolithic libvirtd
+%define with_libvirtd      0%{!?_without_libvirtd:1}
+
+# The hypervisor drivers that run in monolithic libvirtd, or a modular daemon
 %define with_lxc           0%{!?_without_lxc:1}
 %define with_libxl         0%{!?_without_libxl:1}
 %define with_vbox          0%{!?_without_vbox:1}
@@ -286,8 +289,8 @@
 
 Summary: Library providing a simple virtualization API
 Name: libvirt
-Version: 12.5.0
-Release: 4%{?dist}%{?extra_release}
+Version: 12.8.0
+Release: 1%{?dist}%{?extra_release}
 License: GPL-2.0-or-later AND LGPL-2.1-only AND LGPL-2.1-or-later AND OFL-1.1
 URL: https://libvirt.org/
 
@@ -295,40 +298,12 @@ URL: https://libvirt.org/
     %define mainturl stable_updates/
 %endif
 Source: https://download.libvirt.org/%{?mainturl}libvirt-%{version}.tar.xz
-Patch1: libvirt-tools-virsh-fix-crash-on-error.patch
-Patch2: libvirt-conf-Include-check-for-pci_bus-in-virDomainIOMMUDefEquals.patch
-Patch3: libvirt-qemu-introduce-QEMU_CAPS_DEVICE_ARM_SMMUV3.patch
-Patch4: libvirt-qemu-introduce-QEMU_CAPS_ARM_SMMUV3_SMMU_PER_BUS.patch
-Patch5: libvirt-qemu-introduce-QEMU_CAPS_ARM_SMMUV3_ACCEL.patch
-Patch6: libvirt-qemu-Add-support-for-HW-accelerated-nested-SMMUv3.patch
-Patch7: libvirt-tests-qemuxmlconfdata-provide-HW-accel-smmuv3-sample-XML-and-CLI-args.patch
-Patch8: libvirt-conf-schemas-Allow-.-in-schema-for-CPU-flag-name.patch
-Patch9: libvirt-tests-capabilityschemadata-Add-a-real-test-example.patch
-Patch10: libvirt-util-virFileChownFiles-do-not-follow-symlinks.patch
-Patch11: libvirt-qemu-Always-assume-support-for-QEMU_CAPS_SET_ACTION.patch
-Patch12: libvirt-qemu-Remove-unused-qemuProcessRebootAllowed.patch
-Patch13: libvirt-qemu-monitor-Remove-support-for-watchdog-set-action.patch
-Patch14: libvirt-qemu-Remove-allowReboot-field.patch
-Patch15: libvirt-qemu-capabilities-Retire-QEMU_CAPS_SET_ACTION.patch
-Patch16: libvirt-qemuProcessSetupLifecycleActions-Prepare-to-handle-other-actions.patch
-Patch17: libvirt-qemuDomainModifyLifecycleActionLive-Prepare-to-handle-other-actions.patch
-Patch18: libvirt-processGuestPanicEvent-Don-t-pass-panic-action-via-parameter.patch
-Patch19: libvirt-conf-Use-proper-enum-types-for-onReboot-onPoweroff-onCrash-and-onLockFailure.patch
-Patch20: libvirt-qemuMonitorGuestPanicEventInfoFormatMsg-Directly-return-message.patch
-Patch21: libvirt-qemuProcessGuestPanicEventInfo-Fold-into-only-caller.patch
-Patch22: libvirt-qemu-processGuestPanicEvent-Split-individual-steps-under-separate-conditions.patch
-Patch23: libvirt-Add-support-for-keeping-VM-running-when-panic-notifier-is-used.patch
-Patch24: libvirt-qemu-Fix-proper-ordering-of-virtlockd-shutdown.patch
-Patch25: libvirt-qemu-move-qemuAgent-InfoFormatParams-to-hypervisor-qemu_agent.c.patch
-Patch26: libvirt-Add-guest-device-info-to-virDomainGetGuestInfo.patch
-Patch27: libvirt-qemu_agent-Introduce-guest-get-devices.patch
-Patch28: libvirt-qemuagenttest-Introduce-GetGuestDeviceInfo-test-case.patch
-Patch29: libvirt-qemu-Implement-device-info-for-virDomainGetGuestInfo-API.patch
-Patch30: libvirt-virsh-Add-support-for-VIR_DOMAIN_GUEST_INFO_DEVICES.patch
-Patch31: libvirt-remote-Fix-integer-overflow-in-RPC-handler-for-virNodeGetFreePages-CVE-2026-18917.patch
 
-
+%if %{with_libvirtd}
 Requires: libvirt-daemon = %{version}-%{release}
+%else
+Obsoletes: libvirt-daemon < %{version}-%{release}
+%endif
 Requires: libvirt-daemon-config-network = %{version}-%{release}
 Requires: libvirt-daemon-config-nwfilter = %{version}-%{release}
 %if %{with_libxl}
@@ -641,8 +616,12 @@ bridge capabilities.
 Summary: Nwfilter driver plugin for the libvirtd daemon
 Requires: libvirt-daemon-common = %{version}-%{release}
 Requires: libvirt-libs = %{version}-%{release}
+    %if %{prefer_nftables}
+Requires: nftables
+    %else
 Requires: iptables
 Requires: ebtables
+    %endif
 
 %description daemon-driver-nwfilter
 The nwfilter driver plugin for the libvirtd daemon, providing
@@ -1193,9 +1172,6 @@ MinGW Windows libvirt virtualization library.
 %prep
 %autosetup -S git_am -N
 
-%autopatch
-
-
 %build
 %if 0%{?fedora} >= %{min_fedora} || 0%{?rhel} >= %{min_rhel}
     %define supported_platform 1
@@ -1206,6 +1182,12 @@ MinGW Windows libvirt virtualization library.
 %if ! %{supported_platform}
 echo "This RPM requires either Fedora >= %{min_fedora} or RHEL >= %{min_rhel}"
 exit 1
+%endif
+
+%if %{with_libvirtd}
+    %define arg_libvirtd -Dlibvirtd=enabled
+%else
+    %define arg_libvirtd -Dlibvirtd=disabled
 %endif
 
 %if %{with_qemu}
@@ -1391,6 +1373,7 @@ export SOURCE_DATE_EPOCH=$(stat --printf='%Y' %{_specdir}/libvirt.spec)
            -Dsasl=enabled \
            -Dpolkit=enabled \
            -Ddriver_libvirtd=enabled \
+           %{?arg_libvirtd} \
            -Ddriver_remote=enabled \
            -Ddriver_test=enabled \
            %{?arg_esx} \
@@ -2102,6 +2085,7 @@ exit 0
 %doc AUTHORS.rst NEWS.rst README.rst
 %doc libvirt-docs/*
 
+    %if %{with_libvirtd}
 %files daemon
 %{_unitdir}/libvirtd.service
 %{_unitdir}/libvirtd.socket
@@ -2118,6 +2102,7 @@ exit 0
 %{_datadir}/augeas/lenses/tests/test_libvirtd.aug
 %attr(0755, root, root) %{_sbindir}/libvirtd
 %{_mandir}/man8/libvirtd.8*
+    %endif
 
 %files daemon-common
 %{_unitdir}/virt-guest-shutdown.target
@@ -2262,6 +2247,9 @@ exit 0
 %config(noreplace) %{_sysconfdir}/libvirt/virtnwfilterd.conf
 %{_datadir}/augeas/lenses/virtnwfilterd.aug
 %{_datadir}/augeas/lenses/tests/test_virtnwfilterd.aug
+%config(noreplace) %{_sysconfdir}/libvirt/nwfilter.conf
+%{_datadir}/augeas/lenses/libvirtd_nwfilter.aug
+%{_datadir}/augeas/lenses/tests/test_libvirtd_nwfilter.aug
 %{_unitdir}/virtnwfilterd.service
 %{_unitdir}/virtnwfilterd.socket
 %{_unitdir}/virtnwfilterd-ro.socket
@@ -2728,6 +2716,11 @@ exit 0
 %endif
 
 %changelog
+* Thu Oct  1 2026 Jiri Denemark <jdenemar@redhat.com> - 12.8.0-1
+- Rebased to libvirt-12.8.0 (RHEL-151485)
+- The rebase also fixes the following bugs:
+    RHEL-74204, RHEL-213506, RHEL-228054, RHEL-249738, RHEL-255585
+
 * Thu Aug 27 2026 Jiri Denemark <jdenemar@redhat.com> - 12.5.0-4
 - remote: Fix integer overflow in RPC handler for virNodeGetFreePages (CVE-2026-18917) (CVE-2026-18917, RHEL-245273)
 
