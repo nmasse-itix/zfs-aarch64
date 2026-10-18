@@ -1,0 +1,42 @@
+From cb33103c4afbce68134be112ecc5d0251e542650 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Daniel=20P=2E=20Berrang=C3=A9?= <berrange@redhat.com>
+Date: Mon, 16 Feb 2026 10:00:48 +0000
+Subject: [PATCH] scripts: avoid matching 'char **' as string for systemtap
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+From: Daniel P. Berrangé <berrange@redhat.com>
+
+When a probe argument is declared "char *" we reference the userspace
+string value using 'user_string(...)' for systemtap.
+
+Unfortunately our code generator also matches on args declared "char **"
+and generates bogus code
+
+   *cert = user_string($arg4);
+
+which is a syntax error for systemtap.
+
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+Signed-off-by: Daniel P. Berrangé <berrange@redhat.com>
+---
+ scripts/dtrace2systemtap.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/scripts/dtrace2systemtap.py b/scripts/dtrace2systemtap.py
+index 506db9c503..361dab1075 100755
+--- a/scripts/dtrace2systemtap.py
++++ b/scripts/dtrace2systemtap.py
+@@ -124,7 +124,7 @@ for file in filelist:
+         for idx in range(len(argbits)):
+             arg = argbits[idx]
+             isstr = False
+-            if 'char *' in arg:
++            if re.match(r'''.*char\s\*[^\*].*''', arg) is not None:
+                 isstr = True
+ 
+             m = re.search(r'''^.*\s\*?(\S+)$''', arg)
+-- 
+2.55.0
+

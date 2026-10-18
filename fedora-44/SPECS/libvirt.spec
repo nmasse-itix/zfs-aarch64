@@ -288,7 +288,7 @@
 Summary: Library providing a simple virtualization API
 Name: libvirt
 Version: 12.0.0
-Release: 3%{?dist}
+Release: 5%{?dist}
 License: GPL-2.0-or-later AND LGPL-2.1-only AND LGPL-2.1-or-later AND OFL-1.1
 URL: https://libvirt.org/
 
@@ -300,6 +300,8 @@ Source: https://download.libvirt.org/%{?mainturl}libvirt-%{version}.tar.xz
 # Fix IPv6 connections to ESXi
 # Upstream in > 12.0.0
 Patch: 0001-esx-Allow-connecting-to-IPv6-server.patch
+# Fix systemtap types
+Patch: 0001-scripts-avoid-matching-char-as-string-for-systemtap.patch
 
 Requires: libvirt-daemon = %{version}-%{release}
 Requires: libvirt-daemon-config-network = %{version}-%{release}
@@ -2688,6 +2690,9 @@ exit 0
 
 
 %changelog
+* Wed Sep 30 2026 Daniel P. Berrangé <berrange@redhat.com> - 12.0.0-5
+- Backport fix for systemtap probes (rhbz#2432568)
+
 * Mon Jan 26 2026 Richard W.M. Jones <rjones@redhat.com> - 12.0.0-3
 - Backport fix for IPv6 connections to ESXi
 
