@@ -288,7 +288,7 @@
 Summary: Library providing a simple virtualization API
 Name: libvirt
 Version: 12.0.0
-Release: 5%{?dist}
+Release: 6%{?dist}
 License: GPL-2.0-or-later AND LGPL-2.1-only AND LGPL-2.1-or-later AND OFL-1.1
 URL: https://libvirt.org/
 
@@ -302,6 +302,10 @@ Source: https://download.libvirt.org/%{?mainturl}libvirt-%{version}.tar.xz
 Patch: 0001-esx-Allow-connecting-to-IPv6-server.patch
 # Fix systemtap types
 Patch: 0001-scripts-avoid-matching-char-as-string-for-systemtap.patch
+# CVE-2026-18917 (bz #2520165)
+Patch: 0001-remote-Fix-integer-overflow-in-RPC-handler-for-virNo.patch
+# Fix ceph pool start (bz #2529178)
+Patch: 0001-replace-rbd-option-auth_supported-with-auth_-_requir.patch
 
 Requires: libvirt-daemon = %{version}-%{release}
 Requires: libvirt-daemon-config-network = %{version}-%{release}
@@ -2690,6 +2694,10 @@ exit 0
 
 
 %changelog
+* Mon Oct 26 2026 Cole Robinson <crobinso@redhat.com> - 12.0.0-6
+- CVE-2026-18917 (bz #2520165)
+- Fix ceph pool start (bz #2529178)
+
 * Wed Sep 30 2026 Daniel P. Berrangé <berrange@redhat.com> - 12.0.0-5
 - Backport fix for systemtap probes (rhbz#2432568)
 
