@@ -1,0 +1,123 @@
+From dd1fef6fde4ce0c31c55125e10d51cc3cea1a42e Mon Sep 17 00:00:00 2001
+Message-ID: <dd1fef6fde4ce0c31c55125e10d51cc3cea1a42e.1794484962.git.jdenemar@redhat.com>
+From: Magnus Kulke <magnuskulke@linux.microsoft.com>
+Date: Fri, 16 Oct 2026 11:57:10 +0200
+Subject: [PATCH] tests: Add vhost network interface to mshv config
+
+We need this to assert that vhost is enabled in a QEMU cmdline
+for HYPERV (mshv) guests.
+
+Signed-off-by: Magnus Kulke <magnuskulke@linux.microsoft.com>
+Signed-off-by: Michal Privoznik <mprivozn@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit 064a69074cdba1a06505a667ee1224fccbc0a3c4)
+
+Please note,
+tests/qemuxmlconfdata/mshv-x86_64-q35-headless.x86_64-latest+mshv.args
+was altered from its original commit, because v12.4.0-rc1~3 is
+not backported.
+
+Resolves: https://redhat.atlassian.net/browse/RHEL-303237
+Signed-off-by: Michal Privoznik <mprivozn@redhat.com>
+---
+ ...86_64-q35-headless.x86_64-latest+mshv.args | 11 +++++++----
+ ...x86_64-q35-headless.x86_64-latest+mshv.xml | 19 +++++++++++++++----
+ .../mshv-x86_64-q35-headless.xml              |  5 +++++
+ 3 files changed, 27 insertions(+), 8 deletions(-)
+
+diff --git a/tests/qemuxmlconfdata/mshv-x86_64-q35-headless.x86_64-latest+mshv.args b/tests/qemuxmlconfdata/mshv-x86_64-q35-headless.x86_64-latest+mshv.args
+index e72d109a52..4e422826bb 100644
+--- a/tests/qemuxmlconfdata/mshv-x86_64-q35-headless.x86_64-latest+mshv.args
++++ b/tests/qemuxmlconfdata/mshv-x86_64-q35-headless.x86_64-latest+mshv.args
+@@ -32,17 +32,20 @@ XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-qemu_mshv/.config \
+ -device '{"driver":"pcie-root-port","port":10,"chassis":3,"id":"pci.3","bus":"pcie.0","addr":"0x1.0x2"}' \
+ -device '{"driver":"pcie-root-port","port":11,"chassis":4,"id":"pci.4","bus":"pcie.0","addr":"0x1.0x3"}' \
+ -device '{"driver":"pcie-root-port","port":12,"chassis":5,"id":"pci.5","bus":"pcie.0","addr":"0x1.0x4"}' \
+--device '{"driver":"qemu-xhci","id":"usb","bus":"pci.1","addr":"0x0"}' \
++-device '{"driver":"pcie-root-port","port":13,"chassis":6,"id":"pci.6","bus":"pcie.0","addr":"0x1.0x5"}' \
++-device '{"driver":"qemu-xhci","id":"usb","bus":"pci.2","addr":"0x0"}' \
+ -blockdev '{"driver":"file","filename":"/var/lib/libvirt/images/test.qcow2","node-name":"libvirt-1-storage","auto-read-only":true,"discard":"unmap"}' \
+ -blockdev '{"node-name":"libvirt-1-format","read-only":false,"driver":"qcow2","file":"libvirt-1-storage"}' \
+--device '{"driver":"virtio-blk-pci","bus":"pci.2","addr":"0x0","drive":"libvirt-1-format","id":"virtio-disk0","bootindex":1}' \
++-device '{"driver":"virtio-blk-pci","bus":"pci.3","addr":"0x0","drive":"libvirt-1-format","id":"virtio-disk0","bootindex":1}' \
++-netdev '{"type":"tap","fds":"3:4:5:6:7","id":"hostnet0"}' \
++-device '{"driver":"virtio-net-pci","ioeventfd":true,"mq":true,"vectors":12,"netdev":"hostnet0","id":"net0","mac":"52:54:00:e5:48:5a","bus":"pci.1","addr":"0x0"}' \
+ -chardev pty,id=charserial0 \
+ -device '{"driver":"isa-serial","chardev":"charserial0","id":"serial0","index":0}' \
+ -audiodev '{"id":"audio1","driver":"none"}' \
+ -global ICH9-LPC.noreboot=off \
+ -watchdog-action reset \
+--device '{"driver":"virtio-balloon-pci","id":"balloon0","bus":"pci.3","addr":"0x0"}' \
++-device '{"driver":"virtio-balloon-pci","id":"balloon0","bus":"pci.4","addr":"0x0"}' \
+ -object '{"qom-type":"rng-random","id":"objrng0","filename":"/dev/urandom"}' \
+--device '{"driver":"virtio-rng-pci","rng":"objrng0","id":"rng0","bus":"pci.4","addr":"0x0"}' \
++-device '{"driver":"virtio-rng-pci","rng":"objrng0","id":"rng0","bus":"pci.5","addr":"0x0"}' \
+ -sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
+ -msg timestamp=on
+diff --git a/tests/qemuxmlconfdata/mshv-x86_64-q35-headless.x86_64-latest+mshv.xml b/tests/qemuxmlconfdata/mshv-x86_64-q35-headless.x86_64-latest+mshv.xml
+index a183a3dd6a..747d25067f 100644
+--- a/tests/qemuxmlconfdata/mshv-x86_64-q35-headless.x86_64-latest+mshv.xml
++++ b/tests/qemuxmlconfdata/mshv-x86_64-q35-headless.x86_64-latest+mshv.xml
+@@ -30,10 +30,10 @@
+       <driver name='qemu' type='qcow2'/>
+       <source file='/var/lib/libvirt/images/test.qcow2'/>
+       <target dev='vda' bus='virtio'/>
+-      <address type='pci' domain='0x0000' bus='0x02' slot='0x00' function='0x0'/>
++      <address type='pci' domain='0x0000' bus='0x03' slot='0x00' function='0x0'/>
+     </disk>
+     <controller type='usb' index='0' model='qemu-xhci'>
+-      <address type='pci' domain='0x0000' bus='0x01' slot='0x00' function='0x0'/>
++      <address type='pci' domain='0x0000' bus='0x02' slot='0x00' function='0x0'/>
+     </controller>
+     <controller type='sata' index='0'>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x1f' function='0x2'/>
+@@ -64,6 +64,17 @@
+       <target chassis='5' port='0xc'/>
+       <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x4'/>
+     </controller>
++    <controller type='pci' index='6' model='pcie-root-port'>
++      <model name='pcie-root-port'/>
++      <target chassis='6' port='0xd'/>
++      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x5'/>
++    </controller>
++    <interface type='ethernet'>
++      <mac address='52:54:00:e5:48:5a'/>
++      <model type='virtio'/>
++      <driver name='vhost' ioeventfd='on' queues='5'/>
++      <address type='pci' domain='0x0000' bus='0x01' slot='0x00' function='0x0'/>
++    </interface>
+     <serial type='pty'>
+       <target type='isa-serial' port='0'>
+         <model name='isa-serial'/>
+@@ -77,11 +88,11 @@
+     <audio id='1' type='none'/>
+     <watchdog model='itco' action='reset'/>
+     <memballoon model='virtio'>
+-      <address type='pci' domain='0x0000' bus='0x03' slot='0x00' function='0x0'/>
++      <address type='pci' domain='0x0000' bus='0x04' slot='0x00' function='0x0'/>
+     </memballoon>
+     <rng model='virtio'>
+       <backend model='random'>/dev/urandom</backend>
+-      <address type='pci' domain='0x0000' bus='0x04' slot='0x00' function='0x0'/>
++      <address type='pci' domain='0x0000' bus='0x05' slot='0x00' function='0x0'/>
+     </rng>
+   </devices>
+ </domain>
+diff --git a/tests/qemuxmlconfdata/mshv-x86_64-q35-headless.xml b/tests/qemuxmlconfdata/mshv-x86_64-q35-headless.xml
+index d8fc60a212..f8e46c30c7 100644
+--- a/tests/qemuxmlconfdata/mshv-x86_64-q35-headless.xml
++++ b/tests/qemuxmlconfdata/mshv-x86_64-q35-headless.xml
+@@ -27,6 +27,11 @@
+       <source file='/var/lib/libvirt/images/test.qcow2'/>
+       <target dev='vda' bus='virtio'/>
+     </disk>
++    <interface type='ethernet'>
++      <mac address='52:54:00:e5:48:5a'/>
++      <model type='virtio'/>
++      <driver name='vhost' ioeventfd='on' queues='5'/>
++    </interface>
+     <console type='pty'/>
+     <rng model='virtio'>
+       <backend model='random'>/dev/urandom</backend>
+-- 
+2.56.0

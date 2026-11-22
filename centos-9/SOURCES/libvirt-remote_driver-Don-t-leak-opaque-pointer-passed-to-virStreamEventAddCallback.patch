@@ -1,0 +1,102 @@
+From 06ed44c587d7e8990e0845ff9988b67ff7768338 Mon Sep 17 00:00:00 2001
+Message-ID: <06ed44c587d7e8990e0845ff9988b67ff7768338.1794484962.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Thu, 14 May 2026 17:19:55 +0200
+Subject: [PATCH] remote_driver: Don't leak opaque pointer passed to
+ 'virStreamEventAddCallback'
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+In the implementation of the virStream events in the remote driver, the
+freeing of the passed opaque data for the callback was guarded by:
+
+  if (!cbdata->cb && cbdata->ff)
+     (cbdata->ff)(cbdata->opaque);
+
+thus if the 'cb' is passed to 'virStreamEventAddCallback' the private
+data would never be freed once 'virStreamEventRemoveCallback' is called.
+
+The issue can be reproduced both in client applications which would
+register the stream callback and also in the libvirt daemons, when
+modular daemons are used. The virStream remote driver client code is in
+such deployments also used to tunnel requests from the hypervisor daemon
+(virtqemud) to sub-daemons (virstoraged).
+
+In those cases the leak is amplified as the stream event callback is
+internally used to do the tunnelling and the daemon dispatch code stores
+a reference to the 'virNetClient' object associated with the connection.
+As this causes the last reference on the virNetClient object to be still
+active, the corresponding connection to the storage daemon isn't closed
+either, leaking a FD both in virtqemud and virtstoraged.
+
+Internally the data is stored in 'struct remoteStreamCallbackData' which
+is defined only in 'remote_driver.c' and there's no code which would
+update the 'cb' field, thus the leak can't be avoided.
+
+Remove the check for 'cb'. My assumption is that this was supposed to
+mimic the 'dispatching' field  in 'util/fdstream.c' or similar logic in
+other dispatch functions.
+
+The patch also adds debug statements which I've used to trace this.
+
+The leak of a connection in 'virtqemud' has the following backtrace
+under valgrind (note that the pointer is considered reachable and thus
+this isn't visible in default config):
+
+==3678343== 136 bytes in 1 blocks are still reachable in loss record 2,680 of 2,964
+==3678343==    at 0x48FC6CD: calloc (vg_replace_malloc.c:1616)
+==3678343==    by 0x4ED8A91: g_malloc0 (in /usr/lib64/libglib-2.0.so.0.8600.5)
+==3678343==    by 0x5019CA2: g_type_class_get (in /usr/lib64/libgobject-2.0.so.0.8600.5)
+==3678343==    by 0x5001011: g_object_new_with_properties (in /usr/lib64/libgobject-2.0.so.0.8600.5)
+==3678343==    by 0x5001EA0: g_object_new (in /usr/lib64/libgobject-2.0.so.0.8600.5)
+==3678343==    by 0x499E653: virObjectNew (virobject.c:252)
+==3678343==    by 0x499EA0F: virObjectLockableNew (virobject.c:274)
+==3678343==    by 0x4A84651: virNetClientStreamNew (virnetclientstream.c:144)
+==3678343==    by 0x4AE82AE: remoteStorageVolUpload (remote_client_bodies.h:8242)
+==3678343==    by 0x4BED13D: virStorageVolUpload (libvirt-storage.c:1809)
+==3678343==    by 0x4043539: remoteDispatchStorageVolUpload (remote_daemon_dispatch_stubs.h:20248)
+==3678343==    by 0x4043539: remoteDispatchStorageVolUploadHelper (remote_daemon_dispatch_stubs.h:20218)
+==3678343==    by 0x4A89A2C: virNetServerProgramDispatchCall (virnetserverprogram.c:423)
+==3678343==    by 0x4A89A2C: virNetServerProgramDispatch (virnetserverprogram.c:299)
+
+Resolves: https://redhat.atlassian.net/browse/RHEL-170773
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Ján Tomko <jtomko@redhat.com>
+(cherry picked from commit 4e61d97ae1cc4d991716abbfa5e827e41aabea53)
+
+https://redhat.atlassian.net/browse/RHEL-299034 (rhel-9.10)
+---
+ src/remote/remote_driver.c | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/src/remote/remote_driver.c b/src/remote/remote_driver.c
+index ec71eaed87..ca459e65a7 100644
+--- a/src/remote/remote_driver.c
++++ b/src/remote/remote_driver.c
+@@ -5335,8 +5335,12 @@ static void remoteStreamEventCallback(virNetClientStream *stream G_GNUC_UNUSED,
+ static void remoteStreamCallbackFree(void *opaque)
+ {
+     struct remoteStreamCallbackData *cbdata = opaque;
++    virNetClientStream *privst = cbdata->st->privateData;
+ 
+-    if (!cbdata->cb && cbdata->ff)
++    VIR_DEBUG("stream=%p, clientstream=%p, cb=%p, ff=%p, opaque=%p",
++              cbdata->st, privst, cbdata->cb, cbdata->ff, cbdata->opaque);
++
++    if (cbdata->ff)
+         (cbdata->ff)(cbdata->opaque);
+ 
+     virObjectUnref(cbdata->st);
+@@ -5357,6 +5361,9 @@ remoteStreamEventAddCallback(virStreamPtr st,
+     struct remoteStreamCallbackData *cbdata;
+     VIR_LOCK_GUARD lock = remoteDriverLock(priv);
+ 
++    VIR_DEBUG("st=%p, clientstream=%p, events=%d, cb=%p, opaque=%p, ff=%p",
++              st, privst, events, cb, opaque, ff);
++
+     cbdata = g_new0(struct remoteStreamCallbackData, 1);
+     cbdata->cb = cb;
+     cbdata->opaque = opaque;
+-- 
+2.56.0

@@ -1,0 +1,237 @@
+From 5c1b127c839f84d6182265714bf43338e654b3d6 Mon Sep 17 00:00:00 2001
+Message-ID: <5c1b127c839f84d6182265714bf43338e654b3d6.1794484962.git.jdenemar@redhat.com>
+From: Michal Privoznik <mprivozn@redhat.com>
+Date: Fri, 16 Oct 2026 08:46:50 +0200
+Subject: [PATCH] tests: Model qemuInterfaceOpenVhostNet() mock more closely to
+ its source
+
+Inside of qemuxml2argvmock.c there's an alternative
+implementation of qemuInterfaceOpenVhostNet(). Fair enough. But
+the original function (living in qemu_interface.c) has a check
+which exits early from the function. This check is lacking in the
+mock which then leads qemuxmlconftest generate a different cmd
+line than the production code.
+
+The is particularly important, when the check is changed and we
+want to verify through tests that it doesn't break anything.
+
+Signed-off-by: Michal Privoznik <mprivozn@redhat.com>
+Reviewed-by: Martin Kletzander <mkletzan@redhat.com>
+(cherry picked from commit 6e1a9eae6ed34cc3b902f5c6e7379a2aa5d002fc)
+
+Conflicts:
+tests/qemuxmlconfdata/downscript.x86_64-latest.args
+tests/qemuxmlconfdata/net-coalesce.x86_64-latest.args
+tests/qemuxmlconfdata/net-eth-unmanaged-tap.x86_64-latest.args
+tests/qemuxmlconfdata/net-isolated-port.x86_64-latest.args
+tests/qemuxmlconfdata/net-midonet.x86_64-latest.args
+tests/qemuxmlconfdata/net-mtu.x86_64-latest.args
+tests/qemuxmlconfdata/net-virtio-network-portgroup.x86_64-latest.args
+tests/qemuxmlconfdata/net-virtio-teaming-network.x86_64-latest.args
+tests/qemuxmlconfdata/net-virtio-vhost.x86_64-latest.args
+tests/qemuxmlconfdata/tap-vhost-incorrect.x86_64-latest.args
+tests/qemuxmlconfdata/tap-vhost.x86_64-latest.args: All of these
+are context, because v12.4.0-rc1~3 is not backported.
+
+Resolves: https://redhat.atlassian.net/browse/RHEL-303237
+Signed-off-by: Michal Privoznik <mprivozn@redhat.com>
+---
+ tests/qemuxml2argvmock.c                                   | 7 ++++++-
+ tests/qemuxmlconfdata/downscript.x86_64-latest.args        | 2 +-
+ tests/qemuxmlconfdata/net-coalesce.x86_64-latest.args      | 6 +++---
+ .../net-eth-unmanaged-tap.x86_64-latest.args               | 2 +-
+ tests/qemuxmlconfdata/net-isolated-port.x86_64-latest.args | 2 +-
+ tests/qemuxmlconfdata/net-midonet.x86_64-latest.args       | 2 +-
+ tests/qemuxmlconfdata/net-mtu.x86_64-latest.args           | 4 ++--
+ .../net-virtio-network-portgroup.x86_64-latest.args        | 2 +-
+ .../net-virtio-teaming-network.x86_64-latest.args          | 2 +-
+ tests/qemuxmlconfdata/net-virtio-vhost.x86_64-latest.args  | 6 +++---
+ .../qemuxmlconfdata/tap-vhost-incorrect.x86_64-latest.args | 2 +-
+ tests/qemuxmlconfdata/tap-vhost.x86_64-latest.args         | 2 +-
+ 12 files changed, 22 insertions(+), 17 deletions(-)
+
+diff --git a/tests/qemuxml2argvmock.c b/tests/qemuxml2argvmock.c
+index 9d10b5655f..47ca04bbd1 100644
+--- a/tests/qemuxml2argvmock.c
++++ b/tests/qemuxml2argvmock.c
+@@ -210,7 +210,7 @@ virNetDevOpenvswitchGetVhostuserIfname(const char *path G_GNUC_UNUSED,
+ }
+ 
+ int
+-qemuInterfaceOpenVhostNet(virDomainObj *vm G_GNUC_UNUSED,
++qemuInterfaceOpenVhostNet(virDomainObj *vm,
+                           virDomainNetDef *net)
+ {
+     qemuDomainNetworkPrivate *netpriv = QEMU_DOMAIN_NETWORK_PRIVATE(net);
+@@ -220,6 +220,11 @@ qemuInterfaceOpenVhostNet(virDomainObj *vm G_GNUC_UNUSED,
+     if (!vhostfdSize)
+          vhostfdSize = 1;
+ 
++    if (vm->def->virtType != VIR_DOMAIN_VIRT_KVM ||
++        net->driver.virtio.name == VIR_DOMAIN_NET_DRIVER_TYPE_QEMU) {
++        return 0;
++    }
++
+     if (!virDomainNetIsVirtioModel(net))
+         return 0;
+ 
+diff --git a/tests/qemuxmlconfdata/downscript.x86_64-latest.args b/tests/qemuxmlconfdata/downscript.x86_64-latest.args
+index 9fe2838b75..2799f71b07 100644
+--- a/tests/qemuxmlconfdata/downscript.x86_64-latest.args
++++ b/tests/qemuxmlconfdata/downscript.x86_64-latest.args
+@@ -34,7 +34,7 @@ XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-QEMUGuest1/.config \
+ -device '{"driver":"virtio-9p-pci","id":"fs0","fsdev":"fsdev-fs0","mount_tag":"fs1","bus":"pci.0","addr":"0x3"}' \
+ -fsdev local,security_model=mapped,id=fsdev-fs1,path=/export/fs2 \
+ -device '{"driver":"virtio-9p-pci","id":"fs1","fsdev":"fsdev-fs1","mount_tag":"fs2","bus":"pci.0","addr":"0x4"}' \
+--netdev '{"type":"tap","fd":"3","vhost":true,"vhostfd":"44","id":"hostnet0"}' \
++-netdev '{"type":"tap","fd":"3","id":"hostnet0"}' \
+ -device '{"driver":"virtio-net-pci","netdev":"hostnet0","id":"net0","mac":"52:54:00:f6:66:88","bus":"pci.0","addr":"0xb"}' \
+ -audiodev '{"id":"audio1","driver":"none"}' \
+ -device '{"driver":"virtio-balloon-pci","id":"balloon0","bus":"pci.0","addr":"0xc"}' \
+diff --git a/tests/qemuxmlconfdata/net-coalesce.x86_64-latest.args b/tests/qemuxmlconfdata/net-coalesce.x86_64-latest.args
+index dafd237ea4..bf1b294516 100644
+--- a/tests/qemuxmlconfdata/net-coalesce.x86_64-latest.args
++++ b/tests/qemuxmlconfdata/net-coalesce.x86_64-latest.args
+@@ -33,11 +33,11 @@ XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-test/.config \
+ -device '{"driver":"virtio-blk-pci","event_idx":true,"bus":"pci.0","addr":"0x4","drive":"libvirt-2-format","id":"virtio-disk0","bootindex":2}' \
+ -blockdev '{"driver":"file","filename":"/var/lib/libvirt/Fedora-14-x86_64-Live-KDE.iso","node-name":"libvirt-1-storage","read-only":true}' \
+ -device '{"driver":"ide-cd","bus":"ide.1","unit":0,"drive":"libvirt-1-storage","id":"ide0-1-0","bootindex":1}' \
+--netdev '{"type":"tap","fd":"102","vhost":true,"vhostfd":"44","id":"hostnet0"}' \
++-netdev '{"type":"tap","fd":"102","id":"hostnet0"}' \
+ -device '{"driver":"virtio-net-pci","netdev":"hostnet0","id":"net0","mac":"52:54:00:e5:48:58","bus":"pci.0","addr":"0x2"}' \
+--netdev '{"type":"tap","fd":"102","vhost":true,"vhostfd":"44","id":"hostnet1"}' \
++-netdev '{"type":"tap","fd":"102","id":"hostnet1"}' \
+ -device '{"driver":"virtio-net-pci","netdev":"hostnet1","id":"net1","mac":"52:54:00:e5:48:59","bus":"pci.0","addr":"0x3"}' \
+--netdev '{"type":"tap","fd":"102","vhost":true,"vhostfd":"44","id":"hostnet2"}' \
++-netdev '{"type":"tap","fd":"102","id":"hostnet2"}' \
+ -device '{"driver":"virtio-net-pci","netdev":"hostnet2","id":"net2","mac":"52:54:00:e5:48:60","bus":"pci.0","addr":"0x5"}' \
+ -chardev pty,id=charserial0 \
+ -device '{"driver":"isa-serial","chardev":"charserial0","id":"serial0","index":0}' \
+diff --git a/tests/qemuxmlconfdata/net-eth-unmanaged-tap.x86_64-latest.args b/tests/qemuxmlconfdata/net-eth-unmanaged-tap.x86_64-latest.args
+index a7b163bcf5..1ba4c41077 100644
+--- a/tests/qemuxmlconfdata/net-eth-unmanaged-tap.x86_64-latest.args
++++ b/tests/qemuxmlconfdata/net-eth-unmanaged-tap.x86_64-latest.args
+@@ -29,7 +29,7 @@ XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-QEMUGuest1/.config \
+ -device '{"driver":"piix3-usb-uhci","id":"usb","bus":"pci.0","addr":"0x1.0x2"}' \
+ -blockdev '{"driver":"host_device","filename":"/dev/HostVG/QEMUGuest1","node-name":"libvirt-1-storage","read-only":false}' \
+ -device '{"driver":"ide-hd","bus":"ide.0","unit":0,"drive":"libvirt-1-storage","id":"ide0-0-0","bootindex":1}' \
+--netdev '{"type":"tap","fd":"3","vhost":true,"vhostfd":"44","id":"hostnet0"}' \
++-netdev '{"type":"tap","fd":"3","id":"hostnet0"}' \
+ -device '{"driver":"virtio-net-pci","netdev":"hostnet0","id":"net0","mac":"fe:11:22:33:44:55","bus":"pci.0","addr":"0x2"}' \
+ -audiodev '{"id":"audio1","driver":"none"}' \
+ -sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \
+diff --git a/tests/qemuxmlconfdata/net-isolated-port.x86_64-latest.args b/tests/qemuxmlconfdata/net-isolated-port.x86_64-latest.args
+index c9ebe3f515..08c72b6818 100644
+--- a/tests/qemuxmlconfdata/net-isolated-port.x86_64-latest.args
++++ b/tests/qemuxmlconfdata/net-isolated-port.x86_64-latest.args
+@@ -32,7 +32,7 @@ XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-q35-test/.config \
+ -device '{"driver":"qemu-xhci","id":"usb","bus":"pci.2","addr":"0x0"}' \
+ -blockdev '{"driver":"host_device","filename":"/dev/HostVG/QEMUGuest1","node-name":"libvirt-1-storage","read-only":false}' \
+ -device '{"driver":"ide-hd","bus":"ide.0","drive":"libvirt-1-storage","id":"sata0-0-0","bootindex":1}' \
+--netdev '{"type":"tap","fd":"102","vhost":true,"vhostfd":"44","id":"hostnet0"}' \
++-netdev '{"type":"tap","fd":"102","id":"hostnet0"}' \
+ -device '{"driver":"virtio-net-pci","netdev":"hostnet0","id":"net0","mac":"52:54:00:d6:c0:0b","bus":"pci.1","addr":"0x0"}' \
+ -audiodev '{"id":"audio1","driver":"none"}' \
+ -device '{"driver":"qxl-vga","id":"video0","max_outputs":1,"ram_size":67108864,"vram_size":33554432,"vram64_size_mb":0,"vgamem_mb":8,"bus":"pcie.0","addr":"0x1"}' \
+diff --git a/tests/qemuxmlconfdata/net-midonet.x86_64-latest.args b/tests/qemuxmlconfdata/net-midonet.x86_64-latest.args
+index b5124ac967..2385184477 100644
+--- a/tests/qemuxmlconfdata/net-midonet.x86_64-latest.args
++++ b/tests/qemuxmlconfdata/net-midonet.x86_64-latest.args
+@@ -29,7 +29,7 @@ XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-QEMUGuest1/.config \
+ -device '{"driver":"piix3-usb-uhci","id":"usb","bus":"pci.0","addr":"0x1.0x2"}' \
+ -blockdev '{"driver":"host_device","filename":"/dev/HostVG/QEMUGuest1","node-name":"libvirt-1-storage","read-only":false}' \
+ -device '{"driver":"ide-hd","bus":"ide.0","unit":0,"drive":"libvirt-1-storage","id":"ide0-0-0","bootindex":1}' \
+--netdev '{"type":"tap","fd":"102","vhost":true,"vhostfd":"44","id":"hostnet0"}' \
++-netdev '{"type":"tap","fd":"102","id":"hostnet0"}' \
+ -device '{"driver":"virtio-net-pci","netdev":"hostnet0","id":"net0","mac":"00:11:22:33:44:55","bus":"pci.0","addr":"0x2"}' \
+ -audiodev '{"id":"audio1","driver":"none"}' \
+ -device '{"driver":"virtio-balloon-pci","id":"balloon0","bus":"pci.0","addr":"0x3"}' \
+diff --git a/tests/qemuxmlconfdata/net-mtu.x86_64-latest.args b/tests/qemuxmlconfdata/net-mtu.x86_64-latest.args
+index db4a20b36a..9bffc21836 100644
+--- a/tests/qemuxmlconfdata/net-mtu.x86_64-latest.args
++++ b/tests/qemuxmlconfdata/net-mtu.x86_64-latest.args
+@@ -33,9 +33,9 @@ XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-test/.config \
+ -device '{"driver":"virtio-blk-pci","event_idx":true,"bus":"pci.0","addr":"0x4","drive":"libvirt-2-format","id":"virtio-disk0","bootindex":2}' \
+ -blockdev '{"driver":"file","filename":"/var/lib/libvirt/Fedora-14-x86_64-Live-KDE.iso","node-name":"libvirt-1-storage","read-only":true}' \
+ -device '{"driver":"ide-cd","bus":"ide.1","unit":0,"drive":"libvirt-1-storage","id":"ide0-1-0","bootindex":1}' \
+--netdev '{"type":"tap","fd":"102","vhost":true,"vhostfd":"44","id":"hostnet0"}' \
++-netdev '{"type":"tap","fd":"102","id":"hostnet0"}' \
+ -device '{"driver":"virtio-net-pci","host_mtu":1500,"netdev":"hostnet0","id":"net0","mac":"52:54:00:e5:48:58","bus":"pci.0","addr":"0x2"}' \
+--netdev '{"type":"tap","fd":"102","vhost":true,"vhostfd":"44","sndbuf":1600,"id":"hostnet1"}' \
++-netdev '{"type":"tap","fd":"102","sndbuf":1600,"id":"hostnet1"}' \
+ -device '{"driver":"virtio-net-pci","host_mtu":9000,"netdev":"hostnet1","id":"net1","mac":"52:54:00:e5:48:59","bus":"pci.0","addr":"0x3"}' \
+ -chardev pty,id=charserial0 \
+ -device '{"driver":"isa-serial","chardev":"charserial0","id":"serial0","index":0}' \
+diff --git a/tests/qemuxmlconfdata/net-virtio-network-portgroup.x86_64-latest.args b/tests/qemuxmlconfdata/net-virtio-network-portgroup.x86_64-latest.args
+index d2ccde705b..623527ebe1 100644
+--- a/tests/qemuxmlconfdata/net-virtio-network-portgroup.x86_64-latest.args
++++ b/tests/qemuxmlconfdata/net-virtio-network-portgroup.x86_64-latest.args
+@@ -29,7 +29,7 @@ XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-QEMUGuest1/.config \
+ -device '{"driver":"piix3-usb-uhci","id":"usb","bus":"pci.0","addr":"0x1.0x2"}' \
+ -blockdev '{"driver":"host_device","filename":"/dev/HostVG/QEMUGuest1","node-name":"libvirt-1-storage","read-only":false}' \
+ -device '{"driver":"ide-hd","bus":"ide.0","unit":0,"drive":"libvirt-1-storage","id":"ide0-0-0","bootindex":1}' \
+--netdev '{"type":"tap","fd":"102","vhost":true,"vhostfd":"44","id":"hostnet0"}' \
++-netdev '{"type":"tap","fd":"102","id":"hostnet0"}' \
+ -device '{"driver":"virtio-net-pci","netdev":"hostnet0","id":"net0","mac":"00:11:22:33:44:55","bus":"pci.0","addr":"0x2"}' \
+ -netdev '{"type":"tap","fd":"102","id":"hostnet1"}' \
+ -device '{"driver":"rtl8139","netdev":"hostnet1","id":"net1","mac":"10:11:22:33:44:55","bus":"pci.0","addr":"0x3"}' \
+diff --git a/tests/qemuxmlconfdata/net-virtio-teaming-network.x86_64-latest.args b/tests/qemuxmlconfdata/net-virtio-teaming-network.x86_64-latest.args
+index 0c07ec4c70..2970e70a48 100644
+--- a/tests/qemuxmlconfdata/net-virtio-teaming-network.x86_64-latest.args
++++ b/tests/qemuxmlconfdata/net-virtio-teaming-network.x86_64-latest.args
+@@ -29,7 +29,7 @@ XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-QEMUGuest1/.config \
+ -device '{"driver":"piix3-usb-uhci","id":"usb","bus":"pci.0","addr":"0x1.0x2"}' \
+ -blockdev '{"driver":"host_device","filename":"/dev/HostVG/QEMUGuest1","node-name":"libvirt-1-storage","read-only":false}' \
+ -device '{"driver":"ide-hd","bus":"ide.0","unit":0,"drive":"libvirt-1-storage","id":"ide0-0-0","bootindex":1}' \
+--netdev '{"type":"tap","fd":"102","vhost":true,"vhostfd":"44","id":"hostua-backup0"}' \
++-netdev '{"type":"tap","fd":"102","id":"hostua-backup0"}' \
+ -device '{"driver":"virtio-net-pci","failover":true,"netdev":"hostua-backup0","id":"ua-backup0","mac":"00:11:22:33:44:55","bus":"pci.0","addr":"0x2"}' \
+ -audiodev '{"id":"audio1","driver":"none"}' \
+ -device '{"driver":"vfio-pci","host":"0001:02:03.4","id":"hostdev0","failover_pair_id":"ua-backup0","bus":"pci.0","addr":"0x3"}' \
+diff --git a/tests/qemuxmlconfdata/net-virtio-vhost.x86_64-latest.args b/tests/qemuxmlconfdata/net-virtio-vhost.x86_64-latest.args
+index eabe768169..46a39a843c 100644
+--- a/tests/qemuxmlconfdata/net-virtio-vhost.x86_64-latest.args
++++ b/tests/qemuxmlconfdata/net-virtio-vhost.x86_64-latest.args
+@@ -28,11 +28,11 @@ XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-test/.config \
+ -boot menu=on,strict=on \
+ -device '{"driver":"piix3-usb-uhci","id":"usb","bus":"pci.0","addr":"0x1.0x2"}' \
+ -device '{"driver":"virtio-serial-pci","id":"virtio-serial0","bus":"pci.0","addr":"0x6"}' \
+--netdev '{"type":"tap","fds":"3:4:5:6:7","vhost":true,"vhostfds":"44:45:46:47:48","id":"hostnet0"}' \
++-netdev '{"type":"tap","fds":"3:4:5:6:7","id":"hostnet0"}' \
+ -device '{"driver":"virtio-net-pci","mq":true,"vectors":12,"netdev":"hostnet0","id":"net0","mac":"52:54:00:e5:48:58","bus":"pci.0","addr":"0x2"}' \
+--netdev '{"type":"tap","fd":"3","vhost":true,"vhostfd":"44","id":"hostnet1"}' \
++-netdev '{"type":"tap","fd":"3","id":"hostnet1"}' \
+ -device '{"driver":"virtio-net-pci","ioeventfd":true,"netdev":"hostnet1","id":"net1","mac":"52:54:00:e5:48:59","bus":"pci.0","addr":"0x3"}' \
+--netdev '{"type":"tap","fds":"3:4:5:6:7","vhost":true,"vhostfds":"44:45:46:47:48","id":"hostnet2"}' \
++-netdev '{"type":"tap","fds":"3:4:5:6:7","id":"hostnet2"}' \
+ -device '{"driver":"virtio-net-pci","ioeventfd":true,"mq":true,"vectors":12,"netdev":"hostnet2","id":"net2","mac":"52:54:00:e5:48:5a","bus":"pci.0","addr":"0x4"}' \
+ -chardev pty,id=charserial0 \
+ -device '{"driver":"isa-serial","chardev":"charserial0","id":"serial0","index":0}' \
+diff --git a/tests/qemuxmlconfdata/tap-vhost-incorrect.x86_64-latest.args b/tests/qemuxmlconfdata/tap-vhost-incorrect.x86_64-latest.args
+index f43f75d709..b3c24dfc13 100644
+--- a/tests/qemuxmlconfdata/tap-vhost-incorrect.x86_64-latest.args
++++ b/tests/qemuxmlconfdata/tap-vhost-incorrect.x86_64-latest.args
+@@ -30,7 +30,7 @@ XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-test/.config \
+ -device '{"driver":"virtio-serial-pci","id":"virtio-serial0","bus":"pci.0","addr":"0x6"}' \
+ -netdev '{"type":"tap","fd":"102","id":"hostnet0"}' \
+ -device '{"driver":"e1000","netdev":"hostnet0","id":"net0","mac":"52:54:00:e5:48:58","bus":"pci.0","addr":"0x2"}' \
+--netdev '{"type":"tap","fd":"102","vhost":true,"vhostfd":"44","id":"hostnet1"}' \
++-netdev '{"type":"tap","fd":"102","id":"hostnet1"}' \
+ -device '{"driver":"virtio-net-pci","netdev":"hostnet1","id":"net1","mac":"52:54:00:e5:48:59","bus":"pci.0","addr":"0x3"}' \
+ -chardev pty,id=charserial0 \
+ -device '{"driver":"isa-serial","chardev":"charserial0","id":"serial0","index":0}' \
+diff --git a/tests/qemuxmlconfdata/tap-vhost.x86_64-latest.args b/tests/qemuxmlconfdata/tap-vhost.x86_64-latest.args
+index 8effdc5968..5aedf5682b 100644
+--- a/tests/qemuxmlconfdata/tap-vhost.x86_64-latest.args
++++ b/tests/qemuxmlconfdata/tap-vhost.x86_64-latest.args
+@@ -33,7 +33,7 @@ XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-test/.config \
+ -device '{"driver":"virtio-blk-pci","event_idx":true,"bus":"pci.0","addr":"0x4","drive":"libvirt-2-format","id":"virtio-disk0","bootindex":2}' \
+ -blockdev '{"driver":"file","filename":"/var/lib/libvirt/Fedora-14-x86_64-Live-KDE.iso","node-name":"libvirt-1-storage","read-only":true}' \
+ -device '{"driver":"ide-cd","bus":"ide.1","unit":0,"drive":"libvirt-1-storage","id":"ide0-1-0","bootindex":1}' \
+--netdev '{"type":"tap","fds":"102:103:104:105:106","vhost":true,"vhostfds":"44:45:46:47:48","id":"hostnet0"}' \
++-netdev '{"type":"tap","fds":"102:103:104:105:106","id":"hostnet0"}' \
+ -device '{"driver":"virtio-net-pci","mq":true,"vectors":12,"netdev":"hostnet0","id":"net0","mac":"52:54:00:e5:48:58","bus":"pci.0","addr":"0x2"}' \
+ -chardev pty,id=charserial0 \
+ -device '{"driver":"isa-serial","chardev":"charserial0","id":"serial0","index":0}' \
+-- 
+2.56.0

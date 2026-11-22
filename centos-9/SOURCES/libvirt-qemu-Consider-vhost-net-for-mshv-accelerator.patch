@@ -1,0 +1,78 @@
+From 36874b61a75041df47ddc1a1283c5bf17fe850c6 Mon Sep 17 00:00:00 2001
+Message-ID: <36874b61a75041df47ddc1a1283c5bf17fe850c6.1794484963.git.jdenemar@redhat.com>
+From: Magnus Kulke <magnuskulke@linux.microsoft.com>
+Date: Fri, 16 Oct 2026 11:57:11 +0200
+Subject: [PATCH] qemu: Consider vhost-net for mshv accelerator
+
+Currently vhost-net is dropped for everything but KVM, this change
+enables it also for the MSHV accelerator (HYPERV) in the generator
+code and the mock.
+
+Signed-off-by: Magnus Kulke <magnuskulke@linux.microsoft.com>
+Signed-off-by: Michal Privoznik <mprivozn@redhat.com>
+Reviewed-by: Michal Privoznik <mprivozn@redhat.com>
+(cherry picked from commit ce7839f99b6c969874f037d2fcda5e18043616d1)
+
+Please note,
+tests/qemuxmlconfdata/mshv-x86_64-q35-headless.x86_64-latest+mshv.args
+was altered from its original commit, because v12.4.0-rc1~3 is
+not backported.
+
+Resolves: https://redhat.atlassian.net/browse/RHEL-303237
+Signed-off-by: Michal Privoznik <mprivozn@redhat.com>
+---
+ src/qemu/qemu_interface.c                                | 9 +++++----
+ tests/qemuxml2argvmock.c                                 | 3 ++-
+ .../mshv-x86_64-q35-headless.x86_64-latest+mshv.args     | 2 +-
+ 3 files changed, 8 insertions(+), 6 deletions(-)
+
+diff --git a/src/qemu/qemu_interface.c b/src/qemu/qemu_interface.c
+index 23a23d201a..5971ec086e 100644
+--- a/src/qemu/qemu_interface.c
++++ b/src/qemu/qemu_interface.c
+@@ -161,11 +161,12 @@ qemuInterfaceOpenVhostNet(virDomainObj *vm,
+     if (!vhostnet_path)
+         vhostnet_path = "/dev/vhost-net";
+ 
+-    /* If running a plain QEMU guest, or
+-     * if the config says explicitly to not use vhost, return now */
+-    if (vm->def->virtType != VIR_DOMAIN_VIRT_KVM ||
+-        net->driver.virtio.name == VIR_DOMAIN_NET_DRIVER_TYPE_QEMU)
++    /* Only enable vhost for KVM and MSHV guests, unless explicitly disabled. */
++    if ((vm->def->virtType != VIR_DOMAIN_VIRT_KVM &&
++         vm->def->virtType != VIR_DOMAIN_VIRT_HYPERV) ||
++        net->driver.virtio.name == VIR_DOMAIN_NET_DRIVER_TYPE_QEMU) {
+         return 0;
++    }
+ 
+     /* If qemu doesn't support vhost-net mode (including the -netdev and
+      * -device command options), don't try to open the device.
+diff --git a/tests/qemuxml2argvmock.c b/tests/qemuxml2argvmock.c
+index 47ca04bbd1..1864a982b6 100644
+--- a/tests/qemuxml2argvmock.c
++++ b/tests/qemuxml2argvmock.c
+@@ -220,7 +220,8 @@ qemuInterfaceOpenVhostNet(virDomainObj *vm,
+     if (!vhostfdSize)
+          vhostfdSize = 1;
+ 
+-    if (vm->def->virtType != VIR_DOMAIN_VIRT_KVM ||
++    if ((vm->def->virtType != VIR_DOMAIN_VIRT_KVM &&
++         vm->def->virtType != VIR_DOMAIN_VIRT_HYPERV) ||
+         net->driver.virtio.name == VIR_DOMAIN_NET_DRIVER_TYPE_QEMU) {
+         return 0;
+     }
+diff --git a/tests/qemuxmlconfdata/mshv-x86_64-q35-headless.x86_64-latest+mshv.args b/tests/qemuxmlconfdata/mshv-x86_64-q35-headless.x86_64-latest+mshv.args
+index 4e422826bb..db23bb11fc 100644
+--- a/tests/qemuxmlconfdata/mshv-x86_64-q35-headless.x86_64-latest+mshv.args
++++ b/tests/qemuxmlconfdata/mshv-x86_64-q35-headless.x86_64-latest+mshv.args
+@@ -37,7 +37,7 @@ XDG_CONFIG_HOME=/var/lib/libvirt/qemu/domain--1-qemu_mshv/.config \
+ -blockdev '{"driver":"file","filename":"/var/lib/libvirt/images/test.qcow2","node-name":"libvirt-1-storage","auto-read-only":true,"discard":"unmap"}' \
+ -blockdev '{"node-name":"libvirt-1-format","read-only":false,"driver":"qcow2","file":"libvirt-1-storage"}' \
+ -device '{"driver":"virtio-blk-pci","bus":"pci.3","addr":"0x0","drive":"libvirt-1-format","id":"virtio-disk0","bootindex":1}' \
+--netdev '{"type":"tap","fds":"3:4:5:6:7","id":"hostnet0"}' \
++-netdev '{"type":"tap","fds":"3:4:5:6:7","vhost":true,"vhostfds":"44:45:46:47:48","id":"hostnet0"}' \
+ -device '{"driver":"virtio-net-pci","ioeventfd":true,"mq":true,"vectors":12,"netdev":"hostnet0","id":"net0","mac":"52:54:00:e5:48:5a","bus":"pci.1","addr":"0x0"}' \
+ -chardev pty,id=charserial0 \
+ -device '{"driver":"isa-serial","chardev":"charserial0","id":"serial0","index":0}' \
+-- 
+2.56.0

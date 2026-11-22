@@ -1,0 +1,69 @@
+From fd90539a607408bcbca092ce1ef81138415b2204 Mon Sep 17 00:00:00 2001
+Message-ID: <fd90539a607408bcbca092ce1ef81138415b2204.1794484962.git.jdenemar@redhat.com>
+From: Peter Krempa <pkrempa@redhat.com>
+Date: Tue, 10 Mar 2026 16:55:47 +0100
+Subject: [PATCH] scripts: dtrace2systemtap: Fix argument name extraction regex
+ to avoid '*' in names
+
+When commit d249170bf609d2c modified the arguments of
+'virNetTLSContextNew' which has a systemtap probe defined the
+'dtrace2systemtap' script was no longer to correctly generate the
+definitions for it.
+
+First problem which stemmed from mis-detecting the string array
+argumment as string, which would use 'user_string' to extract it was
+fixed in cb33103c4afbce681.
+
+After that the generated probe is still not correct because it doesn't
+strip all the '*' from pointers and thus for double pointers it
+generates the following invalid definition:
+
+  probe libvirt.rpc.tls_context_new = process("/usr/lib64/libvirt.so").mark("rpc_tls_context_new") {
+    ctxt = $arg1;
+    cacert = user_string($arg2);
+    cacrl = user_string($arg3);
+    *cert = $arg4;
+    *keys = $arg5;
+    sanityCheckCert = $arg6;
+    requireValidCert = $arg7;
+    isServer = $arg8;
+  }
+
+Leading to the following failure:
+
+  # stap -ve 'probe oneshot {exit()}'
+  parse error: expected literal string or number
+          saw: operator '*' at /usr/share/systemtap/tapset/libvirt_probes-64.stp:204:3
+       source:   *cert = $arg4;
+                 ^
+  1 parse error.
+
+To address the issue the regex extracting the arguments needs to
+optionally match any number of '*' instead of just one.
+
+Resolves: https://issues.redhat.com/browse/RHEL-153832
+Fixes: cb33103c4afbce68134be112ecc5d0251e542650
+Signed-off-by: Peter Krempa <pkrempa@redhat.com>
+Reviewed-by: Jiri Denemark <jdenemar@redhat.com>
+(cherry picked from commit 954036635a42327cb959d2fec3027f0cb891e206)
+
+https://redhat.atlassian.net/browse/RHEL-254748 (rhel-9.10)
+---
+ scripts/dtrace2systemtap.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/scripts/dtrace2systemtap.py b/scripts/dtrace2systemtap.py
+index 361dab1075..12fc390bcd 100755
+--- a/scripts/dtrace2systemtap.py
++++ b/scripts/dtrace2systemtap.py
+@@ -127,7 +127,7 @@ for file in filelist:
+             if re.match(r'''.*char\s\*[^\*].*''', arg) is not None:
+                 isstr = True
+ 
+-            m = re.search(r'''^.*\s\*?(\S+)$''', arg)
++            m = re.search(r'''^.*\s\**(\S+)$''', arg)
+             if m is not None:
+                 arg = m.group(1)
+             else:
+-- 
+2.56.0

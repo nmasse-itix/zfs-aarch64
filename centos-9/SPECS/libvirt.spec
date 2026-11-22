@@ -287,7 +287,7 @@
 Summary: Library providing a simple virtualization API
 Name: libvirt
 Version: 11.10.0
-Release: 19%{?dist}%{?extra_release}
+Release: 20%{?dist}%{?extra_release}
 License: GPL-2.0-or-later AND LGPL-2.1-only AND LGPL-2.1-or-later AND OFL-1.1
 URL: https://libvirt.org/
 
@@ -458,6 +458,12 @@ Patch160: libvirt-qemuagenttest-Introduce-GetGuestDeviceInfo-test-case.patch
 Patch161: libvirt-qemu-Implement-device-info-for-virDomainGetGuestInfo-API.patch
 Patch162: libvirt-virsh-Add-support-for-VIR_DOMAIN_GUEST_INFO_DEVICES.patch
 Patch163: libvirt-remote-Fix-integer-overflow-in-RPC-handler-for-virNodeGetFreePages-CVE-2026-18917.patch
+Patch164: libvirt-scripts-avoid-matching-char-as-string-for-systemtap.patch
+Patch165: libvirt-scripts-dtrace2systemtap-Fix-argument-name-extraction-regex-to-avoid-in-names.patch
+Patch166: libvirt-remote_driver-Don-t-leak-opaque-pointer-passed-to-virStreamEventAddCallback.patch
+Patch167: libvirt-tests-Model-qemuInterfaceOpenVhostNet-mock-more-closely-to-its-source.patch
+Patch168: libvirt-tests-Add-vhost-network-interface-to-mshv-config.patch
+Patch169: libvirt-qemu-Consider-vhost-net-for-mshv-accelerator.patch
 
 
 Requires: libvirt-daemon = %{version}-%{release}
@@ -2849,6 +2855,14 @@ exit 0
 %endif
 
 %changelog
+* Thu Nov 12 2026 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-20
+- scripts: avoid matching 'char **' as string for systemtap (RHEL-254748)
+- scripts: dtrace2systemtap: Fix argument name extraction regex to avoid '*' in names (RHEL-254748)
+- remote_driver: Don't leak opaque pointer passed to 'virStreamEventAddCallback' (RHEL-299034)
+- tests: Model qemuInterfaceOpenVhostNet() mock more closely to its source (RHEL-303237)
+- tests: Add vhost network interface to mshv config (RHEL-303237)
+- qemu: Consider vhost-net for mshv accelerator (RHEL-303237)
+
 * Mon Aug 31 2026 Jiri Denemark <jdenemar@redhat.com> - 11.10.0-19
 - remote: Fix integer overflow in RPC handler for virNodeGetFreePages (CVE-2026-18917) (CVE-2026-18917, RHEL-245281)
 
